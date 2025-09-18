@@ -1,0 +1,1819 @@
+openapi: 3.0.0
+info:
+  title: Live API Gateway
+  version: "2.0.0"
+  description: >
+    API desarrollada con Express en Firebase Functions que integra funciones de
+    verificación de email, feed de stories, eventos, seguimiento, likes y más.
+
+    **VERSIÓN 2.0 - MIGRADA A NUEVA ESTRUCTURA**
+    - Todas las APIs han sido migradas a la nueva estructura /races/{raceId}/events/{eventId}/
+    - Solo incluye APIs activamente implementadas y migradas
+    - APIs obsoletas/duplicadas han sido removidas
+
+    **OPTIMIZACIONES ULTRA-RÁPIDAS**
+    - Feed Extended API: 99% más rápido con Collection Group Queries
+    - Rendimiento: Historia específica ~50ms, Feed completo ~150ms
+    - Paginación eficiente optimizada para aplicaciones móviles
+    - Consultas paralelas y enriquecimiento optimizado
+  contact:
+    name: Live Copernico Team
+    email: support@copernico.com
+servers:
+  - url: https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway
+    description: Servidor de producción Firebase
+  - url: http://127.0.0.1:5001/live-copernico/us-central1/liveApiGateway
+    description: Servidor de desarrollo local
+
+paths:
+  /api/:
+    get:
+      tags:
+        - General
+      summary: Endpoint raíz
+      description: Devuelve un mensaje de bienvenida.
+      responses:
+        '200':
+          description: Respuesta exitosa.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "¡Express en Firebase Functions!"
+
+  /api/sendEmailVerificationCode:
+    post:
+      tags:
+        - Authentication
+      summary: Enviar código de verificación por email
+      description: Genera un código de 6 dígitos, lo almacena en Firestore y simula el envío de email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+              required:
+                - email
+      responses:
+        '200':
+          description: Código de verificación enviado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Verification code sent to email."
+        '400':
+          description: Email inválido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error al enviar el código.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/events:
+    get:
+      tags:
+        - Events
+      summary: Obtener un evento
+      description: Retorna la información de un evento basado en raceId y eventId. MIGRADO para nueva estructura.
+      parameters:
+        - in: query
+          name: raceId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la carrera (NUEVO - requerido).
+          example: "race123"
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+          description: Identificador del evento.
+          example: "marathon2024"
+      responses:
+        '200':
+          description: Evento obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+        '400':
+          description: Faltan los parámetros raceId o eventId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Evento no encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/athlete-card/config/{raceId}:
+    get:
+      tags:
+        - Athlete Card
+      summary: Obtener configuración del widget de atleta
+      description: Retorna la configuración completa del widget de atleta para una carrera específica. MIGRADO para nueva estructura.
+      parameters:
+        - in: path
+          name: raceId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la carrera.
+          example: "race123"
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+          description: Identificador del evento (NUEVO - requerido).
+          example: "event456"
+      responses:
+        '200':
+          description: Configuración obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AthleteCardConfig'
+        '400':
+          description: Faltan los parámetros raceId o eventId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Configuración no encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/feed:
+    get:
+      tags:
+        - Feed
+      summary: Obtener el feed de stories
+      description: Retorna el feed de stories basado en el userId y los participantes seguidos.
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: Identificador del usuario.
+          example: "user123"
+      responses:
+        '200':
+          description: Feed obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Story'
+        '400':
+          description: Falta el parámetro userId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/feed/extended:
+    get:
+      tags:
+        - Feed
+      summary: Obtener el feed extendido (ULTRA-OPTIMIZADO)
+      description: >
+        Retorna el feed con historias, participantes y likes extendidos.
+        MIGRADO para nueva estructura con Collection Group Queries ultra-rápidas.
+
+        **Múltiples modos de operación:**
+        1. **Historia específica**: Proporcionar `storyId` para obtener una historia individual
+        2. **Feed con seguidos**: Proporcionar `userId` para incluir historias de seguidos
+        3. **Feed completo**: Sin parámetros opcionales para obtener feed paginado
+
+        **Optimizaciones implementadas:**
+        - Collection Group Queries (99% más rápido)
+        - Campo raceId agregado automáticamente
+        - Paginación eficiente para móvil
+        - Consultas paralelas ultra-rápidas
+
+        **Rendimiento:**
+        - Historia específica: ~50ms
+        - Feed 20 historias: ~150ms
+        - Feed 50 historias: ~300ms
+      parameters:
+        - in: query
+          name: raceId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la carrera (NUEVO - requerido).
+          example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+          description: Identificador del evento (NUEVO - requerido).
+          example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+
+        - in: query
+          name: userId
+          required: false
+          schema:
+            type: string
+          description: >
+            Identificador del usuario para incluir historias de participantes seguidos.
+            Si se proporciona, el feed incluirá historias de seguidos además de las globales.
+          example: "user123"
+
+        - in: query
+          name: storyId
+          required: false
+          schema:
+            type: string
+          description: >
+            Identificador de historia específica.
+            Si se proporciona, retorna solo esa historia (ignora otros parámetros).
+            Si se omite, retorna feed completo con paginación.
+          example: "story_1749569812961"
+
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+          description: >
+            Número máximo de historias a retornar.
+            Optimizado para móvil (máximo 50).
+            Solo aplica en modo feed completo.
+          example: 20
+
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: >
+            Número de historias a omitir para paginación.
+            Solo aplica en modo feed completo.
+          example: 0
+
+      responses:
+        '200':
+          description: Feed extendido obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UltraOptimizedStory'
+                    description: Array de historias con datos completos
+
+                  pagination:
+                    $ref: '#/components/schemas/FeedPagination'
+
+                  performance:
+                    $ref: '#/components/schemas/PerformanceMetrics'
+
+                required:
+                  - stories
+                  - pagination
+                  - performance
+
+              examples:
+                historia_especifica:
+                  summary: Historia específica
+                  description: Respuesta cuando se proporciona storyId
+                  value:
+                    stories:
+                      - storyId: "story_1749569812961"
+                        raceId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        eventId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        participantId: "participant-789"
+                        description: "Historia específica"
+                        originType: "automatic_global"
+                        moderationStatus: "approved"
+                        date: "2024-01-15T10:30:00Z"
+                        fileUrl: "https://storage.googleapis.com/..."
+                        participant:
+                          name: "Juan Pérez"
+                          dorsal: "101"
+                          category: "Elite"
+                        totalLikes: 15
+                    pagination:
+                      limit: 1
+                      offset: 0
+                      total: 1
+                      hasMore: false
+                      currentPage: 1
+                      totalPages: 1
+                    performance:
+                      totalTime: 45
+                      queriesExecuted: 1
+                      storiesProcessed: 1
+                      mode: "single_story"
+
+                feed_con_seguidos:
+                  summary: Feed con seguidos
+                  description: Respuesta cuando se proporciona userId
+                  value:
+                    stories:
+                      - storyId: "story-1"
+                        raceId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        eventId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        participantId: "participant-1"
+                        description: "Historia de seguido"
+                        originType: "manual"
+                        moderationStatus: "approved"
+                        date: "2024-01-15T10:30:00Z"
+                        participant:
+                          name: "María García"
+                          dorsal: "205"
+                        totalLikes: 8
+                    pagination:
+                      limit: 20
+                      offset: 0
+                      total: 75
+                      hasMore: true
+                      currentPage: 1
+                      totalPages: 4
+                    performance:
+                      totalTime: 180
+                      queriesExecuted: 2
+                      storiesProcessed: 75
+                      mode: "feed"
+
+                feed_completo:
+                  summary: Feed completo
+                  description: Respuesta del feed paginado sin userId
+                  value:
+                    stories:
+                      - storyId: "story-1"
+                        raceId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        eventId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        participantId: "participant-1"
+                        description: "Historia global"
+                        originType: "automatic_global"
+                        moderationStatus: "approved"
+                        date: "2024-01-15T10:30:00Z"
+                        participant:
+                          name: "Carlos López"
+                          dorsal: "150"
+                        totalLikes: 12
+                    pagination:
+                      limit: 20
+                      offset: 0
+                      total: 55
+                      hasMore: true
+                      currentPage: 1
+                      totalPages: 3
+                    performance:
+                      totalTime: 163
+                      queriesExecuted: 1
+                      storiesProcessed: 55
+                      mode: "feed"
+
+        '400':
+          description: Parámetros faltantes o inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                parametros_faltantes:
+                  summary: Parámetros faltantes
+                  value:
+                    error: "Faltan los parámetros raceId y eventId"
+
+        '404':
+          description: Historia específica no encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Historia no encontrada"
+                  storyId:
+                    type: string
+                    example: "story-abc-123"
+                  raceId:
+                    type: string
+                    example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                  eventId:
+                    type: string
+                    example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error interno del servidor"
+                  details:
+                    type: string
+                    example: "Descripción detallada del error"
+
+  /api/follow:
+    post:
+      tags:
+        - Social
+      summary: Registrar seguimiento de un participante
+      description: Permite que un usuario siga a un participante en un evento. MIGRADO para nueva estructura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                followerId:
+                  type: string
+                  example: "user123"
+                followingId:
+                  type: string
+                  example: "participant456"
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (NUEVO - requerido)
+                  example: "race123"
+                eventId:
+                  type: string
+                  example: "marathon2024"
+              required:
+                - followerId
+                - followingId
+                - raceId
+                - eventId
+      responses:
+        '200':
+          description: Seguimiento registrado correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Seguimiento registrado correctamente."
+                  followerId:
+                    type: string
+                  followingId:
+                    type: string
+                  raceId:
+                    type: string
+                  eventId:
+                    type: string
+        '400':
+          description: Parámetros faltantes o seguimiento ya existente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Participante no existe en el evento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/unfollow:
+    post:
+      tags:
+        - Social
+      summary: Dejar de seguir a un participante
+      description: Permite que un usuario deje de seguir a un participante en un evento. MIGRADO para nueva estructura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                followerId:
+                  type: string
+                  example: "user123"
+                followingId:
+                  type: string
+                  example: "participant456"
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (NUEVO - requerido)
+                  example: "race123"
+                eventId:
+                  type: string
+                  example: "marathon2024"
+              required:
+                - followerId
+                - followingId
+                - raceId
+                - eventId
+      responses:
+        '200':
+          description: Seguimiento eliminado correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Seguimiento eliminado correctamente."
+                  followerId:
+                    type: string
+                  followingId:
+                    type: string
+                  raceId:
+                    type: string
+                  eventId:
+                    type: string
+        '400':
+          description: Parámetros faltantes o no se está siguiendo al participante.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Participante no existe en el evento.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/like:
+    post:
+      tags:
+        - Social
+      summary: Dar like a una historia
+      description: Agrega un like a una historia de un participante en un evento. MIGRADO para nueva estructura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (NUEVO - requerido)
+                  example: "race123"
+                eventId:
+                  type: string
+                  example: "marathon2024"
+                participantId:
+                  type: string
+                  example: "participant456"
+                storyId:
+                  type: string
+                  example: "story789"
+                userId:
+                  type: string
+                  example: "user123"
+              required:
+                - raceId
+                - eventId
+                - participantId
+                - storyId
+                - userId
+      responses:
+        '200':
+          description: Like agregado correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Like agregado correctamente."
+                  likeId:
+                    type: string
+                  userId:
+                    type: string
+                  raceId:
+                    type: string
+                  eventId:
+                    type: string
+                  participantId:
+                    type: string
+                  storyId:
+                    type: string
+        '400':
+          description: Parámetros faltantes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: La historia no existe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/likes/count:
+    get:
+      tags:
+        - Social
+      summary: Contar likes de un participante
+      description: Retorna el total de likes de un participante en un evento. MIGRADO para nueva estructura.
+      parameters:
+        - in: query
+          name: raceId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la carrera (NUEVO - requerido).
+          example: "race123"
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+          description: Identificador del evento.
+          example: "marathon2024"
+        - in: query
+          name: participantId
+          required: true
+          schema:
+            type: string
+          description: Identificador del participante.
+          example: "participant456"
+      responses:
+        '200':
+          description: Total de likes obtenido.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  participantId:
+                    type: string
+                  raceId:
+                    type: string
+                  eventId:
+                    type: string
+                  totalLikes:
+                    type: integer
+                    example: 10
+        '400':
+          description: Parámetros faltantes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Participante no encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/participant:
+    get:
+      tags:
+        - Participants
+      summary: Obtener información de un participante
+      description: Retorna los datos de un participante en un evento. MIGRADO para nueva estructura.
+      parameters:
+        - in: query
+          name: raceId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la carrera (NUEVO - requerido).
+          example: "race123"
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+          description: Identificador del evento.
+          example: "marathon2024"
+        - in: query
+          name: participantId
+          required: true
+          schema:
+            type: string
+          description: Identificador del participante.
+          example: "participant456"
+      responses:
+        '200':
+          description: Participante obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participant'
+        '400':
+          description: Parámetros faltantes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Participante no encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/participants/followers/count:
+    get:
+      tags:
+        - Participants
+      summary: Contar seguidores de un participante
+      description: Retorna el número de seguidores de un participante en un evento. MIGRADO para nueva estructura.
+      parameters:
+        - in: query
+          name: raceId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la carrera (NUEVO - requerido).
+          example: "race123"
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+          description: Identificador del evento.
+          example: "marathon2024"
+        - in: query
+          name: participantId
+          required: true
+          schema:
+            type: string
+          description: Identificador del participante.
+          example: "participant456"
+      responses:
+        '200':
+          description: Número de seguidores obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  raceId:
+                    type: string
+                  eventId:
+                    type: string
+                  participantId:
+                    type: string
+                  followersCount:
+                    type: integer
+                    example: 25
+        '400':
+          description: Parámetros faltantes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/following/count:
+    get:
+      tags:
+        - Users
+      summary: Contar participantes seguidos por un usuario
+      description: Retorna el número de participantes que un usuario sigue. MIGRADO para nueva estructura.
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: Identificador del usuario.
+          example: "user123"
+      responses:
+        '200':
+          description: Número de participantes seguidos obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                  followingCount:
+                    type: integer
+                    example: 15
+        '400':
+          description: Falta el parámetro userId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/following:
+    get:
+      tags:
+        - Users
+      summary: Listar participantes seguidos por un usuario
+      description: Retorna la lista completa de participantes que sigue un usuario con información detallada. MIGRADO para nueva estructura.
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: Identificador del usuario.
+          example: "user123"
+      responses:
+        '200':
+          description: Lista de participantes seguidos obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                    example: "user123"
+                  followingCount:
+                    type: integer
+                    example: 3
+                  participants:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        participantId:
+                          type: string
+                          example: "participant456"
+                        raceId:
+                          type: string
+                          example: "race123"
+                        eventId:
+                          type: string
+                          example: "marathon2024"
+                        followedAt:
+                          type: string
+                          format: date-time
+                          example: "2024-01-15T10:30:00Z"
+                        participant:
+                          $ref: '#/components/schemas/Participant'
+        '400':
+          description: Falta el parámetro userId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/search/participants:
+    get:
+      tags:
+        - Search
+      summary: Buscar participantes
+      description: |
+        Realiza una búsqueda de participantes utilizando Algolia.
+        ACTUALIZADO para nueva estructura races/events - ahora soporta filtrado de seguimientos por raceId/eventId.
+      parameters:
+        - in: query
+          name: query
+          required: false
+          schema:
+            type: string
+          description: Término de búsqueda. Si no se proporciona, retorna todos los participantes.
+          example: "John Doe"
+        - in: query
+          name: userId
+          required: false
+          schema:
+            type: string
+          description: Identificador del usuario para verificar seguimientos.
+          example: "user123"
+        - in: query
+          name: raceId
+          required: false
+          schema:
+            type: string
+          description: |
+            ID de la carrera para filtrar seguimientos específicos.
+            Si se proporciona junto con eventId, solo mostrará seguimientos para esa carrera/evento específico.
+          example: "marathon2024"
+        - in: query
+          name: eventId
+          required: false
+          schema:
+            type: string
+          description: |
+            ID del evento para filtrar seguimientos específicos.
+            Debe usarse junto con raceId para filtrado específico.
+          example: "event001"
+      responses:
+        '200':
+          description: Búsqueda realizada exitosamente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SearchParticipant'
+        '500':
+          description: Error en la búsqueda.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/downloadAndUpload:
+    post:
+      tags:
+        - Upload
+      summary: Descargar archivo desde URL y subirlo a Firebase Storage
+      description: >
+        Descarga un archivo desde una URL proporcionada y lo sube a Firebase Storage.
+        Endpoint completamente nuevo sin conflictos de middlewares. MIGRADO para nueva estructura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                apiKey:
+                  type: string
+                  description: API Key para autenticación
+                  example: "your-webhook-api-key"
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (NUEVO - requerido para nueva estructura)
+                  example: "race123"
+                eventId:
+                  type: string
+                  description: Identificador del evento
+                  example: "event456"
+                participantId:
+                  type: string
+                  description: Identificador del participante
+                  example: "participant789"
+                fileUrl:
+                  type: string
+                  description: URL del archivo a descargar
+                  example: "https://example.com/video.mp4"
+                description:
+                  type: string
+                  description: Descripción del archivo (opcional)
+                  example: "Video del participante"
+                originType:
+                  type: string
+                  description: Origen del archivo
+                  example: "aws-webhook"
+                date:
+                  type: string
+                  description: Fecha del archivo (opcional)
+                  example: "2024-01-15T10:30:00.000Z"
+              required:
+                - apiKey
+                - raceId
+                - eventId
+                - participantId
+                - fileUrl
+                - originType
+      responses:
+        '200':
+          description: Archivo descargado y subido exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "✅ Archivo descargado y subido exitosamente"
+                  fileUrl:
+                    type: string
+                    example: "https://storage.googleapis.com/..."
+                  fileName:
+                    type: string
+                    example: "abc123-video.mp4"
+                  mediaType:
+                    type: string
+                    enum: [image, video, unknown]
+                  originalFileName:
+                    type: string
+                    example: "video.mp4"
+                  sourceUrl:
+                    type: string
+                    example: "https://example.com/video.mp4"
+                  documentId:
+                    type: string
+                    example: "doc123abc"
+        '400':
+          description: Parámetros faltantes o error descargando archivo
+        '401':
+          description: API Key inválida
+        '500':
+          description: Error interno del servidor
+      security:
+        - ApiKeyAuth: []
+
+  /api/generateUploadUrl:
+    post:
+      tags:
+        - Upload
+      summary: Generar URL prefirmada para subida a Firebase Storage
+      description: >
+        Genera una URL prefirmada para subir archivos directamente a Firebase Storage.
+        MIGRADO a Firebase Storage y nueva estructura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (NUEVO - requerido)
+                  example: "race123"
+                eventId:
+                  type: string
+                  description: Identificador del evento
+                  example: "event456"
+                participantId:
+                  type: string
+                  description: Identificador del participante
+                  example: "participant789"
+                fileName:
+                  type: string
+                  description: Nombre del archivo
+                  example: "video.mp4"
+                contentType:
+                  type: string
+                  description: Tipo de contenido del archivo
+                  example: "video/mp4"
+              required:
+                - raceId
+                - eventId
+                - participantId
+                - fileName
+                - contentType
+      responses:
+        '200':
+          description: URL prefirmada generada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl:
+                    type: string
+                    description: URL prefirmada para subida
+                  filePath:
+                    type: string
+                    description: Ruta del archivo en Storage
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    description: Fecha de expiración de la URL
+        '400':
+          description: Parámetros faltantes
+        '500':
+          description: Error interno del servidor
+
+  /api/uploadToFirebase:
+    post:
+      tags:
+        - Upload
+      summary: Subir archivo directamente a Firebase Storage
+      description: >
+        Sube un archivo directamente a Firebase Storage con metadata completa.
+        MIGRADO a Firebase Storage y nueva estructura.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Archivo a subir
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (NUEVO - requerido)
+                  example: "race123"
+                eventId:
+                  type: string
+                  description: Identificador del evento
+                  example: "event456"
+                participantId:
+                  type: string
+                  description: Identificador del participante
+                  example: "participant789"
+                description:
+                  type: string
+                  description: Descripción del archivo (opcional)
+                  example: "Video del participante"
+              required:
+                - file
+                - raceId
+                - eventId
+                - participantId
+      responses:
+        '200':
+          description: Archivo subido exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Archivo subido exitosamente"
+                  fileUrl:
+                    type: string
+                    example: "https://storage.googleapis.com/..."
+                  fileName:
+                    type: string
+                    example: "abc123-video.mp4"
+                  mediaType:
+                    type: string
+                    enum: [image, video, unknown]
+        '400':
+          description: Parámetros faltantes o archivo no válido
+        '500':
+          description: Error interno del servidor
+
+  /api/confirmUpload:
+    post:
+      tags:
+        - Upload
+      summary: Confirmar subida y registrar en Firestore
+      description: >
+        Confirma la subida de un archivo y registra la metadata en Firestore.
+        MIGRADO a nueva estructura.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (NUEVO - requerido)
+                  example: "race123"
+                eventId:
+                  type: string
+                  description: Identificador del evento
+                  example: "event456"
+                participantId:
+                  type: string
+                  description: Identificador del participante
+                  example: "participant789"
+                fileName:
+                  type: string
+                  description: Nombre del archivo subido
+                  example: "abc123-video.mp4"
+                fileUrl:
+                  type: string
+                  description: URL del archivo en Storage
+                  example: "https://storage.googleapis.com/..."
+                description:
+                  type: string
+                  description: Descripción del archivo (opcional)
+                  example: "Video del participante"
+                originType:
+                  type: string
+                  description: Origen del archivo
+                  example: "manual-upload"
+              required:
+                - raceId
+                - eventId
+                - participantId
+                - fileName
+                - fileUrl
+      responses:
+        '200':
+          description: Upload confirmado y registrado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Upload confirmado exitosamente"
+                  documentId:
+                    type: string
+                    example: "doc123abc"
+                  storyData:
+                    type: object
+                    description: Datos de la historia registrada
+        '400':
+          description: Parámetros faltantes
+        '500':
+          description: Error interno del servidor
+
+  /api/altimetry:
+    post:
+      tags:
+        - Utilities
+      summary: Obtener altimetría con la API de Google
+      description: Devuelve datos de elevación entre un conjunto de coordenadas utilizando Google Maps Elevation API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                coordinates:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      lat:
+                        type: number
+                        example: 40.7128
+                      lng:
+                        type: number
+                        example: -74.0060
+                  description: Array de coordenadas (latitud, longitud)
+                samples:
+                  type: integer
+                  default: 100
+                  description: Número de muestras de elevación a obtener
+                  example: 100
+              required:
+                - coordinates
+      responses:
+        '200':
+          description: Datos de altimetría devueltos exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    elevation:
+                      type: number
+                      description: Elevación en metros
+                      example: 10.5
+                    location:
+                      type: object
+                      properties:
+                        lat:
+                          type: number
+                          example: 40.7128
+                        lng:
+                          type: number
+                          example: -74.0060
+                    resolution:
+                      type: number
+                      description: Resolución de los datos
+                      example: 4.771976
+        '400':
+          description: Solicitud malformada o coordenadas faltantes
+        '500':
+          description: Error al llamar a la API de Google
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Mensaje de error
+        error:
+          type: string
+          description: Detalles adicionales del error
+      required:
+        - message
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identificador del evento
+        name:
+          type: string
+          description: Nombre del evento
+        date:
+          type: string
+          format: date-time
+          description: Fecha del evento
+        location:
+          type: string
+          description: Ubicación del evento
+        config:
+          type: object
+          description: Configuración del evento
+
+    AthleteCardConfig:
+      type: object
+      properties:
+        components:
+          type: object
+          description: Configuración de componentes del widget
+          properties:
+            profile:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                position:
+                  type: string
+            stats:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                metrics:
+                  type: array
+                  items:
+                    type: string
+        metadata:
+          type: object
+          description: Metadatos de la configuración
+          properties:
+            version:
+              type: string
+            lastUpdated:
+              type: string
+              format: date-time
+      example:
+        components:
+          profile:
+            enabled: true
+            position: "top"
+          stats:
+            enabled: true
+            metrics: ["time", "pace", "distance"]
+        metadata:
+          version: "1.0"
+          lastUpdated: "2024-01-15T10:30:00Z"
+
+    Story:
+      type: object
+      properties:
+        storyId:
+          type: string
+        eventId:
+          type: string
+        participantId:
+          type: string
+        date:
+          type: string
+          format: date-time
+        content:
+          type: string
+        moderationStatus:
+          type: string
+        originType:
+          type: string
+
+    ExtendedStory:
+      allOf:
+        - $ref: '#/components/schemas/Story'
+        - type: object
+          properties:
+            participant:
+              type: object
+              description: Información del participante
+            totalLikes:
+              type: integer
+              description: Total de likes de la historia
+
+    UltraOptimizedStory:
+      type: object
+      properties:
+        storyId:
+          type: string
+          description: Identificador único de la historia
+          example: "story_1749569812961"
+
+        raceId:
+          type: string
+          description: Identificador de la carrera
+          example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+
+        eventId:
+          type: string
+          description: Identificador del evento
+          example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+
+        participantId:
+          type: string
+          description: Identificador del participante
+          example: "participant-789"
+
+        description:
+          type: string
+          nullable: true
+          description: Descripción de la historia
+          example: "Gran momento en la carrera"
+
+        originType:
+          type: string
+          enum: [automatic_global, manual, automatic_follow]
+          description: Tipo de origen de la historia
+          example: "automatic_global"
+
+        moderationStatus:
+          type: string
+          enum: [approved, pending, rejected]
+          description: Estado de moderación
+          example: "approved"
+
+        date:
+          type: string
+          format: date-time
+          description: Fecha y hora de la historia
+          example: "2024-01-15T10:30:00Z"
+
+        fileUrl:
+          type: string
+          nullable: true
+          description: URL del archivo multimedia
+          example: "https://storage.googleapis.com/..."
+
+        fileName:
+          type: string
+          nullable: true
+          description: Nombre del archivo
+          example: "image_001.jpg"
+
+        participant:
+          $ref: '#/components/schemas/OptimizedParticipant'
+
+        totalLikes:
+          type: integer
+          minimum: 0
+          description: Número total de likes
+          example: 15
+
+      required:
+        - storyId
+        - raceId
+        - eventId
+        - participantId
+        - originType
+        - moderationStatus
+        - date
+        - totalLikes
+
+    OptimizedParticipant:
+      type: object
+      nullable: true
+      properties:
+        name:
+          type: string
+          description: Nombre del participante
+          example: "Juan Pérez"
+
+        dorsal:
+          type: string
+          description: Número de dorsal
+          example: "101"
+
+        category:
+          type: string
+          nullable: true
+          description: Categoría del participante
+          example: "Elite"
+
+        team:
+          type: string
+          nullable: true
+          description: Equipo del participante
+          example: "Team Pro"
+
+    FeedPagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          description: Número de historias solicitadas
+          example: 20
+
+        offset:
+          type: integer
+          minimum: 0
+          description: Número de historias omitidas
+          example: 0
+
+        total:
+          type: integer
+          minimum: 0
+          description: Total de historias disponibles
+          example: 55
+
+        hasMore:
+          type: boolean
+          description: Indica si hay más páginas disponibles
+          example: true
+
+        currentPage:
+          type: integer
+          minimum: 1
+          description: Página actual
+          example: 1
+
+        totalPages:
+          type: integer
+          minimum: 1
+          description: Total de páginas
+          example: 3
+
+      required:
+        - limit
+        - offset
+        - total
+        - hasMore
+        - currentPage
+        - totalPages
+
+    PerformanceMetrics:
+      type: object
+      properties:
+        totalTime:
+          type: integer
+          minimum: 0
+          description: Tiempo total de respuesta en milisegundos
+          example: 163
+
+        queriesExecuted:
+          type: integer
+          minimum: 1
+          description: Número de consultas ejecutadas
+          example: 1
+
+        storiesProcessed:
+          type: integer
+          minimum: 0
+          description: Número de historias procesadas
+          example: 55
+
+        mode:
+          type: string
+          enum: [single_story, feed]
+          description: Modo de operación utilizado
+          example: "feed"
+
+      required:
+        - totalTime
+        - queriesExecuted
+        - storiesProcessed
+        - mode
+
+    Participant:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identificador del participante
+        name:
+          type: string
+          description: Nombre del participante
+        bib:
+          type: string
+          description: Número de dorsal
+        category:
+          type: string
+          description: Categoría del participante
+        team:
+          type: string
+          description: Equipo del participante
+      example:
+        id: "participant456"
+        name: "John Doe"
+        bib: "1234"
+        category: "M30-39"
+        team: "Running Club"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identificador del usuario
+        email:
+          type: string
+          format: email
+          description: Email del usuario
+        name:
+          type: string
+          description: Nombre del usuario
+        profile:
+          type: object
+          description: Información del perfil
+      example:
+        id: "user123"
+        email: "user@example.com"
+        name: "Jane Smith"
+        profile:
+          avatar: "https://example.com/avatar.jpg"
+          preferences: {}
+
+    SearchParticipant:
+      type: object
+      properties:
+        objectID:
+          type: string
+          description: ID del objeto en Algolia (participantId)
+        name:
+          type: string
+          description: Nombre del participante
+        bib:
+          type: string
+          description: Número de dorsal
+        category:
+          type: string
+          description: Categoría
+        raceId:
+          type: string
+          description: ID de la carrera (NUEVO - estructura races/events)
+        eventId:
+          type: string
+          description: ID del evento
+        following:
+          type: boolean
+          description: |
+            Si el usuario actual sigue a este participante.
+            ACTUALIZADO: Ahora considera el contexto de raceId/eventId si se proporcionan en la consulta.
+      example:
+        objectID: "participant456"
+        name: "John Doe"
+        bib: "1234"
+        category: "M30-39"
+        raceId: "race123"
+        eventId: "marathon2024"
+        following: true
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key para autenticación
+
+  parameters:
+    EventIdParam:
+      name: eventId
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Identificador del evento
+      example: "marathon2024"
+
+    UserIdParam:
+      name: userId
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Identificador del usuario
+      example: "user123"
+
+    ParticipantIdParam:
+      name: participantId
+      in: query
+      required: true
+      schema:
+        type: string
+      description: Identificador del participante
+      example: "participant456"
+
+    RaceIdParam:
+      name: raceId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Identificador de la carrera
+      example: "race123"
+
+tags:
+  - name: General
+    description: Endpoints generales de la API
+  - name: Authentication
+    description: Endpoints de autenticación y verificación
+  - name: Events
+    description: Gestión de eventos y carreras (MIGRADO)
+  - name: Athlete Card
+    description: Configuración del widget de atleta (MIGRADO)
+  - name: Feed
+    description: Feed de historias y contenido (MIGRADO + ULTRA-OPTIMIZADO - 99% más rápido)
+  - name: Social
+    description: Funcionalidades sociales - likes, follows (MIGRADO)
+  - name: Participants
+    description: Gestión de participantes (MIGRADO)
+  - name: Users
+    description: Gestión de usuarios (MIGRADO)
+  - name: Search
+    description: Búsqueda y filtrado con Algolia
+  - name: Upload
+    description: Subida de archivos a Firebase Storage (MIGRADO)
+  - name: Utilities
+    description: Utilidades y herramientas auxiliares

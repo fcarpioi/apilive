@@ -1,0 +1,26 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "build": {
+        "main": "index.mjs"
+      },
+      "serviceAccount": "firebase-adminsdk-fbsvc@live-copernico.iam.gserviceaccount.com",
+      "region": "us-central1",
+      "memory": "1GB",
+      "timeoutSeconds": 540,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+      
+    }
+  ],
+  "firestore": {
+    "indexes": "firestore.indexes.json"
+  }
+}

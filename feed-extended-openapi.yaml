@@ -1,0 +1,429 @@
+openapi: 3.0.3
+info:
+  title: Feed Extended API
+  description: |
+    API ultra-optimizada para obtener el feed de historias con datos completos.
+    
+    **Características principales:**
+    - Collection Group Queries ultra-rápidas (99% más rápido)
+    - Soporte para historia específica o feed completo
+    - Paginación eficiente para aplicaciones móviles
+    - Datos enriquecidos con participantes y likes
+    
+    **Rendimiento:**
+    - Historia específica: ~50ms
+    - Feed 20 historias: ~150ms
+    - Feed 50 historias: ~300ms
+  version: 2.0.0
+  contact:
+    name: API Support
+    email: support@copernico.com
+
+servers:
+  - url: https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway
+    description: Servidor de producción
+
+paths:
+  /api/feed/extended:
+    get:
+      summary: Obtener feed extendido de historias
+      description: |
+        Retorna el feed de historias con datos completos de participantes y likes.
+        
+        **Múltiples modos de operación:**
+        1. **Historia específica**: Proporcionar `storyId` para obtener una historia individual
+        2. **Feed con seguidos**: Proporcionar `userId` para incluir historias de seguidos
+        3. **Feed completo**: Sin parámetros opcionales para obtener feed paginado
+        
+        **Optimizaciones:**
+        - Collection Group Queries ultra-rápidas
+        - Campo raceId agregado automáticamente
+        - Límites optimizados para móvil
+      operationId: getFeedExtended
+      tags:
+        - Feed
+      parameters:
+        - name: raceId
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+          description: Identificador único de la carrera
+        
+        - name: eventId
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+          description: Identificador único del evento
+        
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "user-789"
+          description: |
+            Identificador del usuario para incluir historias de participantes seguidos.
+            Si se proporciona, el feed incluirá historias de seguidos además de las globales.
+
+        - name: storyId
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "story-abc-123"
+          description: |
+            Identificador de historia específica.
+            Si se proporciona, retorna solo esa historia (ignora otros parámetros).
+            Si se omite, retorna feed completo con paginación.
+        
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+            example: 20
+          description: |
+            Número máximo de historias a retornar.
+            Optimizado para móvil (máximo 50).
+            Solo aplica en modo feed completo.
+        
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+          description: |
+            Número de historias a omitir para paginación.
+            Solo aplica en modo feed completo.
+      
+      responses:
+        '200':
+          description: Feed obtenido exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Story'
+                    description: Array de historias con datos completos
+                  
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+                  
+                  performance:
+                    $ref: '#/components/schemas/Performance'
+                
+                required:
+                  - stories
+                  - pagination
+                  - performance
+              
+              examples:
+                historia_especifica:
+                  summary: Historia específica
+                  description: Respuesta cuando se proporciona storyId
+                  value:
+                    stories:
+                      - storyId: "story-abc-123"
+                        raceId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        eventId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        participantId: "participant-789"
+                        description: "Historia específica"
+                        originType: "automatic_global"
+                        moderationStatus: "approved"
+                        date: "2024-01-15T10:30:00Z"
+                        fileUrl: "https://storage.googleapis.com/..."
+                        participant:
+                          name: "Juan Pérez"
+                          dorsal: "101"
+                          category: "Elite"
+                        totalLikes: 15
+                    pagination:
+                      limit: 1
+                      offset: 0
+                      total: 1
+                      hasMore: false
+                      currentPage: 1
+                      totalPages: 1
+                    performance:
+                      totalTime: 45
+                      queriesExecuted: 1
+                      storiesProcessed: 1
+                      mode: "single_story"
+                
+                feed_completo:
+                  summary: Feed completo
+                  description: Respuesta del feed paginado
+                  value:
+                    stories:
+                      - storyId: "story-1"
+                        raceId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        eventId: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                        participantId: "participant-1"
+                        description: "Primera historia"
+                        originType: "automatic_global"
+                        moderationStatus: "approved"
+                        date: "2024-01-15T10:30:00Z"
+                        participant:
+                          name: "Juan Pérez"
+                          dorsal: "101"
+                        totalLikes: 5
+                    pagination:
+                      limit: 20
+                      offset: 0
+                      total: 150
+                      hasMore: true
+                      currentPage: 1
+                      totalPages: 8
+                    performance:
+                      totalTime: 150
+                      queriesExecuted: 1
+                      storiesProcessed: 150
+                      mode: "feed"
+        
+        '400':
+          description: Parámetros faltantes o inválidos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Faltan los parámetros raceId y eventId"
+        
+        '404':
+          description: Historia específica no encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Historia no encontrada"
+                  storyId:
+                    type: string
+                    example: "story-abc-123"
+                  raceId:
+                    type: string
+                    example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                  eventId:
+                    type: string
+                    example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+        
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error interno del servidor"
+                  details:
+                    type: string
+                    example: "Descripción detallada del error"
+
+components:
+  schemas:
+    Story:
+      type: object
+      properties:
+        storyId:
+          type: string
+          description: Identificador único de la historia
+          example: "story-abc-123"
+        
+        raceId:
+          type: string
+          description: Identificador de la carrera
+          example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+        
+        eventId:
+          type: string
+          description: Identificador del evento
+          example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+        
+        participantId:
+          type: string
+          description: Identificador del participante
+          example: "participant-789"
+        
+        description:
+          type: string
+          nullable: true
+          description: Descripción de la historia
+          example: "Gran momento en la carrera"
+        
+        originType:
+          type: string
+          enum: [automatic_global, manual, automatic_follow]
+          description: Tipo de origen de la historia
+          example: "automatic_global"
+        
+        moderationStatus:
+          type: string
+          enum: [approved, pending, rejected]
+          description: Estado de moderación
+          example: "approved"
+        
+        date:
+          type: string
+          format: date-time
+          description: Fecha y hora de la historia
+          example: "2024-01-15T10:30:00Z"
+        
+        fileUrl:
+          type: string
+          nullable: true
+          description: URL del archivo multimedia
+          example: "https://storage.googleapis.com/..."
+        
+        fileName:
+          type: string
+          nullable: true
+          description: Nombre del archivo
+          example: "image_001.jpg"
+        
+        participant:
+          $ref: '#/components/schemas/Participant'
+        
+        totalLikes:
+          type: integer
+          minimum: 0
+          description: Número total de likes
+          example: 15
+      
+      required:
+        - storyId
+        - raceId
+        - eventId
+        - participantId
+        - originType
+        - moderationStatus
+        - date
+        - totalLikes
+    
+    Participant:
+      type: object
+      nullable: true
+      properties:
+        name:
+          type: string
+          description: Nombre del participante
+          example: "Juan Pérez"
+        
+        dorsal:
+          type: string
+          description: Número de dorsal
+          example: "101"
+        
+        category:
+          type: string
+          nullable: true
+          description: Categoría del participante
+          example: "Elite"
+        
+        team:
+          type: string
+          nullable: true
+          description: Equipo del participante
+          example: "Team Pro"
+    
+    Pagination:
+      type: object
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          description: Número de historias solicitadas
+          example: 20
+        
+        offset:
+          type: integer
+          minimum: 0
+          description: Número de historias omitidas
+          example: 0
+        
+        total:
+          type: integer
+          minimum: 0
+          description: Total de historias disponibles
+          example: 150
+        
+        hasMore:
+          type: boolean
+          description: Indica si hay más páginas disponibles
+          example: true
+        
+        currentPage:
+          type: integer
+          minimum: 1
+          description: Página actual
+          example: 1
+        
+        totalPages:
+          type: integer
+          minimum: 1
+          description: Total de páginas
+          example: 8
+      
+      required:
+        - limit
+        - offset
+        - total
+        - hasMore
+        - currentPage
+        - totalPages
+    
+    Performance:
+      type: object
+      properties:
+        totalTime:
+          type: integer
+          minimum: 0
+          description: Tiempo total de respuesta en milisegundos
+          example: 150
+        
+        queriesExecuted:
+          type: integer
+          minimum: 1
+          description: Número de consultas ejecutadas
+          example: 1
+        
+        storiesProcessed:
+          type: integer
+          minimum: 0
+          description: Número de historias procesadas
+          example: 150
+        
+        mode:
+          type: string
+          enum: [single_story, feed]
+          description: Modo de operación utilizado
+          example: "feed"
+      
+      required:
+        - totalTime
+        - queriesExecuted
+        - storiesProcessed
+        - mode
+
+tags:
+  - name: Feed
+    description: Operaciones relacionadas con el feed de historias

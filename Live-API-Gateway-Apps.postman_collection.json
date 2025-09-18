@@ -1,0 +1,344 @@
+{
+	"info": {
+		"_postman_id": "live-api-gateway-apps",
+		"name": "Live API Gateway - Apps",
+		"description": "Collection para las nuevas APIs de Apps, Companies y Apps Feed Extended",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Apps",
+			"item": [
+				{
+					"name": "Get All Apps",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/apps",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"apps"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Apps by Company ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/apps?idcompany={{sampleCompanyId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"apps"
+							],
+							"query": [
+								{
+									"key": "idcompany",
+									"value": "{{sampleCompanyId}}",
+									"description": "ID de la company para filtrar apps"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Apps by Bundle ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/apps?bundleId={{sampleBundleId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"apps"
+							],
+							"query": [
+								{
+									"key": "bundleId",
+									"value": "{{sampleBundleId}}",
+									"description": "Bundle ID para filtrar apps"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Apps with Both Filters (Priority to Company)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/apps?idcompany={{sampleCompanyId}}&bundleId={{sampleBundleId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"apps"
+							],
+							"query": [
+								{
+									"key": "idcompany",
+									"value": "{{sampleCompanyId}}",
+									"description": "ID de la company (prioridad alta)"
+								},
+								{
+									"key": "bundleId",
+									"value": "{{sampleBundleId}}",
+									"description": "Bundle ID (prioridad baja)"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Companies",
+			"item": [
+				{
+					"name": "Get Companies (Last 15 Days)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/companies",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"companies"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Apps Feed Extended",
+			"item": [
+				{
+					"name": "Get Apps Feed Extended - Basic",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/apps/feed/extended?appId={{sampleAppId}}&raceId={{sampleRaceId}}&eventId={{sampleEventId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"apps",
+								"feed",
+								"extended"
+							],
+							"query": [
+								{
+									"key": "appId",
+									"value": "{{sampleAppId}}",
+									"description": "App ID (requerido)"
+								},
+								{
+									"key": "raceId",
+									"value": "{{sampleRaceId}}",
+									"description": "Race ID (requerido)"
+								},
+								{
+									"key": "eventId",
+									"value": "{{sampleEventId}}",
+									"description": "Event ID (requerido)"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Apps Feed Extended - With Pagination",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/apps/feed/extended?appId={{sampleAppId}}&raceId={{sampleRaceId}}&eventId={{sampleEventId}}&limit=10&offset=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"apps",
+								"feed",
+								"extended"
+							],
+							"query": [
+								{
+									"key": "appId",
+									"value": "{{sampleAppId}}",
+									"description": "App ID (requerido)"
+								},
+								{
+									"key": "raceId",
+									"value": "{{sampleRaceId}}",
+									"description": "Race ID (requerido)"
+								},
+								{
+									"key": "eventId",
+									"value": "{{sampleEventId}}",
+									"description": "Event ID (requerido)"
+								},
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Límite por página"
+								},
+								{
+									"key": "offset",
+									"value": "20",
+									"description": "Offset para paginación"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Apps Feed Extended - Specific Story",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/apps/feed/extended?appId={{sampleAppId}}&raceId={{sampleRaceId}}&eventId={{sampleEventId}}&storyId={{sampleStoryId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"apps",
+								"feed",
+								"extended"
+							],
+							"query": [
+								{
+									"key": "appId",
+									"value": "{{sampleAppId}}",
+									"description": "App ID (requerido)"
+								},
+								{
+									"key": "raceId",
+									"value": "{{sampleRaceId}}",
+									"description": "Race ID (requerido)"
+								},
+								{
+									"key": "eventId",
+									"value": "{{sampleEventId}}",
+									"description": "Event ID (requerido)"
+								},
+								{
+									"key": "storyId",
+									"value": "{{sampleStoryId}}",
+									"description": "Story ID específico"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://liveapigateway-3rt3xwiooa-uc.a.run.app",
+			"type": "string"
+		},
+		{
+			"key": "sampleAppId",
+			"value": "RtME2RACih6YxgrlmuQR",
+			"type": "string"
+		},
+		{
+			"key": "sampleRaceId",
+			"value": "683ea9b3-4878-4ec9-912e-4419ac1f1da3",
+			"type": "string"
+		},
+		{
+			"key": "sampleEventId",
+			"value": "683ea9b3-4878-4ec9-912e-4419ac1f1da3",
+			"type": "string"
+		},
+		{
+			"key": "sampleCompanyId",
+			"value": "4f739ee0-93af-11ec-a392-c562749f06e9",
+			"type": "string"
+		},
+		{
+			"key": "sampleBundleId",
+			"value": "live.app.com",
+			"type": "string"
+		},
+		{
+			"key": "sampleStoryId",
+			"value": "story-example-123",
+			"type": "string"
+		}
+	]
+}

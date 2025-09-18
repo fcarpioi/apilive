@@ -1,0 +1,19 @@
+# Firebase/Google Cloud Credentials - NEVER COMMIT
+serviceAccountKey.json
+serviceNew.json
+functions/serviceAccountKey.json
+functions/serviceNew.json
+
+# Environment variables
+.env
+functions/.env
+
+# Node modules
+node_modules/
+functions/node_modules/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
