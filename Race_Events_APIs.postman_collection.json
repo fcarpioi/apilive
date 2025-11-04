@@ -1,0 +1,523 @@
+{
+	"info": {
+		"_postman_id": "race-events-apis-2025",
+		"name": "Race Events APIs - Nuevas",
+		"description": "APIs para gestión de eventos de carrera con stories, participantes y sponsors",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Participants",
+			"item": [
+				{
+					"name": "POST Create Participant with Stories",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"eventId\": \"event-0\",\n  \"participantId\": \"TEST_RUNNER_001\",\n  \"participant\": {\n    \"name\": \"Carlos\",\n    \"lastName\": \"Rodríguez\",\n    \"dorsal\": \"456\",\n    \"category\": \"Seniors\",\n    \"externalId\": \"CAR_001\",\n    \"country\": \"España\",\n    \"profilePicture\": \"https://example.com/photo.jpg\",\n    \"description\": \"Corredor de prueba\"\n  },\n  \"stories\": [\n    {\n      \"type\": \"ATHELETE_STARTED\",\n      \"fileUrl\": \"https://stream.mux.com/start.m3u8\",\n      \"description\": \"Carlos inicia la carrera\",\n      \"mediaType\": \"video\",\n      \"duration\": 15,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"00:00:00\",\n        \"netTime\": \"00:00:00\",\n        \"split\": \"START\",\n        \"checkpoint\": \"Línea de Salida\"\n      }\n    },\n    {\n      \"type\": \"ATHELETE_CROSSED_TIMING_SPLIT\",\n      \"fileUrl\": \"https://stream.mux.com/checkpoint.m3u8\",\n      \"description\": \"Carlos pasa por 10K\",\n      \"mediaType\": \"video\",\n      \"duration\": 20,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"00:42:15\",\n        \"netTime\": \"00:42:10\",\n        \"split\": \"10K\",\n        \"checkpoint\": \"Checkpoint 10 Kilómetros\"\n      }\n    },\n    {\n      \"type\": \"ATHELETE_FINISHED\",\n      \"fileUrl\": \"https://stream.mux.com/finish.m3u8\",\n      \"description\": \"Carlos cruza la meta\",\n      \"mediaType\": \"video\",\n      \"duration\": 25,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"01:52:30\",\n        \"netTime\": \"01:52:25\",\n        \"split\": \"FINISH\",\n        \"checkpoint\": \"Meta Final\"\n      }\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/participants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"participants"
+							]
+						},
+						"description": "Crea un participante con múltiples stories que incluyen type y splitTime"
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Participant (Simple)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"eventId\": \"event-0\",\n  \"participant\": {\n    \"name\": \"María\",\n    \"lastName\": \"García\",\n    \"dorsal\": \"789\",\n    \"category\": \"Seniors\",\n    \"country\": \"México\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/participants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"participants"
+							]
+						},
+						"description": "Crea un participante sin stories"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para crear participantes con o sin stories"
+		},
+		{
+			"name": "Sponsors",
+			"item": [
+				{
+					"name": "POST Create Sponsor (Custom ID)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"sponsorId\": \"nike-sponsor-custom\",\n  \"sponsor\": {\n    \"name\": \"Nike\",\n    \"logoUrl\": \"https://example.com/nike-logo.png\",\n    \"posterUrl\": \"https://example.com/nike-poster.jpg\",\n    \"website\": \"https://nike.com\",\n    \"description\": \"Sponsor principal de la carrera\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsors",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsors"
+							]
+						},
+						"description": "Crea un sponsor con ID personalizado"
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Sponsor (Auto ID)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"sponsor\": {\n    \"name\": \"Gatorade\",\n    \"logoUrl\": \"https://example.com/gatorade-logo.png\",\n    \"posterUrl\": \"https://example.com/gatorade-poster.jpg\",\n    \"website\": \"https://gatorade.com\",\n    \"description\": \"Sponsor de hidratación\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sponsors",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sponsors"
+							]
+						},
+						"description": "Crea un sponsor con ID automático"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para crear sponsors"
+		},
+		{
+			"name": "Race Events",
+			"item": [
+				{
+					"name": "GET All Stories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"race-events"
+							],
+							"query": [
+								{
+									"key": "raceId",
+									"value": "{{raceId}}"
+								},
+								{
+									"key": "appId",
+									"value": "{{appId}}"
+								},
+								{
+									"key": "eventId",
+									"value": "{{eventId}}"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Obtiene todas las stories de eventos sin filtro"
+					},
+					"response": []
+				},
+				{
+					"name": "GET Started Stories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_STARTED",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"race-events"
+							],
+							"query": [
+								{
+									"key": "raceId",
+									"value": "{{raceId}}"
+								},
+								{
+									"key": "appId",
+									"value": "{{appId}}"
+								},
+								{
+									"key": "eventId",
+									"value": "{{eventId}}"
+								},
+								{
+									"key": "type",
+									"value": "ATHELETE_STARTED"
+								}
+							]
+						},
+						"description": "Obtiene solo stories de tipo ATHELETE_STARTED"
+					},
+					"response": []
+				},
+				{
+					"name": "GET Checkpoint Stories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_CROSSED_TIMING_SPLIT",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"race-events"
+							],
+							"query": [
+								{
+									"key": "raceId",
+									"value": "{{raceId}}"
+								},
+								{
+									"key": "appId",
+									"value": "{{appId}}"
+								},
+								{
+									"key": "eventId",
+									"value": "{{eventId}}"
+								},
+								{
+									"key": "type",
+									"value": "ATHELETE_CROSSED_TIMING_SPLIT"
+								}
+							]
+						},
+						"description": "Obtiene solo stories de checkpoints"
+					},
+					"response": []
+				},
+				{
+					"name": "GET Finished Stories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_FINISHED",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"race-events"
+							],
+							"query": [
+								{
+									"key": "raceId",
+									"value": "{{raceId}}"
+								},
+								{
+									"key": "appId",
+									"value": "{{appId}}"
+								},
+								{
+									"key": "eventId",
+									"value": "{{eventId}}"
+								},
+								{
+									"key": "type",
+									"value": "ATHELETE_FINISHED"
+								}
+							]
+						},
+						"description": "Obtiene solo stories de meta/finalización"
+					},
+					"response": []
+				},
+				{
+					"name": "GET With Pagination",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=5&offset=0",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"race-events"
+							],
+							"query": [
+								{
+									"key": "raceId",
+									"value": "{{raceId}}"
+								},
+								{
+									"key": "appId",
+									"value": "{{appId}}"
+								},
+								{
+									"key": "eventId",
+									"value": "{{eventId}}"
+								},
+								{
+									"key": "limit",
+									"value": "5"
+								},
+								{
+									"key": "offset",
+									"value": "0"
+								}
+							]
+						},
+						"description": "Obtiene stories con paginación"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para obtener stories de eventos de carrera"
+		},
+		{
+			"name": "Migration",
+			"item": [
+				{
+					"name": "POST Migrate Participants (Test - 2 participants)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"eventId\": \"event-0\",\n  \"limit\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/migrate-participants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"migrate-participants"
+							]
+						},
+						"description": "Migra 2 participantes de prueba de estructura antigua a nueva con 3 stories cada uno"
+					},
+					"response": []
+				},
+				{
+					"name": "POST Migrate Participants (Production - 10 participants)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"eventId\": \"event-0\",\n  \"limit\": 10\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/migrate-participants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"migrate-participants"
+							]
+						},
+						"description": "Migra 10 participantes de estructura antigua a nueva con 3 stories cada uno"
+					},
+					"response": []
+				},
+				{
+					"name": "POST Migrate Participants (Batch - 50 participants)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"eventId\": \"event-0\",\n  \"limit\": 50\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/migrate-participants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"migrate-participants"
+							]
+						},
+						"description": "Migra hasta 50 participantes (máximo permitido) de estructura antigua a nueva"
+					},
+					"response": []
+				}
+			],
+			"description": "API de migración para mover participantes de estructura antigua a nueva"
+		},
+		{
+			"name": "AWS Integration",
+			"item": [
+				{
+					"name": "POST Checkpoint Participant (AWS → API)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apiKey\": \"9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0\",\n  \"id\": \"AWS_PARTICIPANT_001\",\n  \"name\": \"Carlos\",\n  \"surname\": \"Rodríguez\",\n  \"fullname\": \"Carlos Rodríguez\",\n  \"birthdate\": \"1985-03-15\",\n  \"gender\": \"male\",\n  \"events\": [{\n    \"status\": \"running\",\n    \"realStatus\": \"running\",\n    \"event\": \"event-0\",\n    \"dorsal\": \"1001\",\n    \"category\": \"Seniors\",\n    \"team\": \"Team AWS\",\n    \"club\": \"Running Club\",\n    \"featured\": true,\n    \"times\": {\n      \"START\": {\n        \"time\": \"00:00:00\",\n        \"netTime\": \"00:00:00\",\n        \"raw\": 1640995200000\n      },\n      \"5K\": {\n        \"time\": \"00:22:30\",\n        \"netTime\": \"00:22:28\",\n        \"raw\": 1640996550000\n      },\n      \"10K\": {\n        \"time\": \"00:45:15\",\n        \"netTime\": \"00:45:12\",\n        \"raw\": 1640997915000\n      },\n      \"FINISH\": {\n        \"time\": \"01:32:45\",\n        \"netTime\": \"01:32:40\",\n        \"raw\": 1641000765000\n      }\n    }\n  }],\n  \"locations\": [\"checkpoint-1\", \"checkpoint-2\"]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/checkpoint-participant",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"checkpoint-participant"
+							]
+						},
+						"description": "API que AWS debe llamar cuando un participante pasa por un checkpoint. Procesa datos completos del participante y crea stories automáticamente."
+					},
+					"response": []
+				},
+				{
+					"name": "POST Checkpoint Participant (Minimal Data)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apiKey\": \"9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0\",\n  \"id\": \"AWS_MINIMAL_001\",\n  \"name\": \"Ana\",\n  \"surname\": \"García\",\n  \"events\": [{\n    \"event\": \"event-0\",\n    \"dorsal\": \"2001\",\n    \"category\": \"Seniors\",\n    \"times\": {\n      \"21K\": {\n        \"time\": \"01:45:30\",\n        \"netTime\": \"01:45:25\"\n      }\n    }\n  }]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/checkpoint-participant",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"checkpoint-participant"
+							]
+						},
+						"description": "Ejemplo con datos mínimos requeridos para el endpoint de checkpoint"
+					},
+					"response": []
+				}
+			],
+			"description": "APIs para integración con AWS - recepción de datos de checkpoints"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://liveapigateway-3rt3xwiooa-uc.a.run.app",
+			"type": "string"
+		},
+		{
+			"key": "raceId",
+			"value": "race-001-madrid-marathon",
+			"type": "string"
+		},
+		{
+			"key": "appId",
+			"value": "RtME2RACih6YxgrlmuQR",
+			"type": "string"
+		},
+		{
+			"key": "eventId",
+			"value": "event-0",
+			"type": "string"
+		}
+	]
+}

@@ -967,8 +967,8 @@ paths:
         - Search
       summary: Buscar participantes
       description: |
-        Realiza una búsqueda de participantes utilizando Algolia.
-        ACTUALIZADO para nueva estructura races/events - ahora soporta filtrado de seguimientos por raceId/eventId.
+        Realiza una búsqueda de participantes en Firestore con múltiples campos (nombre, dorsal, categoría, equipo).
+        Compatible con nueva estructura races/apps/events - soporta filtrado de seguimientos por raceId/eventId.
       parameters:
         - in: query
           name: query
@@ -986,33 +986,73 @@ paths:
           example: "user123"
         - in: query
           name: raceId
-          required: false
+          required: true
           schema:
             type: string
-          description: |
-            ID de la carrera para filtrar seguimientos específicos.
-            Si se proporciona junto con eventId, solo mostrará seguimientos para esa carrera/evento específico.
-          example: "marathon2024"
+          description: ID de la carrera.
+          example: "race-001-madrid-marathon"
+        - in: query
+          name: appId
+          required: true
+          schema:
+            type: string
+          description: ID de la aplicación.
+          example: "RtME2RACih6YxgrlmuQR"
         - in: query
           name: eventId
-          required: false
+          required: true
           schema:
             type: string
-          description: |
-            ID del evento para filtrar seguimientos específicos.
-            Debe usarse junto con raceId para filtrado específico.
-          example: "event001"
+          description: ID del evento.
+          example: "event-0"
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Número máximo de resultados a retornar.
+          example: 20
       responses:
         '200':
-          description: Búsqueda realizada exitosamente.
+          description: Lista de participantes encontrados
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/SearchParticipant'
+                type: object
+                properties:
+                  participants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchParticipant'
+                  total:
+                    type: integer
+                    description: Número total de participantes encontrados
+                  query:
+                    type: string
+                    description: Término de búsqueda utilizado
+                  searchMethod:
+                    type: string
+                    description: Método de búsqueda utilizado
+                    example: "firestore_native"
+                  raceId:
+                    type: string
+                    description: ID de la carrera
+                  appId:
+                    type: string
+                    description: ID de la aplicación
+                  eventId:
+                    type: string
+                    description: ID del evento
+        '400':
+          description: Parámetros requeridos faltantes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
-          description: Error en la búsqueda.
+          description: Error en la búsqueda
           content:
             application/json:
               schema:
@@ -1718,37 +1758,89 @@ components:
     SearchParticipant:
       type: object
       properties:
+        id:
+          type: string
+          description: ID del participante
         objectID:
           type: string
-          description: ID del objeto en Algolia (participantId)
+          description: ID del participante (para compatibilidad con frontend)
         name:
           type: string
           description: Nombre del participante
+        fullName:
+          type: string
+          description: Nombre completo del participante
         bib:
           type: string
           description: Número de dorsal
+        dorsal:
+          type: string
+          description: Número de dorsal (campo nativo)
         category:
           type: string
           description: Categoría
+        team:
+          type: string
+          description: Equipo
+        club:
+          type: string
+          description: Club
+        gender:
+          type: string
+          description: Género
+        featured:
+          type: boolean
+          description: Si es un participante destacado
+        status:
+          type: string
+          description: Estado del participante
+        following:
+          type: boolean
+          description: Si el usuario actual sigue a este participante
         raceId:
           type: string
-          description: ID de la carrera (NUEVO - estructura races/events)
+          description: ID de la carrera
+        appId:
+          type: string
+          description: ID de la aplicación
         eventId:
           type: string
           description: ID del evento
-        following:
-          type: boolean
-          description: |
-            Si el usuario actual sigue a este participante.
-            ACTUALIZADO: Ahora considera el contexto de raceId/eventId si se proporcionan en la consulta.
+        birthdate:
+          type: string
+          description: Fecha de nacimiento
+        country:
+          type: string
+          description: País
+        wave:
+          type: string
+          description: Ola de salida
+        chip:
+          type: array
+          items:
+            type: integer
+          description: Números de chip
       example:
+        id: "participant456"
         objectID: "participant456"
-        name: "John Doe"
+        name: "John"
+        fullName: "John Doe"
         bib: "1234"
+        dorsal: "1234"
         category: "M30-39"
-        raceId: "race123"
-        eventId: "marathon2024"
+        team: "Running Club"
+        club: "Athletic Club"
+        gender: "male"
+        featured: false
+        status: "running"
         following: true
+        raceId: "race-001-madrid-marathon"
+        appId: "RtME2RACih6YxgrlmuQR"
+        eventId: "event-0"
+        birthdate: "1985-05-15"
+        country: "España"
+        wave: "1"
+        chip: [1234]
 
   securitySchemes:
     ApiKeyAuth:

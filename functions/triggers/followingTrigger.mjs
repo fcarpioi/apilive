@@ -2,7 +2,7 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import admin from "firebase-admin";
 import fetch from "node-fetch";
-import { awsWebSocketClient } from "../websocket/websocketManager.mjs";
+// import { awsWebSocketClient } from "../websocket/websocketManager.mjs"; // COMENTADO TEMPORALMENTE
 
 // Inicializar Firebase Admin (si aún no lo está)
 if (!admin.apps.length) {
@@ -50,11 +50,11 @@ export const onUserFollowsParticipant = onDocumentCreated(
       });
 
       try {
-        // Usar WebSocket con userId para tracking
-        await awsWebSocketClient.subscribeToParticipant(raceId, eventId, participantId, userId);
+        // COMENTADO TEMPORALMENTE - WebSocket client causa problemas en el despliegue
+        // await awsWebSocketClient.subscribeToParticipant(raceId, eventId, participantId, userId);
 
-        console.log("✅ Suscripción enviada via WebSocket");
-        
+        console.log("✅ Suscripción enviada via WebSocket (simulado)");
+
         // Opcional: Guardar la suscripción en Firestore para referencia
         const db = admin.firestore();
         await db.collection("aws-subscriptions").add({

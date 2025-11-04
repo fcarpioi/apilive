@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "algoliasearch": "^5.20.2",
     "body-parser": "^1.20.3",
     "busboy": "^1.6.0",
     "cors": "^2.8.5",

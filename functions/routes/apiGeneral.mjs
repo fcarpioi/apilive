@@ -8,6 +8,9 @@ import { v4 as uuidv4 } from "uuid";
 //import dotenv from "dotenv";
 //dotenv.config();
 
+// Importar rutas FCM
+import fcmTokensRouter from "./fcmTokens.mjs";
+
 // Inicializar Firebase Admin (si aún no lo está)
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -572,8 +575,8 @@ router.get("/likes/count", async (req, res) => {
  * @openapi
  * /api/participant:
  *   get:
- *     summary: Obtener información de un participante
- *     description: Retorna los datos de un participante en un evento. MIGRADO para nueva estructura.
+ *     summary: Obtener información de un participante (ESTRUCTURA ANTIGUA)
+ *     description: Retorna los datos de un participante en un evento. DEPRECADO - usar /api/apps/participant.
  *     parameters:
  *       - in: query
  *         name: raceId
@@ -605,27 +608,227 @@ router.get("/likes/count", async (req, res) => {
  */
 router.get("/participant", async (req, res) => {
   try {
-    const { raceId, eventId, participantId } = req.query;
+    const { raceId, eventId, participantId, appId } = req.query;
     if (!raceId || !eventId || !participantId) {
       return res.status(400).json({
         message: "raceId, eventId y participantId son obligatorios.",
       });
     }
+
     const db = admin.firestore();
-    const participantRef = db.collection("races").doc(raceId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId);
-    const participantDoc = await participantRef.get();
-    if (!participantDoc.exists) {
-      return res.status(404).json({ message: "El participante no existe en este evento." });
+    let participantDoc = null;
+    let participantRef = null;
+
+    // Si se proporciona appId, usar nueva estructura
+    if (appId) {
+      console.log(`🔍 Buscando participante en nueva estructura: races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`);
+      participantRef = db.collection("races").doc(raceId)
+        .collection("apps").doc(appId)
+        .collection("events").doc(eventId)
+        .collection("participants").doc(participantId);
+      participantDoc = await participantRef.get();
     }
-    return res.status(200).json({
+
+    // Si no se encuentra en nueva estructura o no se proporcionó appId, buscar en estructura antigua
+    if (!participantDoc || !participantDoc.exists) {
+      console.log(`🔍 Buscando participante en estructura antigua: races/${raceId}/events/${eventId}/participants/${participantId}`);
+      participantRef = db.collection("races").doc(raceId)
+        .collection("events").doc(eventId)
+        .collection("participants").doc(participantId);
+      participantDoc = await participantRef.get();
+    }
+
+    if (!participantDoc.exists) {
+      return res.status(404).json({
+        message: "El participante no existe en este evento.",
+        searchedStructures: appId ? ["nueva (races/apps/events)", "antigua (races/events)"] : ["antigua (races/events)"]
+      });
+    }
+
+    const participantData = {
       id: participantDoc.id,
-      ...participantDoc.data(),
-    });
+      ...participantDoc.data()
+    };
+
+    // Si se encontró en nueva estructura y se quieren splits, agregarlos
+    if (appId && participantDoc.exists) {
+      try {
+        // Obtener splits del participante
+        const storiesSnapshot = await participantRef.collection("stories")
+          .where("type", "in", ["ATHELETE_STARTED", "ATHELETE_FINISHED", "ATHELETE_CROSSED_TIMING_SPLIT"])
+          .orderBy("date", "asc")
+          .get();
+
+        const splits = storiesSnapshot.docs.map(doc => {
+          const storyData = doc.data();
+          return {
+            storyId: doc.id,
+            type: storyData.type,
+            date: storyData.date,
+            description: storyData.description || "",
+            ...(storyData.split_time || storyData.splitTime || {}),
+            fileUrl: storyData.fileUrl || "",
+            moderationStatus: storyData.moderationStatus || ""
+          };
+        });
+
+        participantData.splits = splits;
+        participantData.totalSplits = splits.length;
+        participantData.structure = "nueva (con splits)";
+      } catch (splitError) {
+        console.warn("⚠️ Error obteniendo splits:", splitError);
+        participantData.structure = "nueva (sin splits)";
+      }
+    } else {
+      participantData.structure = "antigua";
+    }
+
+    return res.status(200).json(participantData);
   } catch (error) {
     console.error("Error al obtener el participante:", error);
     return res.status(500).json({ message: "Error interno del servidor", error: error.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/apps/participant:
+ *   get:
+ *     summary: Obtener información completa de un participante con splits
+ *     description: Retorna los datos de un participante en un evento con información de splits/checkpoints incluida. NUEVA ESTRUCTURA RECOMENDADA.
+ *     parameters:
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador de la carrera.
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador de la aplicación.
+ *       - in: query
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador del evento.
+ *       - in: query
+ *         name: participantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador del participante.
+ *     responses:
+ *       '200':
+ *         description: Participante obtenido exitosamente con splits incluidos.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                 name:
+ *                   type: string
+ *                 dorsal:
+ *                   type: string
+ *                 category:
+ *                   type: string
+ *                 splits:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       storyId:
+ *                         type: string
+ *                       type:
+ *                         type: string
+ *                       time:
+ *                         type: string
+ *                       netTime:
+ *                         type: string
+ *                       split:
+ *                         type: string
+ *                       checkpoint:
+ *                         type: string
+ *       '400':
+ *         description: Parámetros faltantes.
+ *       '404':
+ *         description: Participante no encontrado.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.get("/apps/participant", async (req, res) => {
+  try {
+    const { raceId, appId, eventId, participantId } = req.query;
+    if (!raceId || !appId || !eventId || !participantId) {
+      return res.status(400).json({
+        message: "raceId, appId, eventId y participantId son obligatorios.",
+      });
+    }
+
+    const db = admin.firestore();
+    console.log(`🔍 Obteniendo participante: ${participantId} en Race: ${raceId}, App: ${appId}, Event: ${eventId}`);
+
+    // Obtener datos del participante
+    const participantRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants").doc(participantId);
+
+    const participantDoc = await participantRef.get();
+    if (!participantDoc.exists) {
+      return res.status(404).json({
+        message: "El participante no existe en este evento.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
+      });
+    }
+
+    const participantData = {
+      id: participantDoc.id,
+      ...participantDoc.data()
+    };
+
+    // Obtener splits/checkpoints del participante desde sus stories
+    console.log(`📊 Obteniendo splits para participante: ${participantId}`);
+    const storiesSnapshot = await participantRef.collection("stories")
+      .where("type", "in", ["ATHELETE_STARTED", "ATHELETE_FINISHED", "ATHELETE_CROSSED_TIMING_SPLIT"])
+      .orderBy("date", "asc")
+      .get();
+
+    const splits = storiesSnapshot.docs.map(doc => {
+      const storyData = doc.data();
+      return {
+        storyId: doc.id,
+        type: storyData.type,
+        date: storyData.date,
+        description: storyData.description,
+        ...(storyData.split_time || storyData.splitTime || {}),
+        fileUrl: storyData.fileUrl || "",
+        moderationStatus: storyData.moderationStatus
+      };
+    });
+
+    console.log(`✅ Participante encontrado con ${splits.length} splits`);
+
+    return res.status(200).json({
+      ...participantData,
+      splits: splits,
+      totalSplits: splits.length,
+      raceId,
+      appId,
+      eventId
+    });
+
+  } catch (error) {
+    console.error("❌ Error al obtener el participante:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
   }
 });
 
@@ -1164,61 +1367,68 @@ router.get("/apps/feed/extended", async (req, res) => {
       console.log(`[PERF] Obteniendo historia específica: ${storyId} en app: ${appId}`);
 
       try {
-        // Buscar la historia específica en la estructura de apps
-        console.log(`[PERF] Buscando historia específica en estructura /apps/${appId}/races/${raceId}/events/${eventId}`);
+        // Buscar la historia iterando por participantes
+        console.log(`[PERF] Buscando historia específica en /apps/${appId}/races/${raceId}/events/${eventId}`);
 
-        const storyQuery = db.collection('apps').doc(appId)
-          .collection('races').doc(raceId)
+        // Obtener todos los participantes - ESTRUCTURA CORRECTA: races/apps/events
+        const participantsSnapshot = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
           .collection('events').doc(eventId)
-          .collection('participants')
-          .where('stories', 'array-contains', storyId)
-          .limit(1);
-
-        const participantsSnapshot = await storyQuery.get();
+          .collection('participants').get();
 
         if (participantsSnapshot.empty) {
-          console.log(`❌ Historia ${storyId} no encontrada en app ${appId}`);
+          console.log(`❌ No hay participantes en el evento`);
           return res.status(404).json({
-            error: "Historia no encontrada",
-            storyId,
+            error: "No hay participantes en el evento",
             appId,
             raceId,
             eventId
           });
         }
 
-        // Obtener la historia específica
-        const participantDoc = participantsSnapshot.docs[0];
-        const participantId = participantDoc.id;
+        // Buscar la historia en cada participante
+        let foundStory = null;
+        let foundParticipantId = null;
+        let foundParticipantData = null;
 
-        const storyDoc = await db.collection('apps').doc(appId)
-          .collection('races').doc(raceId)
-          .collection('events').doc(eventId)
-          .collection('participants').doc(participantId)
-          .collection('stories').doc(storyId).get();
+        for (const participantDoc of participantsSnapshot.docs) {
+          const participantId = participantDoc.id;
 
-        if (!storyDoc.exists) {
+          const storyDoc = await db.collection('races').doc(raceId)
+            .collection('apps').doc(appId)
+            .collection('events').doc(eventId)
+            .collection('participants').doc(participantId)
+            .collection('stories').doc(storyId).get();
+
+          if (storyDoc.exists) {
+            foundStory = storyDoc.data();
+            foundParticipantId = participantId;
+            foundParticipantData = participantDoc.data();
+            console.log(`✅ Historia encontrada en participante: ${participantId}`);
+            break;
+          }
+        }
+
+        if (!foundStory) {
+          console.log(`❌ Historia ${storyId} no encontrada en ningún participante`);
           return res.status(404).json({
             error: "Historia no encontrada",
             storyId,
             appId,
             raceId,
             eventId,
-            participantId
+            participantsSearched: participantsSnapshot.size
           });
         }
 
-        const storyData = storyDoc.data();
-        const participantData = participantDoc.data();
-
         const enrichedStory = {
-          storyId: storyDoc.id,
+          storyId: storyId,
           appId,
           raceId,
           eventId,
-          participantId,
-          ...storyData,
-          participant: participantData,
+          participantId: foundParticipantId,
+          ...foundStory,
+          participant: foundParticipantData,
           totalLikes: 0 // TODO: Implementar conteo de likes
         };
 
@@ -1236,7 +1446,7 @@ router.get("/apps/feed/extended", async (req, res) => {
           },
           performance: {
             totalTime: Date.now() - startTime,
-            queriesExecuted: 2,
+            queriesExecuted: participantsSnapshot.size + 1,
             storiesProcessed: 1
           }
         });
@@ -1258,9 +1468,9 @@ router.get("/apps/feed/extended", async (req, res) => {
 
     let step2Time = Date.now();
 
-    // 1. Obtener todos los participantes del evento en la app
-    const participantsSnapshot = await db.collection('apps').doc(appId)
-      .collection('races').doc(raceId)
+    // 1. Obtener todos los participantes del evento en la app - ESTRUCTURA CORRECTA: races/apps/events
+    const participantsSnapshot = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
       .collection('events').doc(eventId)
       .collection('participants').get();
 
@@ -1291,13 +1501,11 @@ router.get("/apps/feed/extended", async (req, res) => {
       const participantId = participantDoc.id;
       const participantData = participantDoc.data();
 
-      const storiesSnapshot = await db.collection('apps').doc(appId)
-        .collection('races').doc(raceId)
+      const storiesSnapshot = await db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
         .collection('events').doc(eventId)
         .collection('participants').doc(participantId)
         .collection('stories')
-        .where('moderationStatus', '==', 'approved')
-        .where('originType', '==', 'automatic_global')
         .orderBy('date', 'desc')
         .get();
 
@@ -1358,6 +1566,1484 @@ router.get("/apps/feed/extended", async (req, res) => {
   } catch (error) {
     console.error("Error al obtener el feed extendido de apps:", error);
     return res.status(500).json({ error: "Error interno del servidor", details: error.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/participants:
+ *   post:
+ *     summary: Crear participante con stories
+ *     description: Crea un participante en un evento específico y opcionalmente agrega stories al participante
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - raceId
+ *               - appId
+ *               - eventId
+ *               - participant
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera
+ *               appId:
+ *                 type: string
+ *                 description: ID de la aplicación
+ *               eventId:
+ *                 type: string
+ *                 description: ID del evento
+ *               participantId:
+ *                 type: string
+ *                 description: ID personalizado del participante (opcional, se genera automáticamente si no se proporciona)
+ *               participant:
+ *                 type: object
+ *                 description: Datos del participante
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   lastName:
+ *                     type: string
+ *                   dorsal:
+ *                     type: string
+ *                   category:
+ *                     type: string
+ *                   externalId:
+ *                     type: string
+ *                   country:
+ *                     type: string
+ *                   profilePicture:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *               stories:
+ *                 type: array
+ *                 description: Array de stories para el participante (opcional)
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     type:
+ *                       type: string
+ *                       enum: [ATHELETE_CROSSED_TIMING_SPLIT, ATHELETE_STARTED, ATHELETE_FINISHED, SPONSOR]
+ *                       description: Tipo de evento de la story
+ *                     fileUrl:
+ *                       type: string
+ *                     description:
+ *                       type: string
+ *                     mediaType:
+ *                       type: string
+ *                     duration:
+ *                       type: number
+ *                     moderationStatus:
+ *                       type: string
+ *                     originType:
+ *                       type: string
+ *                     splitTime:
+ *                       type: object
+ *                       description: Datos de tiempo de split para esta story específica
+ *                       properties:
+ *                         time:
+ *                           type: string
+ *                         netTime:
+ *                           type: string
+ *                         split:
+ *                           type: string
+ *                         checkpoint:
+ *                           type: string
+ *     responses:
+ *       '201':
+ *         description: Participante creado exitosamente
+ *       '400':
+ *         description: Parámetros inválidos
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.post("/participants", async (req, res) => {
+  try {
+    const { raceId, appId, eventId, participantId, participant, stories = [] } = req.body;
+
+    if (!raceId || !appId || !eventId || !participant) {
+      return res.status(400).json({
+        error: "Faltan parámetros requeridos",
+        required: ["raceId", "appId", "eventId", "participant"]
+      });
+    }
+
+    const db = admin.firestore();
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    console.log(`📝 Creando participante en Race: ${raceId}, App: ${appId}, Event: ${eventId}`);
+
+    // Preparar datos del participante
+    const participantData = {
+      ...participant,
+      raceId,
+      eventId,
+      registerDate: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    // Usar participantId proporcionado o generar uno automático
+    let finalParticipantId = participantId;
+    let participantRef;
+
+    if (finalParticipantId) {
+      // Usar ID personalizado
+      participantRef = db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('events').doc(eventId)
+        .collection('participants').doc(finalParticipantId);
+
+      await participantRef.set(participantData);
+    } else {
+      // Generar ID automático
+      participantRef = await db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('events').doc(eventId)
+        .collection('participants').add(participantData);
+
+      finalParticipantId = participantRef.id;
+    }
+
+    console.log(`✅ Participante creado: ${finalParticipantId}`);
+
+    // Crear stories si se proporcionaron
+    const createdStories = [];
+    if (stories && stories.length > 0) {
+      console.log(`📸 Creando ${stories.length} stories para el participante`);
+
+      for (let i = 0; i < stories.length; i++) {
+        const story = stories[i];
+
+        const storyData = {
+          ...story,
+          participantId: finalParticipantId,
+          raceId,
+          eventId,
+          createdAt: timestamp,
+          date: timestamp,
+          // Campos por defecto si no se proporcionan
+          fileName: story.fileName || `story_${Date.now()}_${i}.mp4`,
+          filePath: story.filePath || `participants/${finalParticipantId}/stories/story_${Date.now()}_${i}.mp4`,
+          fileSize: story.fileSize || 0,
+          contentType: story.contentType || "video/mp4",
+          mediaType: story.mediaType || "video",
+          moderationStatus: story.moderationStatus || "approved",
+          originType: story.originType || "manual",
+          duration: story.duration || 0,
+          testData: story.testData || false,
+          // NUEVOS CAMPOS REQUERIDOS
+          type: story.type || "ATHELETE_STARTED", // Tipo de evento por defecto
+          splitTime: story.splitTime || {} // Datos de split time
+        };
+
+        const storyRef = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(eventId)
+          .collection('participants').doc(finalParticipantId)
+          .collection('stories').add(storyData);
+
+        createdStories.push({
+          storyId: storyRef.id,
+          ...storyData
+        });
+
+        console.log(`✅ Story creada: ${storyRef.id}`);
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      participantId: finalParticipantId,
+      participant: participantData,
+      stories: createdStories,
+      summary: {
+        participantCreated: true,
+        storiesCreated: createdStories.length,
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${finalParticipantId}`
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error creando participante:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/sponsors:
+ *   post:
+ *     summary: Crear sponsor
+ *     description: Crea un sponsor para una carrera y aplicación específica
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - raceId
+ *               - appId
+ *               - sponsor
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera
+ *               appId:
+ *                 type: string
+ *                 description: ID de la aplicación
+ *               sponsorId:
+ *                 type: string
+ *                 description: ID personalizado del sponsor (opcional)
+ *               sponsor:
+ *                 type: object
+ *                 description: Datos del sponsor
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   logoUrl:
+ *                     type: string
+ *                   posterUrl:
+ *                     type: string
+ *                   website:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *     responses:
+ *       '201':
+ *         description: Sponsor creado exitosamente
+ *       '400':
+ *         description: Parámetros inválidos
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.post("/sponsors", async (req, res) => {
+  try {
+    const { raceId, appId, sponsorId, sponsor } = req.body;
+
+    if (!raceId || !appId || !sponsor) {
+      return res.status(400).json({
+        error: "Faltan parámetros requeridos",
+        required: ["raceId", "appId", "sponsor"]
+      });
+    }
+
+    const db = admin.firestore();
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    console.log(`🏢 Creando sponsor en Race: ${raceId}, App: ${appId}`);
+
+    // Preparar datos del sponsor
+    const sponsorData = {
+      ...sponsor,
+      raceId,
+      appId,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    // Usar sponsorId proporcionado o generar uno automático
+    let finalSponsorId = sponsorId;
+    let sponsorRef;
+
+    if (finalSponsorId) {
+      // Usar ID personalizado
+      sponsorRef = db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('sponsors').doc(finalSponsorId);
+
+      await sponsorRef.set(sponsorData);
+    } else {
+      // Generar ID automático
+      sponsorRef = await db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('sponsors').add(sponsorData);
+
+      finalSponsorId = sponsorRef.id;
+    }
+
+    console.log(`✅ Sponsor creado: ${finalSponsorId}`);
+
+    return res.status(201).json({
+      success: true,
+      sponsorId: finalSponsorId,
+      sponsor: sponsorData,
+      path: `/races/${raceId}/apps/${appId}/sponsors/${finalSponsorId}`
+    });
+
+  } catch (error) {
+    console.error("❌ Error creando sponsor:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/sponsors:
+ *   get:
+ *     summary: Obtener lista de sponsors
+ *     description: Retorna todos los sponsors de una carrera y aplicación específica
+ *     parameters:
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la carrera
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación
+ *     responses:
+ *       '200':
+ *         description: Lista de sponsors obtenida exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 sponsors:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       sponsorId:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       logoUrl:
+ *                         type: string
+ *                       posterUrl:
+ *                         type: string
+ *                       website:
+ *                         type: string
+ *                       description:
+ *                         type: string
+ *                 total:
+ *                   type: integer
+ *       '400':
+ *         description: Parámetros faltantes
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.get("/sponsors", async (req, res) => {
+  try {
+    const { raceId, appId } = req.query;
+
+    if (!raceId || !appId) {
+      return res.status(400).json({
+        error: "Faltan parámetros requeridos",
+        required: ["raceId", "appId"]
+      });
+    }
+
+    const db = admin.firestore();
+    console.log(`🔍 Obteniendo sponsors - Race: ${raceId}, App: ${appId}`);
+
+    const sponsorsSnapshot = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
+      .collection('sponsors')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const sponsors = sponsorsSnapshot.docs.map(doc => ({
+      sponsorId: doc.id,
+      ...doc.data()
+    }));
+
+    console.log(`✅ Encontrados ${sponsors.length} sponsors`);
+
+    return res.status(200).json({
+      sponsors: sponsors,
+      total: sponsors.length,
+      raceId,
+      appId
+    });
+
+  } catch (error) {
+    console.error("❌ Error obteniendo sponsors:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/sponsors/{sponsorId}:
+ *   get:
+ *     summary: Obtener detalles de un sponsor específico
+ *     description: Retorna información detallada de un sponsor específico
+ *     parameters:
+ *       - in: path
+ *         name: sponsorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del sponsor
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la carrera
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación
+ *     responses:
+ *       '200':
+ *         description: Detalles del sponsor obtenidos exitosamente
+ *       '400':
+ *         description: Parámetros faltantes
+ *       '404':
+ *         description: Sponsor no encontrado
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.get("/sponsors/:sponsorId", async (req, res) => {
+  try {
+    const { sponsorId } = req.params;
+    const { raceId, appId } = req.query;
+
+    if (!raceId || !appId) {
+      return res.status(400).json({
+        error: "Faltan parámetros requeridos",
+        required: ["raceId", "appId"]
+      });
+    }
+
+    const db = admin.firestore();
+    console.log(`🔍 Obteniendo sponsor: ${sponsorId} - Race: ${raceId}, App: ${appId}`);
+
+    const sponsorDoc = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
+      .collection('sponsors').doc(sponsorId)
+      .get();
+
+    if (!sponsorDoc.exists) {
+      return res.status(404).json({
+        error: "Sponsor no encontrado",
+        sponsorId,
+        path: `/races/${raceId}/apps/${appId}/sponsors/${sponsorId}`
+      });
+    }
+
+    const sponsorData = {
+      sponsorId: sponsorDoc.id,
+      ...sponsorDoc.data()
+    };
+
+    console.log(`✅ Sponsor encontrado: ${sponsorData.name}`);
+
+    return res.status(200).json(sponsorData);
+
+  } catch (error) {
+    console.error("❌ Error obteniendo sponsor:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/sponsors/{sponsorId}/stories:
+ *   get:
+ *     summary: Obtener stories relacionadas con un sponsor
+ *     description: Retorna todas las stories que incluyen un sponsor específico en su información
+ *     parameters:
+ *       - in: path
+ *         name: sponsorId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del sponsor
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la carrera
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación
+ *       - in: query
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del evento
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Número máximo de stories a retornar
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Número de stories a omitir para paginación
+ *     responses:
+ *       '200':
+ *         description: Stories del sponsor obtenidas exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 stories:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 sponsor:
+ *                   type: object
+ *                 pagination:
+ *                   type: object
+ *       '400':
+ *         description: Parámetros faltantes
+ *       '404':
+ *         description: Sponsor no encontrado
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.get("/sponsors/:sponsorId/stories", async (req, res) => {
+  try {
+    const { sponsorId } = req.params;
+    const { raceId, appId, eventId, limit = 20, offset = 0 } = req.query;
+
+    if (!raceId || !appId || !eventId) {
+      return res.status(400).json({
+        error: "Faltan parámetros requeridos",
+        required: ["raceId", "appId", "eventId"]
+      });
+    }
+
+    const db = admin.firestore();
+    const limitNum = Math.min(parseInt(limit) || 20, 100);
+    const offsetNum = parseInt(offset) || 0;
+
+    console.log(`🔍 Obteniendo stories del sponsor: ${sponsorId} - Race: ${raceId}, App: ${appId}, Event: ${eventId}`);
+
+    // Primero verificar que el sponsor existe
+    const sponsorDoc = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
+      .collection('sponsors').doc(sponsorId)
+      .get();
+
+    if (!sponsorDoc.exists) {
+      return res.status(404).json({
+        error: "Sponsor no encontrado",
+        sponsorId
+      });
+    }
+
+    const sponsorData = {
+      sponsorId: sponsorDoc.id,
+      ...sponsorDoc.data()
+    };
+
+    // Obtener todos los participantes del evento
+    const participantsSnapshot = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
+      .collection('events').doc(eventId)
+      .collection('participants').get();
+
+    if (participantsSnapshot.empty) {
+      return res.status(200).json({
+        stories: [],
+        sponsor: sponsorData,
+        pagination: {
+          limit: limitNum,
+          offset: offsetNum,
+          total: 0,
+          hasMore: false
+        }
+      });
+    }
+
+    // Recopilar todas las stories que incluyan este sponsor
+    const allStories = [];
+
+    for (const participantDoc of participantsSnapshot.docs) {
+      const participantData = participantDoc.data();
+      const participantId = participantDoc.id;
+
+      const storiesSnapshot = await db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('events').doc(eventId)
+        .collection('participants').doc(participantId)
+        .collection('stories')
+        .orderBy('date', 'desc')
+        .get();
+
+      // Filtrar stories que incluyan este sponsor
+      storiesSnapshot.docs.forEach(storyDoc => {
+        const storyData = storyDoc.data();
+
+        // Verificar si la story incluye este sponsor
+        // (Asumiendo que las stories tienen un campo sponsors[] o similar)
+        const includesSponsor = storyData.sponsors?.some(s =>
+          s.sponsorId === sponsorId ||
+          s.logo_url === sponsorData.logoUrl ||
+          s.name === sponsorData.name
+        ) || false;
+
+        if (includesSponsor) {
+          allStories.push({
+            storyId: storyDoc.id,
+            raceId,
+            appId,
+            eventId,
+            participantId,
+            participant: participantData,
+            sponsor: sponsorData,
+            ...storyData
+          });
+        }
+      });
+    }
+
+    // Ordenar por fecha descendente
+    allStories.sort((a, b) => {
+      const dateA = a.date?._seconds || a.date?.seconds || 0;
+      const dateB = b.date?._seconds || b.date?.seconds || 0;
+      return dateB - dateA;
+    });
+
+    // Aplicar paginación
+    const total = allStories.length;
+    const paginatedStories = allStories.slice(offsetNum, offsetNum + limitNum);
+
+    console.log(`✅ Encontradas ${total} stories para sponsor ${sponsorData.name}, mostrando ${paginatedStories.length}`);
+
+    return res.status(200).json({
+      stories: paginatedStories,
+      sponsor: sponsorData,
+      pagination: {
+        limit: limitNum,
+        offset: offsetNum,
+        total: total,
+        hasMore: offsetNum + limitNum < total,
+        currentPage: Math.floor(offsetNum / limitNum) + 1,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error obteniendo stories del sponsor:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/migrate-participants:
+ *   post:
+ *     summary: Migrar participantes de estructura antigua a nueva
+ *     description: Lee participantes de /apps/{appId}/races/{raceId}/events/{eventId}/participants y los migra a /races/{raceId}/apps/{appId}/events/{eventId}/participants con 3 stories por participante
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - raceId
+ *               - appId
+ *               - eventId
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera
+ *               appId:
+ *                 type: string
+ *                 description: ID de la aplicación
+ *               eventId:
+ *                 type: string
+ *                 description: ID del evento
+ *               limit:
+ *                 type: integer
+ *                 description: Límite de participantes a migrar (opcional, default 10)
+ *     responses:
+ *       '200':
+ *         description: Migración completada exitosamente
+ *       '400':
+ *         description: Parámetros inválidos
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.post("/migrate-participants", async (req, res) => {
+  try {
+    const { raceId, appId, eventId, limit = 10 } = req.body;
+
+    if (!raceId || !appId || !eventId) {
+      return res.status(400).json({
+        error: "Faltan parámetros requeridos",
+        required: ["raceId", "appId", "eventId"]
+      });
+    }
+
+    const db = admin.firestore();
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const limitNum = Math.min(parseInt(limit) || 10, 50); // Máximo 50 para evitar timeouts
+
+    console.log(`🔄 Iniciando migración - Race: ${raceId}, App: ${appId}, Event: ${eventId}, Limit: ${limitNum}`);
+
+    // 1. Leer participantes de la estructura ANTIGUA (apps/races/events)
+    const oldParticipantsSnapshot = await db.collection('apps').doc(appId)
+      .collection('races').doc(raceId)
+      .collection('events').doc(eventId)
+      .collection('participants')
+      .limit(limitNum)
+      .get();
+
+    if (oldParticipantsSnapshot.empty) {
+      return res.status(200).json({
+        success: true,
+        message: "No hay participantes para migrar",
+        migrated: 0,
+        participants: []
+      });
+    }
+
+    console.log(`📋 Encontrados ${oldParticipantsSnapshot.size} participantes en estructura antigua`);
+
+    const migratedParticipants = [];
+    const errors = [];
+
+    // 2. Procesar cada participante
+    for (const oldParticipantDoc of oldParticipantsSnapshot.docs) {
+      try {
+        const oldParticipantData = oldParticipantDoc.data();
+        const oldParticipantId = oldParticipantDoc.id;
+
+        console.log(`👤 Migrando participante: ${oldParticipantData.name || 'Sin nombre'} (${oldParticipantId})`);
+
+        // 3. Obtener stories del participante en estructura antigua (apps/races/events)
+        const oldStoriesSnapshot = await db.collection('apps').doc(appId)
+          .collection('races').doc(raceId)
+          .collection('events').doc(eventId)
+          .collection('participants').doc(oldParticipantId)
+          .collection('stories').get();
+
+        // 4. Preparar datos del participante para estructura NUEVA
+        const newParticipantData = {
+          ...oldParticipantData,
+          raceId,
+          eventId,
+          registerDate: timestamp,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          migratedFrom: "old_structure",
+          originalId: oldParticipantId
+        };
+
+        // 5. Crear participante en estructura NUEVA
+        const newParticipantRef = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(eventId)
+          .collection('participants').add(newParticipantData);
+
+        const newParticipantId = newParticipantRef.id;
+
+        // 6. Obtener una story existente para usar su fileUrl (si existe)
+        let existingFileUrl = "https://stream.mux.com/default-video.m3u8";
+        let existingDescription = "Video generado automáticamente";
+
+        if (!oldStoriesSnapshot.empty) {
+          const firstStory = oldStoriesSnapshot.docs[0].data();
+          existingFileUrl = firstStory.fileUrl || existingFileUrl;
+          existingDescription = firstStory.description || existingDescription;
+        }
+
+        // 7. Crear las 3 stories obligatorias con tipos y splits
+        const storiesToCreate = [
+          {
+            type: "ATHELETE_STARTED",
+            fileUrl: existingFileUrl,
+            description: `${oldParticipantData.name || 'Participante'} inicia la carrera`,
+            splitTime: {
+              time: "00:00:00",
+              netTime: "00:00:00",
+              split: "START",
+              checkpoint: "Línea de Salida"
+            }
+          },
+          {
+            type: "ATHELETE_CROSSED_TIMING_SPLIT",
+            fileUrl: existingFileUrl,
+            description: `${oldParticipantData.name || 'Participante'} pasa por checkpoint intermedio`,
+            splitTime: {
+              time: "00:15:00",
+              netTime: "00:14:58",
+              split: "INTERMEDIATE",
+              checkpoint: "Checkpoint Intermedio"
+            }
+          },
+          {
+            type: "ATHELETE_FINISHED",
+            fileUrl: existingFileUrl,
+            description: `${oldParticipantData.name || 'Participante'} cruza la meta`,
+            splitTime: {
+              time: "01:00:00",
+              netTime: "00:59:55",
+              split: "FINISH",
+              checkpoint: "Meta Final"
+            }
+          }
+        ];
+
+        const createdStories = [];
+
+        for (let i = 0; i < storiesToCreate.length; i++) {
+          const storyTemplate = storiesToCreate[i];
+
+          const storyData = {
+            ...storyTemplate,
+            participantId: newParticipantId,
+            raceId,
+            eventId,
+            createdAt: timestamp,
+            date: timestamp,
+            fileName: `migrated_story_${Date.now()}_${i}.mp4`,
+            filePath: `participants/${newParticipantId}/stories/migrated_story_${Date.now()}_${i}.mp4`,
+            fileSize: 0,
+            contentType: "video/mp4",
+            mediaType: "video",
+            moderationStatus: "approved",
+            originType: "migration_automatic",
+            duration: 30,
+            testData: false,
+            migratedFrom: "old_structure"
+          };
+
+          const storyRef = await db.collection('races').doc(raceId)
+            .collection('apps').doc(appId)
+            .collection('events').doc(eventId)
+            .collection('participants').doc(newParticipantId)
+            .collection('stories').add(storyData);
+
+          createdStories.push({
+            storyId: storyRef.id,
+            type: storyTemplate.type,
+            splitTime: storyTemplate.splitTime
+          });
+        }
+
+        migratedParticipants.push({
+          oldParticipantId,
+          newParticipantId,
+          name: oldParticipantData.name || 'Sin nombre',
+          dorsal: oldParticipantData.dorsal || 'Sin dorsal',
+          storiesCreated: createdStories.length,
+          stories: createdStories
+        });
+
+        console.log(`✅ Participante migrado: ${newParticipantId} con ${createdStories.length} stories`);
+
+      } catch (participantError) {
+        console.error(`❌ Error migrando participante ${oldParticipantDoc.id}:`, participantError);
+        errors.push({
+          participantId: oldParticipantDoc.id,
+          error: participantError.message
+        });
+      }
+    }
+
+    console.log(`🎉 Migración completada: ${migratedParticipants.length} participantes migrados`);
+
+    return res.status(200).json({
+      success: true,
+      message: `Migración completada exitosamente`,
+      migrated: migratedParticipants.length,
+      participants: migratedParticipants,
+      errors: errors.length > 0 ? errors : undefined,
+      summary: {
+        totalProcessed: oldParticipantsSnapshot.size,
+        successful: migratedParticipants.length,
+        failed: errors.length,
+        storiesCreatedPerParticipant: 3
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error en migración de participantes:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/checkpoint-participant:
+ *   post:
+ *     summary: Webhook para recibir datos de checkpoint de participantes
+ *     description: Recibe información cuando un participante pasa por un punto de control y actualiza la base de datos
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               participantData:
+ *                 type: object
+ *                 description: Información completa del participante
+ *               checkpointData:
+ *                 type: object
+ *                 description: Información del checkpoint
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera
+ *               eventId:
+ *                 type: string
+ *                 description: ID del evento
+ *               appId:
+ *                 type: string
+ *                 description: ID de la aplicación
+ *     responses:
+ *       '200':
+ *         description: Datos procesados exitosamente
+ *       '400':
+ *         description: Datos inválidos
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.post("/checkpoint-participant", async (req, res) => {
+  try {
+    console.log("🎯 Webhook checkpoint recibido:", JSON.stringify(req.body, null, 2));
+
+    const participantFull = req.body;
+
+    // Validaciones básicas
+    if (!participantFull || !participantFull.id) {
+      return res.status(400).json({
+        error: "Datos de participante inválidos - se requiere ID",
+        received: req.body
+      });
+    }
+
+    // Validar API Key para autenticación máquina-a-máquina
+    const apiKey = participantFull.apiKey || req.headers['x-api-key'];
+    const expectedApiKey = process.env.WEBHOOK_API_KEY || "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0";
+
+    if (!apiKey || apiKey !== expectedApiKey) {
+      console.error("❌ API key inválida");
+      return res.status(401).json({ error: "API key inválida" });
+    }
+
+    // Extraer eventId del payload AWS
+    const eventId = participantFull.events?.[0]?.event;
+    if (!eventId) {
+      return res.status(400).json({
+        error: "No se encontró eventId en los datos del participante",
+        received: participantFull.events
+      });
+    }
+
+    const db = admin.firestore();
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    console.log(`📋 Procesando participante: ${participantFull.name || participantFull.fullname} (ID: ${participantFull.id}) para eventId: ${eventId}`);
+
+    // 1. Buscar todas las ubicaciones donde existe este eventId
+    console.log("🔍 Buscando ubicaciones del eventId...");
+
+    // Por ahora, usar ubicación conocida para testing - luego implementar búsqueda completa
+    const locations = [];
+
+    // Verificar ubicación conocida - verificar si existe el documento del evento
+    const knownRaceId = "race-001-madrid-marathon";
+    const knownAppId = "RtME2RACih6YxgrlmuQR";
+
+    const eventRef = db.collection('races').doc(knownRaceId)
+      .collection('apps').doc(knownAppId)
+      .collection('events').doc(eventId);
+
+    const eventDoc = await eventRef.get();
+
+    if (eventDoc.exists) {
+      locations.push({
+        raceId: knownRaceId,
+        appId: knownAppId,
+        eventId: eventId
+      });
+      console.log(`📍 Encontrado eventId ${eventId} en ubicación conocida: races/${knownRaceId}/apps/${knownAppId}/events/${eventId}`);
+      console.log(`📋 Datos del evento:`, eventDoc.data());
+    } else {
+      console.log(`⚠️ No existe el documento del evento: races/${knownRaceId}/apps/${knownAppId}/events/${eventId}`);
+    }
+
+    // TODO: Implementar búsqueda completa en todas las races/apps cuando sea necesario
+    // const racesSnapshot = await db.collection('races').get();
+    // for (const raceDoc of racesSnapshot.docs) { ... }
+
+    if (locations.length === 0) {
+      return res.status(404).json({
+        error: `No se encontraron ubicaciones para eventId: ${eventId}`,
+        eventId: eventId,
+        suggestion: "Verificar que el eventId existe en la estructura /races/{raceId}/apps/{appId}/events/{eventId}"
+      });
+    }
+
+    console.log(`📍 Encontradas ${locations.length} ubicaciones para eventId ${eventId}:`, locations);
+
+    // 2. Preparar datos del participante (comunes para todas las ubicaciones)
+    const participantData = {
+      name: participantFull.name || "",
+      lastName: participantFull.surname || "",
+      fullName: participantFull.fullname || `${participantFull.name || ""} ${participantFull.surname || ""}`.trim(),
+      dorsal: participantFull.events?.[0]?.dorsal || "",
+      category: participantFull.events?.[0]?.category || "",
+      externalId: participantFull.id,
+      birthdate: participantFull.birthdate || "",
+      gender: participantFull.gender || "",
+      team: participantFull.events?.[0]?.team || "",
+      club: participantFull.events?.[0]?.club || "",
+      featured: participantFull.events?.[0]?.featured || false,
+      status: participantFull.events?.[0]?.status || "notstarted",
+      realStatus: participantFull.events?.[0]?.realStatus || "notstarted",
+      event: participantFull.events?.[0]?.event || "",
+      chip: participantFull.events?.[0]?.chip || [],
+      wave: participantFull.events?.[0]?.wave || "",
+      locations: participantFull.locations || [],
+      extraFields: {
+        extrafield1: participantFull.extrafield1 || "",
+        extrafield2: participantFull.extrafield2 || "",
+        extrafield3: participantFull.extrafield3 || "",
+        extrafield4: participantFull.extrafield4 || "",
+        extrafield5: participantFull.extrafield5 || ""
+      },
+      eventId,
+      webhookProcessedAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    // 3. Procesar participante en cada ubicación encontrada
+    const results = [];
+
+    for (const location of locations) {
+      const { raceId, appId, eventId: locationEventId } = location;
+
+      try {
+        console.log(`🔄 Procesando en ubicación: raceId=${raceId}, appId=${appId}, eventId=${locationEventId}`);
+
+        // Agregar raceId específico a los datos del participante para esta ubicación
+        const locationParticipantData = {
+          ...participantData,
+          raceId: raceId
+        };
+
+        // Buscar participante existente por externalId en esta ubicación
+        const existingParticipantQuery = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(locationEventId)
+          .collection('participants')
+          .where('externalId', '==', participantFull.id)
+          .limit(1)
+          .get();
+
+        let participantRef;
+        let participantId;
+        let isNewParticipant = false;
+
+        if (!existingParticipantQuery.empty) {
+          // Participante existe - actualizar
+          participantRef = existingParticipantQuery.docs[0].ref;
+          participantId = existingParticipantQuery.docs[0].id;
+          await participantRef.update(locationParticipantData);
+          console.log(`✅ Participante actualizado: ${participantId} en ${raceId}/${appId}`);
+        } else {
+          // Participante nuevo - crear
+          locationParticipantData.createdAt = timestamp;
+          locationParticipantData.registerDate = timestamp;
+          participantRef = await db.collection('races').doc(raceId)
+            .collection('apps').doc(appId)
+            .collection('events').doc(locationEventId)
+            .collection('participants').add(locationParticipantData);
+          participantId = participantRef.id;
+          isNewParticipant = true;
+          console.log(`🆕 Participante creado: ${participantId} en ${raceId}/${appId}`);
+        }
+
+        // 4. Procesar tiempos y crear stories para cada checkpoint en esta ubicación
+        const storiesCreated = [];
+        const times = participantFull.events?.[0]?.times || {};
+
+        for (const [pointName, pointTime] of Object.entries(times)) {
+          try {
+            // Determinar tipo de story basado en el punto
+            let storyType = "ATHELETE_CROSSED_TIMING_SPLIT";
+            if (pointName.toLowerCase().includes('start') || pointName.toLowerCase().includes('salida')) {
+              storyType = "ATHELETE_STARTED";
+            } else if (pointName.toLowerCase().includes('finish') || pointName.toLowerCase().includes('meta')) {
+              storyType = "ATHELETE_FINISHED";
+            }
+
+            // Crear datos de la story
+            const storyData = {
+              type: storyType,
+              participantId: participantId,
+              raceId: raceId,
+              eventId: locationEventId,
+              createdAt: timestamp,
+              date: timestamp,
+              fileName: `webhook_${pointName}_${Date.now()}.mp4`,
+              filePath: `participants/${participantId}/stories/webhook_${pointName}_${Date.now()}.mp4`,
+              fileSize: 0,
+              contentType: "video/mp4",
+              mediaType: "video",
+              moderationStatus: "approved",
+              originType: "webhook_automatic",
+              duration: 30,
+              testData: false,
+              description: `${locationParticipantData.fullName} - ${pointName}`,
+              fileUrl: "", // Se puede agregar URL de video si está disponible
+              splitTime: {
+                time: pointTime.time || "",
+                netTime: pointTime.netTime || "",
+                split: pointName,
+                checkpoint: pointName,
+                rawTime: pointTime.raw || null,
+                position: pointTime.position || null
+              },
+              webhookData: {
+                originalPointName: pointName,
+                pointTimeData: pointTime,
+                processedAt: new Date().toISOString()
+              }
+            };
+
+            // Verificar si ya existe una story para este checkpoint en esta ubicación
+            const existingStoryQuery = await db.collection('races').doc(raceId)
+              .collection('apps').doc(appId)
+              .collection('events').doc(locationEventId)
+              .collection('participants').doc(participantId)
+              .collection('stories')
+              .where('splitTime.split', '==', pointName)
+              .limit(1)
+              .get();
+
+            if (existingStoryQuery.empty) {
+              // Crear nueva story
+              const storyRef = await db.collection('races').doc(raceId)
+                .collection('apps').doc(appId)
+                .collection('events').doc(locationEventId)
+                .collection('participants').doc(participantId)
+                .collection('stories').add(storyData);
+
+              storiesCreated.push({
+                storyId: storyRef.id,
+                type: storyType,
+                checkpoint: pointName,
+                time: pointTime.time || ""
+              });
+
+              console.log(`📖 Story creada: ${storyRef.id} para checkpoint ${pointName} en ${raceId}/${appId}`);
+            } else {
+              // Actualizar story existente
+              const existingStoryRef = existingStoryQuery.docs[0].ref;
+              await existingStoryRef.update({
+                ...storyData,
+                updatedAt: timestamp
+              });
+
+              storiesCreated.push({
+                storyId: existingStoryQuery.docs[0].id,
+                type: storyType,
+                checkpoint: pointName,
+                time: pointTime.time || "",
+                updated: true
+              });
+
+              console.log(`🔄 Story actualizada: ${existingStoryQuery.docs[0].id} para checkpoint ${pointName} en ${raceId}/${appId}`);
+            }
+
+          } catch (storyError) {
+            console.error(`❌ Error procesando checkpoint ${pointName} en ${raceId}/${appId}:`, storyError);
+          }
+        }
+
+        // Agregar resultado de esta ubicación
+        results.push({
+          raceId: raceId,
+          appId: appId,
+          eventId: locationEventId,
+          participant: {
+            id: participantId,
+            externalId: participantFull.id,
+            name: locationParticipantData.fullName,
+            dorsal: locationParticipantData.dorsal,
+            status: locationParticipantData.status,
+            isNew: isNewParticipant
+          },
+          stories: {
+            created: storiesCreated.length,
+            details: storiesCreated
+          },
+          checkpoints: Object.keys(times).length
+        });
+
+      } catch (locationError) {
+        console.error(`❌ Error procesando ubicación ${raceId}/${appId}:`, locationError);
+        results.push({
+          raceId: raceId,
+          appId: appId,
+          eventId: locationEventId,
+          error: locationError.message,
+          success: false
+        });
+      }
+    }
+
+    // 5. Respuesta final con todos los resultados
+    return res.status(200).json({
+      success: true,
+      message: "Webhook procesado exitosamente en todas las ubicaciones",
+      eventId: eventId,
+      locationsProcessed: locations.length,
+      results: results,
+      processedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ Error procesando webhook checkpoint:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/race-events:
+ *   get:
+ *     summary: Obtener eventos de carrera
+ *     description: Obtiene eventos de carrera filtrados por tipo, con información completa de participantes, sponsors, stories, etc.
+ *     parameters:
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la carrera
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación
+ *       - in: query
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del evento
+ *       - in: query
+ *         name: type
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [ATHELETE_CROSSED_TIMING_SPLIT, COMPLETE_AWARD, ATHELETE_STARTED, SPONSOR, ATHELETE_FINISHED]
+ *         description: Filtrar por tipo de evento
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Límite de resultados
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Offset para paginación
+ *     responses:
+ *       '200':
+ *         description: Stories de eventos obtenidas exitosamente
+ *       '400':
+ *         description: Parámetros faltantes
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.get("/race-events", async (req, res) => {
+  try {
+    const { raceId, appId, eventId, type, limit = 20, offset = 0 } = req.query;
+
+    if (!raceId || !appId || !eventId) {
+      return res.status(400).json({
+        error: "Faltan parámetros requeridos",
+        required: ["raceId", "appId", "eventId"]
+      });
+    }
+
+    const db = admin.firestore();
+    const limitNum = Math.min(parseInt(limit) || 20, 100);
+    const offsetNum = parseInt(offset) || 0;
+
+    console.log(`🔍 Obteniendo eventos de carrera desde stories - Race: ${raceId}, App: ${appId}, Event: ${eventId}, Type: ${type || 'ALL'}`);
+
+    // Obtener sponsors una vez - ESTRUCTURA CORRECTA: races/apps
+    const sponsorsSnapshot = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
+      .collection('sponsors').get();
+
+    const sponsors = sponsorsSnapshot.docs.map(doc => ({
+      sponsorId: doc.id,
+      ...doc.data()
+    }));
+
+    const sponsorsFormatted = sponsors.map(sponsor => ({
+      logo_url: sponsor.logoUrl || "",
+      poster_url: sponsor.posterUrl || ""
+    }));
+
+    // Obtener todos los participantes - ESTRUCTURA CORRECTA: races/apps/events
+    const participantsSnapshot = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
+      .collection('events').doc(eventId)
+      .collection('participants').get();
+
+    if (participantsSnapshot.empty) {
+      return res.status(200).json({
+        stories: [],
+        pagination: {
+          limit: limitNum,
+          offset: offsetNum,
+          total: 0,
+          hasMore: false
+        }
+      });
+    }
+
+    // Recopilar todas las stories de todos los participantes
+    const allStories = [];
+
+    for (const participantDoc of participantsSnapshot.docs) {
+      const participantData = participantDoc.data();
+      const participantId = participantDoc.id;
+
+      // Obtener stories del participante - ESTRUCTURA CORRECTA: races/apps/events
+      let storiesQuery = db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('events').doc(eventId)
+        .collection('participants').doc(participantId)
+        .collection('stories');
+
+      // Filtrar por tipo si se especifica (usando índice de Firestore)
+      if (type) {
+        storiesQuery = storiesQuery.where('type', '==', type);
+        console.log(`🔍 Aplicando filtro Firestore: type == '${type}'`);
+      }
+
+      // Agregar ordenamiento
+      storiesQuery = storiesQuery.orderBy('date', 'desc');
+
+      const storiesSnapshot = await storiesQuery.get();
+      console.log(`📊 Participante ${participantId}: ${storiesSnapshot.size} stories encontradas`);
+
+      // Procesar cada story como un evento
+      storiesSnapshot.docs.forEach(storyDoc => {
+        const storyData = storyDoc.data();
+
+        // Crear story con formato de evento
+        // Determinar si fileUrl es imagen o video basado en mediaType
+        const isVideo = storyData.mediaType === "video";
+        const isImage = storyData.mediaType === "image";
+
+        const story = {
+          storyId: storyDoc.id,
+          type: storyData.type || "ATHELETE_STARTED",
+          participant: participantData,
+          split_time: storyData.splitTime || {},
+          image_url: isImage ? (storyData.fileUrl || "") : "",
+          video_url: isVideo ? (storyData.fileUrl || "") : "",
+          sponsors: sponsorsFormatted,
+          // Datos adicionales de la story
+          description: storyData.description || "",
+          duration: storyData.duration || 0,
+          createdAt: storyData.createdAt,
+          date: storyData.date,
+          moderationStatus: storyData.moderationStatus || "",
+          originType: storyData.originType || ""
+        };
+
+        // Agregar campos específicos según el tipo
+        switch (storyData.type) {
+          case 'SPONSOR':
+            story.free_text = storyData.description || "";
+            story.poster_url = storyData.fileUrl || "";
+            break;
+          case 'COMPLETE_AWARD':
+            story.rankings = storyData.rankings || [];
+            break;
+        }
+
+        allStories.push(story);
+      });
+    }
+
+    // Ordenar todas las stories por fecha
+    allStories.sort((a, b) => {
+      const dateA = a.date?._seconds || a.date?.seconds || 0;
+      const dateB = b.date?._seconds || b.date?.seconds || 0;
+      return dateB - dateA; // Más reciente primero
+    });
+
+    // Aplicar paginación
+    const paginatedStories = allStories.slice(offsetNum, offsetNum + limitNum);
+
+    console.log(`✅ ${paginatedStories.length} stories procesadas de ${allStories.length} total`);
+
+    return res.status(200).json({
+      stories: paginatedStories,
+      pagination: {
+        limit: limitNum,
+        offset: offsetNum,
+        total: allStories.length,
+        hasMore: (offsetNum + limitNum) < allStories.length
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error obteniendo eventos de carrera:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
   }
 });
 
@@ -1605,7 +3291,7 @@ router.get("/users/following", async (req, res) => {
  * /api/search/participants:
  *   get:
  *     summary: Buscar participantes
- *     description: Realiza una búsqueda de participantes utilizando Algolia.
+ *     description: Realiza una búsqueda de participantes en Firestore con múltiples campos (nombre, dorsal, categoría, equipo).
  *     parameters:
  *       - in: query
  *         name: query
@@ -1621,57 +3307,184 @@ router.get("/users/following", async (req, res) => {
  *         description: ID del usuario para verificar seguimientos.
  *       - in: query
  *         name: raceId
- *         required: false
+ *         required: true
  *         schema:
  *           type: string
- *         description: ID de la carrera para filtrar seguimientos específicos.
+ *         description: ID de la carrera.
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación.
  *       - in: query
  *         name: eventId
- *         required: false
+ *         required: true
  *         schema:
  *           type: string
- *         description: ID del evento para filtrar seguimientos específicos.
+ *         description: ID del evento.
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Número máximo de resultados a retornar.
  *     responses:
  *       '200':
  *         description: Búsqueda realizada exitosamente.
+ *       '400':
+ *         description: Parámetros requeridos faltantes.
  *       '500':
  *         description: Error en la búsqueda.
  */
-const ALGOLIA_SEARCH_API_URL = "https://HJFHEZN5GF-dsn.algolia.net/1/indexes/participants/query";
-const ALGOLIA_API_KEY = "6bd7310e673b3bc59be6ae0c4c6614a2";
 
 router.get("/search/participants", async (req, res) => {
   try {
-    const { query, userId, raceId, eventId } = req.query;
+    const { query, userId, raceId, appId, eventId, limit = 20 } = req.query;
 
-    // Si no hay query o está vacío, usar comillas vacías para obtener todos los datos
-    const searchQuery = (!query || query.trim() === "") ? "" : query;
-
-    // Realizar la búsqueda en Algolia
-    const response = await fetch(ALGOLIA_SEARCH_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Algolia-Application-Id": "HJFHEZN5GF",
-        "X-Algolia-API-Key": ALGOLIA_API_KEY,
-      },
-      body: JSON.stringify({ query: searchQuery }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Error en la búsqueda: ${response.statusText}`);
+    // Validar parámetros requeridos
+    if (!raceId || !appId || !eventId) {
+      return res.status(400).json({
+        error: "Los parámetros raceId, appId y eventId son obligatorios."
+      });
     }
 
-    const result = await response.json();
+    const db = admin.firestore();
+    const limitNum = Math.min(parseInt(limit) || 20, 100);
+
+    console.log(`🔍 Búsqueda de participantes: query="${query}", raceId=${raceId}, appId=${appId}, eventId=${eventId}`);
+
+    // Referencia a la colección de participantes
+    const participantsRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants");
+
+    let allParticipants = [];
+
+    if (!query || query.trim() === "") {
+      // Si no hay query, devolver todos los participantes
+      console.log("📋 Obteniendo todos los participantes (sin filtro)");
+      const snapshot = await participantsRef.limit(limitNum).get();
+      allParticipants = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } else {
+      // Realizar búsqueda con múltiples campos
+      const searchTerm = query.trim();
+      const searchTermLower = searchTerm.toLowerCase();
+
+      console.log(`🔍 Buscando: "${searchTerm}"`);
+
+      // Búsquedas paralelas en diferentes campos
+      const searchPromises = [];
+
+      // 1. Búsqueda por nombre (case-insensitive usando >= y <=)
+      if (isNaN(searchTerm)) {
+        // Solo buscar por nombre si no es un número
+        const nameSearchUpper = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1).toLowerCase();
+        searchPromises.push(
+          participantsRef
+            .where("name", ">=", nameSearchUpper)
+            .where("name", "<=", nameSearchUpper + '\uf8ff')
+            .limit(limitNum)
+            .get()
+        );
+
+        // Búsqueda por fullName
+        searchPromises.push(
+          participantsRef
+            .where("fullName", ">=", nameSearchUpper)
+            .where("fullName", "<=", nameSearchUpper + '\uf8ff')
+            .limit(limitNum)
+            .get()
+        );
+      }
+
+      // 2. Búsqueda por dorsal (exacta)
+      searchPromises.push(
+        participantsRef
+          .where("dorsal", "==", searchTerm)
+          .limit(limitNum)
+          .get()
+      );
+
+      // 3. Búsqueda por categoría (exacta)
+      searchPromises.push(
+        participantsRef
+          .where("category", "==", searchTerm)
+          .limit(limitNum)
+          .get()
+      );
+
+      // 4. Búsqueda por equipo
+      if (isNaN(searchTerm)) {
+        searchPromises.push(
+          participantsRef
+            .where("team", ">=", searchTerm)
+            .where("team", "<=", searchTerm + '\uf8ff')
+            .limit(limitNum)
+            .get()
+        );
+      }
+
+      // Ejecutar todas las búsquedas en paralelo
+      const searchResults = await Promise.all(searchPromises);
+
+      // Combinar resultados y eliminar duplicados
+      const participantMap = new Map();
+
+      searchResults.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+          if (!participantMap.has(doc.id)) {
+            participantMap.set(doc.id, {
+              id: doc.id,
+              ...doc.data()
+            });
+          }
+        });
+      });
+
+      allParticipants = Array.from(participantMap.values());
+
+      // Filtrado adicional en memoria para búsquedas más flexibles
+      if (allParticipants.length < limitNum && searchTerm.length > 2) {
+        allParticipants = allParticipants.filter(participant => {
+          const name = (participant.name || "").toLowerCase();
+          const lastName = (participant.lastName || "").toLowerCase();
+          const fullName = (participant.fullName || "").toLowerCase();
+          const dorsal = (participant.dorsal || "").toLowerCase();
+          const category = (participant.category || "").toLowerCase();
+          const team = (participant.team || "").toLowerCase();
+
+          return name.includes(searchTermLower) ||
+                 lastName.includes(searchTermLower) ||
+                 fullName.includes(searchTermLower) ||
+                 dorsal.includes(searchTermLower) ||
+                 category.includes(searchTermLower) ||
+                 team.includes(searchTermLower);
+        });
+      }
+
+      // Limitar resultados finales
+      allParticipants = allParticipants.slice(0, limitNum);
+    }
+
+    console.log(`📊 Encontrados ${allParticipants.length} participantes`);
+
+    // Continuar con la lógica de seguimientos...
 
     // Crear un mapa de participantes seguidos para comparación eficiente
     const followedParticipantsMap = new Map();
 
     if (userId) {
       try {
+        console.log(`👥 Obteniendo seguimientos para usuario: ${userId}`);
+
         // Obtener todos los seguimientos del usuario
-        let followingsQuery = admin.firestore()
-          .collection("users")
+        let followingsQuery = db.collection("users")
           .doc(userId)
           .collection("followings")
           .where("profileType", "==", "participant");
@@ -1684,6 +3497,7 @@ router.get("/search/participants", async (req, res) => {
         }
 
         const followingsSnapshot = await followingsQuery.get();
+        console.log(`📋 Encontrados ${followingsSnapshot.size} seguimientos`);
 
         followingsSnapshot.forEach(doc => {
           const data = doc.data();
@@ -1702,14 +3516,12 @@ router.get("/search/participants", async (req, res) => {
       }
     }
 
-    // Enriquecer los resultados de Algolia agregando el campo "following"
-    const hitsWithFollowing = result.hits.map(participant => {
+    // Enriquecer los resultados agregando el campo "following"
+    const participantsWithFollowing = allParticipants.map(participant => {
       let isFollowing = false;
 
       if (userId && followedParticipantsMap.size > 0) {
-        // TEMPORAL: Adaptarse a la estructura actual de Algolia
-        // El objectID en Algolia actual parece ser el participantId
-        const participantId = participant.objectID || participant.participantId || participant.id;
+        const participantId = participant.id;
 
         if (raceId && eventId) {
           // Comparación específica por race/event
@@ -1721,25 +3533,51 @@ router.get("/search/participants", async (req, res) => {
         }
       }
 
-      // TEMPORAL: Agregar campos faltantes hasta que se reindexe Algolia
+      // Mapear a la estructura esperada por el frontend
       const enrichedParticipant = {
-        ...participant,
+        id: participant.id,
+        objectID: participant.id, // Para compatibilidad con frontend que espera objectID
+        name: participant.name || participant.fullName || "",
+        fullName: participant.fullName || `${participant.name || ""} ${participant.lastName || ""}`.trim(),
+        bib: participant.dorsal || null,
+        dorsal: participant.dorsal || null,
+        category: participant.category || null,
+        team: participant.team || null,
+        club: participant.club || null,
+        gender: participant.gender || null,
+        featured: participant.featured || false,
+        status: participant.status || "unknown",
         following: isFollowing,
-        // Mapear campos de la estructura actual a la esperada
-        bib: participant.bib || participant.dorsal || null,
-        category: participant.category || participant.Category || null,
-        // Agregar raceId/eventId si se proporcionaron en la consulta
-        raceId: participant.raceId || raceId || null,
-        eventId: participant.eventId || eventId || null
+        raceId: raceId,
+        eventId: eventId,
+        appId: appId,
+        // Campos adicionales disponibles
+        birthdate: participant.birthdate || null,
+        country: participant.country || null,
+        wave: participant.wave || null,
+        chip: participant.chip || null
       };
 
       return enrichedParticipant;
     });
 
-    return res.status(200).json(hitsWithFollowing);
+    console.log(`✅ Búsqueda completada: ${participantsWithFollowing.length} participantes encontrados`);
+
+    return res.status(200).json({
+      participants: participantsWithFollowing,
+      total: participantsWithFollowing.length,
+      query: query || "",
+      searchMethod: "firestore_native",
+      raceId,
+      appId,
+      eventId
+    });
   } catch (error) {
-    console.error("Error en la búsqueda de Algolia:", error);
-    return res.status(500).json({ error: "Error en la búsqueda" });
+    console.error("Error en la búsqueda de participantes:", error);
+    return res.status(500).json({
+      error: "Error en la búsqueda",
+      message: error.message
+    });
   }
 });
 
@@ -1928,9 +3766,9 @@ router.get("/apps", async (req, res) => {
 
       console.log(`🔄 Procesando app: ${appId}`);
 
-      // 5. Obtener races de esta app
-      const racesSnapshot = await db.collection('apps').doc(appId)
-        .collection('races').get();
+      // 5. Obtener races de esta app - ESTRUCTURA CORREGIDA: races/apps
+      // Necesitamos buscar en todas las races donde esta app esté presente
+      const racesSnapshot = await db.collection('races').get();
 
       const races = [];
 
@@ -1938,22 +3776,28 @@ router.get("/apps", async (req, res) => {
         const raceData = raceDoc.data();
         const raceId = raceDoc.id;
 
-        // 6. Obtener events de esta race
-        const eventsSnapshot = await db.collection('apps').doc(appId)
-          .collection('races').doc(raceId)
-          .collection('events').get();
+        // 6. Verificar si esta app existe en esta race
+        const appInRaceDoc = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId).get();
 
-        const events = eventsSnapshot.docs.map(eventDoc => ({
-          eventId: eventDoc.id,
-          ...eventDoc.data()
-        }));
+        if (appInRaceDoc.exists) {
+          // 7. Obtener events de esta race para esta app - ESTRUCTURA CORREGIDA: races/apps/events
+          const eventsSnapshot = await db.collection('races').doc(raceId)
+            .collection('apps').doc(appId)
+            .collection('events').get();
 
-        races.push({
-          raceId,
-          ...raceData,
-          events: events,
-          eventsCount: events.length
-        });
+          const events = eventsSnapshot.docs.map(eventDoc => ({
+            eventId: eventDoc.id,
+            ...eventDoc.data()
+          }));
+
+          races.push({
+            raceId,
+            ...raceData,
+            events: events,
+            eventsCount: events.length
+          });
+        }
       }
 
       appsWithData.push({
@@ -2954,5 +4798,253 @@ router.post("/participant-checkpoint", async (req, res) => {
  * El nuevo flujo simplificado usa:
  * - /api/participant-checkpoint (HTTP simple)
  */
+
+// 🔥 Configurar rutas FCM
+router.use("/fcm", fcmTokensRouter);
+
+/**
+ * @openapi
+ * /api/generate-test-data:
+ *   post:
+ *     summary: Generar datos de prueba variados
+ *     description: Genera participantes, stories y sponsors de prueba con datos realistas y variados
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 default: "race-001-madrid-marathon"
+ *               appId:
+ *                 type: string
+ *                 default: "RtME2RACih6YxgrlmuQR"
+ *               eventId:
+ *                 type: string
+ *                 default: "event-0"
+ *               participantsCount:
+ *                 type: integer
+ *                 default: 50
+ *               storiesPerParticipant:
+ *                 type: integer
+ *                 default: 3
+ *     responses:
+ *       '200':
+ *         description: Datos de prueba generados exitosamente
+ *       '400':
+ *         description: Parámetros inválidos
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.post("/generate-test-data", async (req, res) => {
+  try {
+    const {
+      raceId = "race-001-madrid-marathon",
+      appId = "RtME2RACih6YxgrlmuQR",
+      eventId = "event-0",
+      participantsCount = 50,
+      storiesPerParticipant = 3
+    } = req.body;
+
+    const db = admin.firestore();
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    console.log(`🎲 Generando datos de prueba: ${participantsCount} participantes, ${storiesPerParticipant} stories cada uno`);
+
+    // Arrays de datos realistas
+    const firstNames = [
+      "Carlos", "María", "José", "Ana", "Luis", "Carmen", "Antonio", "Isabel", "Francisco", "Pilar",
+      "Manuel", "Dolores", "David", "Teresa", "Jesús", "Rosario", "Javier", "Laura", "Rafael", "Antonia",
+      "Miguel", "Francisca", "Ángel", "Cristina", "José María", "Mercedes", "Alejandro", "Concepción", "Daniel", "Lucía",
+      "John", "Emma", "Michael", "Olivia", "William", "Ava", "James", "Isabella", "Alexander", "Sophia",
+      "Hiroshi", "Yuki", "Takeshi", "Sakura", "Kenji", "Akiko", "Ryo", "Mei", "Daisuke", "Hana"
+    ];
+
+    const lastNames = [
+      "García", "Rodríguez", "González", "Fernández", "López", "Martínez", "Sánchez", "Pérez", "Gómez", "Martín",
+      "Jiménez", "Ruiz", "Hernández", "Díaz", "Moreno", "Muñoz", "Álvarez", "Romero", "Alonso", "Gutiérrez",
+      "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez",
+      "Tanaka", "Suzuki", "Takahashi", "Watanabe", "Ito", "Yamamoto", "Nakamura", "Kobayashi", "Kato", "Yoshida"
+    ];
+
+    const categories = ["Seniors", "Masters", "Elite", "Sub-23", "Veteranos", "Juvenil"];
+    const teams = ["Team Nike", "Adidas Running", "Club Atlético", "Runners Madrid", "Team Elite", "Marathon Club"];
+    const clubs = ["Club Deportivo Central", "Atlético Madrileño", "Running Club Elite", "Deportivo Municipal"];
+
+    const checkpoints = [
+      { name: "START", time: "00:00:00", distance: 0 },
+      { name: "5K", time: "00:25:00", distance: 5 },
+      { name: "10K", time: "00:50:00", distance: 10 },
+      { name: "HALF", time: "01:52:00", distance: 21.1 },
+      { name: "30K", time: "02:30:00", distance: 30 },
+      { name: "FINISH", time: "03:30:00", distance: 42.195 }
+    ];
+
+    const videoUrls = [
+      "https://stream.mux.com/8fqCWmerI00DOAlwTc00foVx6UvmvTG1EKDuxicStvKLg.m3u8",
+      "https://stream.mux.com/LNhJJdYUakWgrg2ef029x4g8wWwfquH61zry2fuF99Rs.m3u8",
+      "https://stream.mux.com/QDTlIze8Lp8DHbV0001n501JHiFUEcJkYQ7tdITNUdepek.m3u8"
+    ];
+
+    let participantsCreated = 0;
+    let storiesCreated = 0;
+
+    // Generar participantes
+    for (let i = 0; i < participantsCount; i++) {
+      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+      const dorsal = String(2000 + i).padStart(4, '0');
+      const category = categories[Math.floor(Math.random() * categories.length)];
+      const team = teams[Math.floor(Math.random() * teams.length)];
+      const club = clubs[Math.floor(Math.random() * clubs.length)];
+      const featured = Math.random() < 0.15; // 15% destacados
+
+      const participantId = `GEN_PARTICIPANT_${Date.now()}_${i}`;
+
+      const participantData = {
+        name: firstName,
+        lastName: lastName,
+        fullName: `${firstName} ${lastName}`,
+        dorsal: dorsal,
+        category: category,
+        externalId: participantId,
+        birthdate: `19${70 + Math.floor(Math.random() * 30)}-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+        gender: Math.random() < 0.5 ? "male" : "female",
+        team: team,
+        club: club,
+        featured: featured,
+        status: "running",
+        realStatus: "running",
+        event: eventId,
+        chip: [parseInt(dorsal)],
+        wave: String(Math.floor(Math.random() * 5) + 1),
+        eventId: eventId,
+        raceId: raceId,
+        createdAt: timestamp,
+        registerDate: timestamp,
+        updatedAt: timestamp,
+        country: Math.random() < 0.8 ? "España" : ["USA", "Japan", "France", "Germany"][Math.floor(Math.random() * 4)],
+        profilePicture: "",
+        description: `Corredor ${category.toLowerCase()} del ${team}`,
+        additionalData: {
+          importedFrom: "test-data-generator",
+          featured: featured,
+          apiVersion: "2.0",
+          importedAt: timestamp,
+          color: ["905cb7", "00a8df", "ff6b6b", "4ecdc4", "45b7d1"][Math.floor(Math.random() * 5)],
+          event: Math.random() < 0.6 ? "Maratón" : "21K"
+        }
+      };
+
+      // Crear participante
+      await db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('events').doc(eventId)
+        .collection('participants').doc(participantId)
+        .set(participantData);
+
+      participantsCreated++;
+
+      // Generar stories para este participante
+      const numStories = Math.min(storiesPerParticipant, checkpoints.length);
+      const selectedCheckpoints = checkpoints.slice(0, numStories);
+
+      for (let j = 0; j < selectedCheckpoints.length; j++) {
+        const checkpoint = selectedCheckpoints[j];
+        const storyId = `story_gen_${Date.now()}_${i}_${j}`;
+
+        // Calcular tiempo realista
+        const baseTime = checkpoint.time;
+        const variation = (Math.random() - 0.5) * 0.3; // ±30% variación
+        const [hours, minutes, seconds] = baseTime.split(':').map(Number);
+        const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+        const adjustedSeconds = Math.max(0, totalSeconds * (1 + variation));
+
+        const finalHours = Math.floor(adjustedSeconds / 3600);
+        const finalMinutes = Math.floor((adjustedSeconds % 3600) / 60);
+        const finalSecs = Math.floor(adjustedSeconds % 60);
+        const finalTime = `${String(finalHours).padStart(2, '0')}:${String(finalMinutes).padStart(2, '0')}:${String(finalSecs).padStart(2, '0')}`;
+
+        // Determinar tipo de historia
+        let storyType;
+        if (checkpoint.name === "START") {
+          storyType = "ATHELETE_STARTED";
+        } else if (checkpoint.name === "FINISH") {
+          storyType = "ATHELETE_FINISHED";
+        } else {
+          storyType = "ATHELETE_CROSSED_TIMING_SPLIT";
+        }
+
+        const storyData = {
+          type: storyType,
+          participantId: participantId,
+          raceId: raceId,
+          eventId: eventId,
+          fileName: `${storyId}.mp4`,
+          filePath: `participants/${participantId}/stories/${storyId}.mp4`,
+          fileSize: Math.floor(Math.random() * 50000000) + 10000000,
+          contentType: "video/mp4",
+          mediaType: "video",
+          moderationStatus: "approved",
+          originType: "automatic_global",
+          duration: 20 + Math.floor(Math.random() * 40),
+          testData: true,
+          description: `${firstName} ${lastName} - ${checkpoint.name}`,
+          fileUrl: videoUrls[Math.floor(Math.random() * videoUrls.length)],
+          sourceUrl: videoUrls[Math.floor(Math.random() * videoUrls.length)],
+          split_time: {
+            time: finalTime,
+            netTime: finalTime,
+            split: checkpoint.name,
+            checkpoint: checkpoint.name,
+            rawTime: Date.now() - (Math.random() * 86400000),
+            position: Math.floor(Math.random() * participantsCount) + 1,
+            distance: checkpoint.distance
+          },
+          date: timestamp,
+          createdAt: timestamp
+        };
+
+        // Crear story
+        await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(eventId)
+          .collection('participants').doc(participantId)
+          .collection('stories').doc(storyId)
+          .set(storyData);
+
+        storiesCreated++;
+      }
+
+      // Log progreso cada 10 participantes
+      if ((i + 1) % 10 === 0) {
+        console.log(`📊 Progreso: ${i + 1}/${participantsCount} participantes creados`);
+      }
+    }
+
+    console.log(`✅ Generación completada: ${participantsCreated} participantes, ${storiesCreated} stories`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Datos de prueba generados exitosamente",
+      data: {
+        participantsCreated: participantsCreated,
+        storiesCreated: storiesCreated,
+        raceId: raceId,
+        appId: appId,
+        eventId: eventId
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error generando datos de prueba:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
 
 export default router;

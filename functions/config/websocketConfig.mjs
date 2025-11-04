@@ -4,7 +4,8 @@ import admin from "firebase-admin";
 class WebSocketConfig {
   constructor() {
     this.config = null;
-    this.loadConfig();
+    // COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
+    // this.loadConfig();
   }
 
   /**
@@ -160,10 +161,21 @@ class WebSocketConfig {
   }
 }
 
+// COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
 // Crear instancia singleton
-const websocketConfig = new WebSocketConfig();
+// const websocketConfig = new WebSocketConfig();
 
 // Validar configuración al cargar
-websocketConfig.validateConfig();
+// websocketConfig.validateConfig();
 
-export default websocketConfig;
+// export default websocketConfig;
+
+// Exportar función factory en lugar de instancia singleton
+export function createWebSocketConfig() {
+  const config = new WebSocketConfig();
+  config.loadConfig();
+  config.validateConfig();
+  return config;
+}
+
+export { WebSocketConfig };

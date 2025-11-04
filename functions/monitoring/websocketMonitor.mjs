@@ -165,25 +165,33 @@ class WebSocketMonitor {
   }
 }
 
-const monitor = new WebSocketMonitor();
+// COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
+// const monitor = new WebSocketMonitor();
 
 /**
  * Función programada para verificar salud cada 5 minutos
+ * COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
  */
+/*
 export const websocketHealthCheck = onSchedule("every 5 minutes", async (event) => {
   console.log("🔍 Verificando salud del WebSocket...");
+  const monitor = new WebSocketMonitor();
   await monitor.checkWebSocketHealth();
 });
+*/
 
 /**
  * Función programada para limpiar métricas antiguas cada día
+ * COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
  */
+/*
 export const cleanupOldMetrics = onSchedule("every 24 hours", async (event) => {
   try {
     console.log("🧹 Limpiando métricas antiguas...");
-    
+
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    
+    const monitor = new WebSocketMonitor();
+
     const oldMetricsSnapshot = await monitor.metricsRef
       .where("timestamp", "<", admin.firestore.Timestamp.fromDate(sevenDaysAgo))
       .get();
@@ -200,5 +208,11 @@ export const cleanupOldMetrics = onSchedule("every 24 hours", async (event) => {
     console.error("❌ Error limpiando métricas:", error);
   }
 });
+*/
 
-export default monitor;
+// Exportar función factory en lugar de instancia global
+export function createWebSocketMonitor() {
+  return new WebSocketMonitor();
+}
+
+export { WebSocketMonitor };

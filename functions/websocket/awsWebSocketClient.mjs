@@ -2,10 +2,11 @@
 import WebSocket from 'ws';
 import fetch from 'node-fetch';
 import admin from 'firebase-admin';
-import websocketConfig from '../config/websocketConfig.mjs';
-import subscriptionManager from './subscriptionManager.mjs';
-import monitor from '../monitoring/websocketMonitor.mjs';
-import messageDeduplicator from '../utils/messageDeduplicator.mjs';
+// COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
+// import websocketConfig from '../config/websocketConfig.mjs';
+// import subscriptionManager from './subscriptionManager.mjs';
+// import monitor from '../monitoring/websocketMonitor.mjs';
+// import messageDeduplicator from '../utils/messageDeduplicator.mjs';
 
 // Inicializar Firebase Admin (si aún no lo está)
 if (!admin.apps.length) {
@@ -21,13 +22,14 @@ class AWSWebSocketClient {
     this.lastHeartbeat = null;
     this.connectionStartTime = null;
 
+    // COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
     // Cargar configuración
-    this.config = websocketConfig.getConfig();
-    this.wsUrl = this.config.aws.websocketUrl;
-    this.apiKey = this.config.aws.apiKey;
-    this.webhookUrl = this.config.internal.webhookUrl;
+    // this.config = websocketConfig.getConfig();
+    // this.wsUrl = this.config.aws.websocketUrl;
+    // this.apiKey = this.config.aws.apiKey;
+    // this.webhookUrl = this.config.internal.webhookUrl;
 
-    console.log("🔧 WebSocket Client inicializado con configuración:", websocketConfig.getLoggableConfig());
+    // console.log("🔧 WebSocket Client inicializado con configuración:", websocketConfig.getLoggableConfig());
   }
 
   /**
@@ -424,9 +426,15 @@ class AWSWebSocketClient {
   }
 }
 
+// COMENTADO TEMPORALMENTE PARA EVITAR INICIALIZACIÓN DURANTE BUILD
 // Crear instancia global
-const awsWebSocketClient = new AWSWebSocketClient();
+// const awsWebSocketClient = new AWSWebSocketClient();
 
 // Exportar instancia y clase
-export default awsWebSocketClient;
+// export default awsWebSocketClient;
 export { AWSWebSocketClient };
+
+// Exportar función factory en lugar de instancia global
+export function createWebSocketClient() {
+  return new AWSWebSocketClient();
+}

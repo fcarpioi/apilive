@@ -6,6 +6,10 @@ import cors from "cors";
 // Importar el router completo con search/participants actualizado
 import apiGeneralRouter from "./routes/apiGeneral.mjs";
 
+// 🔥 Importar triggers de Firestore
+// import { onUserFollowsParticipant } from "./triggers/followingTrigger.mjs"; // COMENTADO TEMPORALMENTE
+import { onStoryCreated } from "./triggers/storyNotificationTrigger.mjs";
+
 // Crear la aplicación Express principal
 const app = express();
 
@@ -26,3 +30,7 @@ app.get("/", (req, res) => {
 
 // Exportar la función principal
 export const liveApiGateway = onRequest(app);
+
+// 🔥 Exportar triggers de Firestore
+// export { onUserFollowsParticipant }; // COMENTADO TEMPORALMENTE
+export { onStoryCreated };
