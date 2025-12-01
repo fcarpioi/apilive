@@ -71,21 +71,21 @@ if (participantData.featured) {
 ```javascript
 // En storyNotificationTrigger.mjs línea 48, reemplazar con:
 switch (storyData.type) {
-  case 'ATHELETE_FINISHED':
+  case 'ATHLETE_FINISHED':
     console.log("🏁 Finalización - enviando a todos");
     await sendNotificationToAllUsers(storyData, participantData, {
       raceId, appId, eventId, participantId, storyId
     });
     break;
-    
-  case 'ATHELETE_STARTED':
+
+  case 'ATHLETE_STARTED':
     console.log("🚀 Inicio - enviando solo a seguidores");
     await sendNotificationToFollowers(participantId, storyData, participantData, {
       raceId, appId, eventId, participantId, storyId
     });
     break;
     
-  case 'ATHELETE_CROSSED_TIMING_SPLIT':
+  case 'ATHLETE_CROSSED_TIMING_SPLIT':
     console.log("⏱️ Checkpoint - enviando solo a seguidores");
     await sendNotificationToFollowers(participantId, storyData, participantData, {
       raceId, appId, eventId, participantId, storyId
@@ -164,9 +164,9 @@ async function sendNotificationWithPreferences(storyData, participantData, conte
     
     // Verificar tipo de evento
     const eventTypeMap = {
-      'ATHELETE_STARTED': 'started',
-      'ATHELETE_FINISHED': 'finished', 
-      'ATHELETE_CROSSED_TIMING_SPLIT': 'checkpoints'
+      'ATHLETE_STARTED': 'started',
+      'ATHLETE_FINISHED': 'finished',
+      'ATHLETE_CROSSED_TIMING_SPLIT': 'checkpoints'
     };
     const eventType = eventTypeMap[storyData.type];
     if (!prefs.eventTypes?.[eventType]) continue;

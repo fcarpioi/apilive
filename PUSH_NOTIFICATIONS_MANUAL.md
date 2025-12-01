@@ -85,9 +85,9 @@ El trigger se ejecuta automáticamente cuando se crea una historia en:
 ```
 
 **Tipos de historia detectados:**
-- `ATHELETE_STARTED` → "🚀 [Nombre] inició la carrera"
-- `ATHELETE_FINISHED` → "🏁 [Nombre] terminó la carrera"  
-- `ATHELETE_CROSSED_TIMING_SPLIT` → "⏱️ [Nombre] pasó por [checkpoint]"
+- `ATHLETE_STARTED` → "🚀 [Nombre] inició la carrera"
+- `ATHLETE_FINISHED` → "🏁 [Nombre] terminó la carrera"
+- `ATHLETE_CROSSED_TIMING_SPLIT` → "⏱️ [Nombre] pasó por [checkpoint]"
 
 ---
 
@@ -513,7 +513,7 @@ if (participantData.featured) {
 #### **Opción C: Por Tipo de Historia**
 ```javascript
 // Línea 48, reemplazar con:
-if (storyData.type === 'ATHELETE_FINISHED') {
+if (storyData.type === 'ATHLETE_FINISHED') {
   // Finalizaciones van a todos
   await sendNotificationToAllUsers(storyData, participantData, {
     raceId, appId, eventId, participantId, storyId

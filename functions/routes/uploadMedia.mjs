@@ -126,19 +126,21 @@ router.post("/uploadMedia", (req, res) => {
                 size: req.file.size
             } : "No file");
 
-            // ✅ Extraer parámetros del body
-            const { eventId, participantId, description } = req.body;
+            // ✅ Extraer parámetros del body (MIGRADO: Agregado raceId y appId)
+            const { raceId, appId, eventId, participantId, description } = req.body;
             const file = req.file;
 
-            // Validar parámetros requeridos
-            if (!eventId || !participantId || !file) {
+            // Validar parámetros requeridos (MIGRADO: Agregado raceId y appId)
+            if (!raceId || !appId || !eventId || !participantId || !file) {
                 console.error("❌ [uploadMedia] Parámetros faltantes:", {
+                    raceId: !!raceId,
+                    appId: !!appId,
                     eventId: !!eventId,
                     participantId: !!participantId,
                     file: !!file
                 });
                 return res.status(400).json({
-                    message: "eventId, participantId y file son requeridos"
+                    message: "raceId, appId, eventId, participantId y file son requeridos"
                 });
             }
 
@@ -162,10 +164,10 @@ router.post("/uploadMedia", (req, res) => {
             });
         }
 
-        // ✅ Generar nombre único del archivo
+        // ✅ Generar nombre único del archivo (MIGRADO: Nueva estructura con races/apps)
         const fileExtension = path.extname(file.originalname);
         const uniqueFileName = `${uuidv4()}${fileExtension}`;
-        const filePath = `events/${eventId}/participants/${participantId}/media/${uniqueFileName}`;
+        const filePath = `races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/media/${uniqueFileName}`;
 
         console.log("📄 [uploadMedia] Archivo generado:", {
             fileName: uniqueFileName,
@@ -179,6 +181,8 @@ router.post("/uploadMedia", (req, res) => {
             metadata: {
                 contentType: file.mimetype,
                 metadata: {
+                    raceId,
+                    appId,
                     eventId,
                     participantId,
                     mediaType,
@@ -218,12 +222,18 @@ router.post("/uploadMedia", (req, res) => {
         console.log("📝 [uploadMedia] Registrando metadata en Firestore...");
         
         const docRef = await firestore
+            .collection("races")
+            .doc(raceId)
+            .collection("apps")
+            .doc(appId)
             .collection("events")
             .doc(eventId)
             .collection("participants")
             .doc(participantId)
             .collection("media")
             .add({
+                raceId,
+                appId,
                 eventId,
                 participantId,
                 fileName: uniqueFileName,

@@ -36,17 +36,23 @@ GET /api/race-events?raceId=race-001-madrid-marathon&appId=RtME2RACih6YxgrlmuQR&
 - **Total Stories**: 621
 - **Estado**: ✅ **FUNCIONANDO PERFECTAMENTE**
 
+#### **5. 🆕 Race with Events and Splits (Nueva Estructura) - PERFECTO ✅**
+```bash
+GET /api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/Qmhfu2mx669sRaDe2LOg/events_splits
+```
+- **Estructura**: `/races/{raceId}/apps/{appId}/events/{eventId}`
+- **Race**: 26dc137a-34e2-44a0-918b-a5af620cf281 (Sin nombre, cronochip, UTC)
+- **App**: Qmhfu2mx669sRaDe2LOg (Gijón 2025)
+- **Eventos**: 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)
+- **Splits**: 7 splits totales distribuidos entre eventos
+- **Estados**: 2 NOT_STARTED, 0 IN_PROGRESS, 1 FINISHED
+- **Estado**: ✅ **FUNCIONANDO PERFECTAMENTE** ⭐ **NUEVO ENDPOINT**
+
 ---
 
 ### ⚠️ **ENDPOINTS CON ESTRUCTURA ANTIGUA (FUNCIONAN PERO LIMITADOS)**
 
-#### **1. Feed Extended SIN appId - FUNCIONA PARCIALMENTE ⚠️**
-```bash
-GET /api/feed/extended?raceId=race-001-madrid-marathon&eventId=event-0
-```
-- **Estructura**: `/races/{raceId}/events/{eventId}/participants/{participantId}/stories`
-- **Total Stories**: 310 (menos que la nueva estructura)
-- **Estado**: ⚠️ **FUNCIONA PERO CON MENOS DATOS**
+
 
 #### **2. Participante SIN appId - NO FUNCIONA ❌**
 ```bash
@@ -78,7 +84,7 @@ GET /api/search/participants?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yx
 
 ### ⚠️ **ENDPOINTS PARCIALMENTE MIGRADOS (2/7)**
 
-6. **⚠️ `/api/feed/extended`** - Estructura antigua, 310 stories (menos datos)
+
 7. **⚠️ `/api/search/participants`** - Necesita revisión de lógica de búsqueda
 
 ### ✅ **ENDPOINTS COMPLETAMENTE MIGRADOS (5/7)**
@@ -122,7 +128,6 @@ El endpoint de búsqueda devuelve array vacío. Necesita verificación de:
 ### **3. OPCIONAL - Deprecar Endpoints Antiguos**
 
 Considerar deprecar endpoints que usan estructura antigua:
-- `/api/feed/extended` (sin appId)
 - `/api/participant` (sin appId)
 
 ---
@@ -154,7 +159,6 @@ Considerar deprecar endpoints que usan estructura antigua:
    - `/api/race-events`
 
 2. **⚠️ EVITAR** endpoints sin `appId` (estructura antigua):
-   - `/api/feed/extended` (menos datos)
    - `/api/participant` (no funciona)
 
 3. **📱 PARÁMETROS OBLIGATORIOS** para nueva estructura:

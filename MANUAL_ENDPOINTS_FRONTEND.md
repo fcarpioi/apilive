@@ -45,7 +45,7 @@ GET /api/apps/feed/extended?appId=RtME2RACih6YxgrlmuQR&raceId=race-001-madrid-ma
       },
       "fileUrl": "https://stream.mux.com/...",
       "description": "Luciana pasa por el checkpoint 5K",
-      "type": "ATHELETE_CROSSED_TIMING_SPLIT",
+      "type": "ATHLETE_CROSSED_TIMING_SPLIT",
       "moderationStatus": "approved"
     }
   ],
@@ -94,7 +94,7 @@ GET /api/apps/participant?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yxgrl
   "splits": [
     {
       "storyId": "0m0R1GzbTTNBUGnNAOTd",
-      "type": "ATHELETE_STARTED",
+      "type": "ATHLETE_STARTED",
       "description": "Giselle inicia la carrera",
       "time": "00:00:00",
       "netTime": "00:00:00", 
@@ -105,7 +105,7 @@ GET /api/apps/participant?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yxgrl
     },
     {
       "storyId": "JJ6ngXxMTx5gXWEcJA7T",
-      "type": "ATHELETE_CROSSED_TIMING_SPLIT",
+      "type": "ATHLETE_CROSSED_TIMING_SPLIT",
       "description": "Giselle pasa por checkpoint intermedio",
       "time": "00:15:00",
       "netTime": "00:14:58",
@@ -116,7 +116,7 @@ GET /api/apps/participant?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yxgrl
     },
     {
       "storyId": "6bam16io6mMTHsJM8c8r",
-      "type": "ATHELETE_FINISHED",
+      "type": "ATHLETE_FINISHED",
       "description": "Giselle cruza la meta",
       "time": "01:00:00",
       "netTime": "00:59:55",
@@ -210,13 +210,13 @@ GET /api/sponsors/nike-sponsor/stories?raceId=race-001-madrid-marathon&appId=RtM
 
 ### **Stories por Tipo**
 ```bash
-GET /api/race-events?raceId=race-001-madrid-marathon&appId=RtME2RACih6YxgrlmuQR&eventId=event-0&type=ATHELETE_FINISHED&limit=20
+GET /api/race-events?raceId=race-001-madrid-marathon&appId=RtME2RACih6YxgrlmuQR&eventId=event-0&type=ATHLETE_FINISHED&limit=20
 ```
 
 **Tipos disponibles:**
-- `ATHELETE_STARTED` - Salidas
-- `ATHELETE_CROSSED_TIMING_SPLIT` - Checkpoints intermedios  
-- `ATHELETE_FINISHED` - Llegadas
+- `ATHLETE_STARTED` - Salidas
+- `ATHLETE_CROSSED_TIMING_SPLIT` - Checkpoints intermedios
+- `ATHLETE_FINISHED` - Llegadas
 
 ### **Búsqueda de Participantes**
 ```bash

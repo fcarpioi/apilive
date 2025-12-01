@@ -1,0 +1,114 @@
+{
+	"info": {
+		"_postman_id": "race-events-splits-final-2025",
+		"name": "🆕 Race Events Splits - Gijón 2025",
+		"description": "Endpoint específico para Race: 26dc137a-34e2-44a0-918b-a5af620cf281 | App: Qmhfu2mx669sRaDe2LOg (Gijón 2025)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "12345678"
+	},
+	"item": [
+		{
+			"name": "🆕 NUEVO - Race Events Splits",
+			"item": [
+				{
+					"name": "🎯 Race Events Splits - Gijón 2025 (WORKING)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/Qmhfu2mx669sRaDe2LOg/events_splits",
+							"protocol": "https",
+							"host": [
+								"liveapigateway-3rt3xwiooa-uc",
+								"a",
+								"run",
+								"app"
+							],
+							"path": [
+								"api",
+								"races",
+								"26dc137a-34e2-44a0-918b-a5af620cf281",
+								"apps",
+								"Qmhfu2mx669sRaDe2LOg",
+								"events_splits"
+							]
+						},
+						"description": "🎯 NUEVO ENDPOINT - DATOS ESPECÍFICOS CONFIGURADOS\n\n📊 RACE: 26dc137a-34e2-44a0-918b-a5af620cf281\n- Nombre: Sin nombre\n- Timezone: UTC\n- Company: cronochip\n\n📱 APP: Qmhfu2mx669sRaDe2LOg\n- Nombre: Gijón 2025\n\n🏃 EVENTOS ESPERADOS:\n- Total: 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)\n- Splits: 7 splits totales\n- Estados: 2 NOT_STARTED, 1 FINISHED\n\n✅ PROBADO Y FUNCIONANDO\n\n📤 Respuesta incluye:\n- race: Metadata completa\n- app: Información de Gijón 2025\n- events: 3 eventos con splits, waves, categorías\n- summary: Contadores automáticos"
+					},
+					"response": []
+				},
+				{
+					"name": "Test Error - Race Not Found",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/RACE-NO-EXISTE/apps/Qmhfu2mx669sRaDe2LOg/events_splits",
+							"protocol": "https",
+							"host": [
+								"liveapigateway-3rt3xwiooa-uc",
+								"a",
+								"run",
+								"app"
+							],
+							"path": [
+								"api",
+								"races",
+								"RACE-NO-EXISTE",
+								"apps",
+								"Qmhfu2mx669sRaDe2LOg",
+								"events_splits"
+							]
+						},
+						"description": "Prueba del error 404 - Race not found"
+					},
+					"response": []
+				},
+				{
+					"name": "Test Error - App Not Found",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/APP-NO-EXISTE/events_splits",
+							"protocol": "https",
+							"host": [
+								"liveapigateway-3rt3xwiooa-uc",
+								"a",
+								"run",
+								"app"
+							],
+							"path": [
+								"api",
+								"races",
+								"26dc137a-34e2-44a0-918b-a5af620cf281",
+								"apps",
+								"APP-NO-EXISTE",
+								"events_splits"
+							]
+						},
+						"description": "Prueba del error 404 - App not found"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://liveapigateway-3rt3xwiooa-uc.a.run.app",
+			"type": "string"
+		},
+		{
+			"key": "raceId",
+			"value": "26dc137a-34e2-44a0-918b-a5af620cf281",
+			"type": "string"
+		},
+		{
+			"key": "appId",
+			"value": "Qmhfu2mx669sRaDe2LOg",
+			"type": "string"
+		}
+	]
+}

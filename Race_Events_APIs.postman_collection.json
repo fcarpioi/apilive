@@ -21,7 +21,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"eventId\": \"event-0\",\n  \"participantId\": \"TEST_RUNNER_001\",\n  \"participant\": {\n    \"name\": \"Carlos\",\n    \"lastName\": \"Rodríguez\",\n    \"dorsal\": \"456\",\n    \"category\": \"Seniors\",\n    \"externalId\": \"CAR_001\",\n    \"country\": \"España\",\n    \"profilePicture\": \"https://example.com/photo.jpg\",\n    \"description\": \"Corredor de prueba\"\n  },\n  \"stories\": [\n    {\n      \"type\": \"ATHELETE_STARTED\",\n      \"fileUrl\": \"https://stream.mux.com/start.m3u8\",\n      \"description\": \"Carlos inicia la carrera\",\n      \"mediaType\": \"video\",\n      \"duration\": 15,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"00:00:00\",\n        \"netTime\": \"00:00:00\",\n        \"split\": \"START\",\n        \"checkpoint\": \"Línea de Salida\"\n      }\n    },\n    {\n      \"type\": \"ATHELETE_CROSSED_TIMING_SPLIT\",\n      \"fileUrl\": \"https://stream.mux.com/checkpoint.m3u8\",\n      \"description\": \"Carlos pasa por 10K\",\n      \"mediaType\": \"video\",\n      \"duration\": 20,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"00:42:15\",\n        \"netTime\": \"00:42:10\",\n        \"split\": \"10K\",\n        \"checkpoint\": \"Checkpoint 10 Kilómetros\"\n      }\n    },\n    {\n      \"type\": \"ATHELETE_FINISHED\",\n      \"fileUrl\": \"https://stream.mux.com/finish.m3u8\",\n      \"description\": \"Carlos cruza la meta\",\n      \"mediaType\": \"video\",\n      \"duration\": 25,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"01:52:30\",\n        \"netTime\": \"01:52:25\",\n        \"split\": \"FINISH\",\n        \"checkpoint\": \"Meta Final\"\n      }\n    }\n  ]\n}"
+							"raw": "{\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"appId\": \"RtME2RACih6YxgrlmuQR\",\n  \"eventId\": \"event-0\",\n  \"participantId\": \"TEST_RUNNER_001\",\n  \"participant\": {\n    \"name\": \"Carlos\",\n    \"lastName\": \"Rodríguez\",\n    \"dorsal\": \"456\",\n    \"category\": \"Seniors\",\n    \"externalId\": \"CAR_001\",\n    \"country\": \"España\",\n    \"profilePicture\": \"https://example.com/photo.jpg\",\n    \"description\": \"Corredor de prueba\"\n  },\n  \"stories\": [\n    {\n      \"type\": \"ATHLETE_STARTED\",\n      \"fileUrl\": \"https://stream.mux.com/start.m3u8\",\n      \"description\": \"Carlos inicia la carrera\",\n      \"mediaType\": \"video\",\n      \"duration\": 15,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"00:00:00\",\n        \"netTime\": \"00:00:00\",\n        \"split\": \"START\",\n        \"checkpoint\": \"Línea de Salida\"\n      }\n    },\n    {\n      \"type\": \"ATHLETE_CROSSED_TIMING_SPLIT\",\n      \"fileUrl\": \"https://stream.mux.com/checkpoint.m3u8\",\n      \"description\": \"Carlos pasa por 10K\",\n      \"mediaType\": \"video\",\n      \"duration\": 20,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"00:42:15\",\n        \"netTime\": \"00:42:10\",\n        \"split\": \"10K\",\n        \"checkpoint\": \"Checkpoint 10 Kilómetros\"\n      }\n    },\n    {\n      \"type\": \"ATHLETE_FINISHED\",\n      \"fileUrl\": \"https://stream.mux.com/finish.m3u8\",\n      \"description\": \"Carlos cruza la meta\",\n      \"mediaType\": \"video\",\n      \"duration\": 25,\n      \"moderationStatus\": \"approved\",\n      \"originType\": \"automatic_checkpoint\",\n      \"splitTime\": {\n        \"time\": \"01:52:30\",\n        \"netTime\": \"01:52:25\",\n        \"split\": \"FINISH\",\n        \"checkpoint\": \"Meta Final\"\n      }\n    }\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/participants",
@@ -176,7 +176,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_STARTED",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_STARTED",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -199,11 +199,11 @@
 								},
 								{
 									"key": "type",
-									"value": "ATHELETE_STARTED"
+									"value": "ATHLETE_STARTED"
 								}
 							]
 						},
-						"description": "Obtiene solo stories de tipo ATHELETE_STARTED"
+						"description": "Obtiene solo stories de tipo ATHLETE_STARTED"
 					},
 					"response": []
 				},
@@ -213,7 +213,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_CROSSED_TIMING_SPLIT",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_CROSSED_TIMING_SPLIT",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -236,7 +236,7 @@
 								},
 								{
 									"key": "type",
-									"value": "ATHELETE_CROSSED_TIMING_SPLIT"
+									"value": "ATHLETE_CROSSED_TIMING_SPLIT"
 								}
 							]
 						},
@@ -250,7 +250,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_FINISHED",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_FINISHED",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -273,7 +273,7 @@
 								},
 								{
 									"key": "type",
-									"value": "ATHELETE_FINISHED"
+									"value": "ATHLETE_FINISHED"
 								}
 							]
 						},

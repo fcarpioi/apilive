@@ -1,8 +1,8 @@
 {
 	"info": {
-		"_postman_id": "live-api-complete-2025",
-		"name": "Live API Complete - Todas las APIs",
-		"description": "Colección completa de todas las APIs del Live API Gateway con nueva estructura races/apps/events",
+		"_postman_id": "live-api-complete-2025-v2",
+		"name": "Live API Complete - Todas las APIs (v2)",
+		"description": "Colección completa de todas las APIs del Live API Gateway con nueva estructura races/apps/events - INCLUYE NUEVO ENDPOINT RACE EVENTS SPLITS",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -169,27 +169,66 @@
 						"description": "Obtener detalles de una historia específica"
 					}
 				},
-				{
-					"name": "Feed Extended - Con Usuario (Seguidos)",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/api/apps/feed/extended?appId={{appId}}&raceId={{raceId}}&eventId={{eventId}}&userId={{userId}}&limit=10",
-							"host": ["{{baseUrl}}"],
-							"path": ["api", "apps", "feed", "extended"],
-							"query": [
-								{"key": "appId", "value": "{{appId}}"},
-								{"key": "raceId", "value": "{{raceId}}"},
-								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "userId", "value": "{{userId}}"},
-								{"key": "limit", "value": "10"}
-							]
+					{
+						"name": "🆕 Feed Extended - Participante Específico",
+						"request": {
+							"method": "GET",
+							"header": [],
+							"url": {
+								"raw": "{{baseUrl}}/api/apps/feed/extended?appId={{appId}}&raceId={{raceId}}&eventId={{eventId}}&participantId={{participantId}}",
+								"host": ["{{baseUrl}}"],
+								"path": ["api", "apps", "feed", "extended"],
+								"query": [
+									{"key": "appId", "value": "{{appId}}"},
+									{"key": "raceId", "value": "{{raceId}}"},
+									{"key": "eventId", "value": "{{eventId}}"},
+									{"key": "participantId", "value": "{{participantId}}"}
+								]
+							},
+							"description": "🆕 NUEVO: Obtener todas las historias de un participante específico usando su ID"
+						}
+					},
+					{
+						"name": "🆕 Feed Extended - Con userId (Seguidos)",
+						"request": {
+							"method": "GET",
+							"header": [],
+							"url": {
+								"raw": "{{baseUrl}}/api/apps/feed/extended?appId={{appId}}&raceId={{raceId}}&eventId={{eventId}}&userId={{userId}}&limit=5",
+								"host": ["{{baseUrl}}"],
+								"path": ["api", "apps", "feed", "extended"],
+								"query": [
+									{"key": "appId", "value": "{{appId}}"},
+									{"key": "raceId", "value": "{{raceId}}"},
+									{"key": "eventId", "value": "{{eventId}}"},
+									{"key": "userId", "value": "{{userId}}"},
+									{"key": "limit", "value": "5"}
+								]
+							},
+							"description": "🆕 ACTUALIZADO: Filtrar historias por participantes seguidos usando userId. Si el usuario no sigue a nadie, devuelve todas las historias."
+						}
+					},
+					{
+						"name": "Feed Extended - Con Usuario (Seguidos)",
+						"request": {
+							"method": "GET",
+							"header": [],
+							"url": {
+								"raw": "{{baseUrl}}/api/apps/feed/extended?appId={{appId}}&raceId={{raceId}}&eventId={{eventId}}&userId={{userId}}&limit=10",
+								"host": ["{{baseUrl}}"],
+								"path": ["api", "apps", "feed", "extended"],
+								"query": [
+									{"key": "appId", "value": "{{appId}}"},
+									{"key": "raceId", "value": "{{raceId}}"},
+									{"key": "eventId", "value": "{{eventId}}"},
+									{"key": "userId", "value": "{{userId}}"},
+									{"key": "limit", "value": "10"}
+								]
+							}
 						},
 						"description": "Feed con historias de participantes seguidos"
 					}
-				}
-			]
+				]
 		},
 		{
 			"name": "👤 Participantes",
@@ -318,14 +357,14 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_STARTED",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_STARTED",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "race-events"],
 							"query": [
 								{"key": "raceId", "value": "{{raceId}}"},
 								{"key": "appId", "value": "{{appId}}"},
 								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "type", "value": "ATHELETE_STARTED"}
+								{"key": "type", "value": "ATHLETE_STARTED"}
 							]
 						},
 						"description": "Obtener solo stories de salida"
@@ -337,14 +376,14 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_CROSSED_TIMING_SPLIT",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_CROSSED_TIMING_SPLIT",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "race-events"],
 							"query": [
 								{"key": "raceId", "value": "{{raceId}}"},
 								{"key": "appId", "value": "{{appId}}"},
 								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "type", "value": "ATHELETE_CROSSED_TIMING_SPLIT"}
+								{"key": "type", "value": "ATHLETE_CROSSED_TIMING_SPLIT"}
 							]
 						},
 						"description": "Obtener solo stories de checkpoints intermedios"
@@ -356,44 +395,49 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHELETE_FINISHED",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_FINISHED",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "race-events"],
 							"query": [
 								{"key": "raceId", "value": "{{raceId}}"},
 								{"key": "appId", "value": "{{appId}}"},
 								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "type", "value": "ATHELETE_FINISHED"}
+								{"key": "type", "value": "ATHLETE_FINISHED"}
 							]
 						},
 						"description": "Obtener solo stories de meta/finalización"
 					}
-				}
-			]
-		},
-		{
-			"name": "📊 Feed Extended (Estructura Antigua)",
-			"item": [
+				},
 				{
-					"name": "Feed Extended - Estructura Antigua",
+					"name": "🆕 Get Race with Events and Splits",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/feed/extended?raceId={{raceId}}&eventId={{eventId}}&limit=10",
+							"raw": "{{baseUrl}}/api/races/{{raceId}}/apps/{{appId}}/events_splits",
 							"host": ["{{baseUrl}}"],
-							"path": ["api", "feed", "extended"],
-							"query": [
-								{"key": "raceId", "value": "{{raceId}}"},
-								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "limit", "value": "10"}
-							]
+							"path": ["api", "races", "{{raceId}}", "apps", "{{appId}}", "events_splits"]
 						},
-						"description": "Feed con estructura antigua (sin appId) - Menos datos disponibles"
+						"description": "🎯 NUEVO ENDPOINT: Obtener información completa de una carrera específica, incluyendo todos sus eventos con splits y estados actuales.\\n\\n📥 VARIABLES CONFIGURADAS POR DEFECTO:\\n- raceId: {{raceId}} = 26dc137a-34e2-44a0-918b-a5af620cf281\\n- appId: {{appId}} = Qmhfu2mx669sRaDe2LOg (Gijón 2025)\\n\\n📤 RESPUESTA CON DATOS POR DEFECTO:\\n- race: Sin nombre (cronochip, UTC)\\n- app: Gijón 2025\\n- events: 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)\\n- summary: 3 eventos totales, 7 splits, estados calculados\\n\\n🚦 ESTADOS DE EVENTOS:\\n- NOT_STARTED: !wavesStarted && !finished\\n- IN_PROGRESS: wavesStarted && !finished\\n- FINISHED: finished === true\\n\\n✅ CASOS DE ERROR:\\n- 404 RACE_NOT_FOUND: Race no encontrada\\n- 404 APP_NOT_FOUND: App no encontrada en la race\\n- 500 INTERNAL_ERROR: Error interno del servidor\\n\\n🧪 PROBADO Y FUNCIONANDO: Usa variables de colección configuradas"
+					}
+				},
+				{
+					"name": "🔧 HARDCODED - Race Events Splits (GUARANTEED WORKING)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/Qmhfu2mx669sRaDe2LOg/events_splits",
+							"protocol": "https",
+							"host": ["liveapigateway-3rt3xwiooa-uc", "a", "run", "app"],
+							"path": ["api", "races", "26dc137a-34e2-44a0-918b-a5af620cf281", "apps", "Qmhfu2mx669sRaDe2LOg", "events_splits"]
+						},
+						"description": "🔧 VERSIÓN HARDCODEADA - GARANTIZADA PARA FUNCIONAR\\n\\n📍 URL COMPLETA SIN VARIABLES:\\nhttps://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/Qmhfu2mx669sRaDe2LOg/events_splits\\n\\n✅ DATOS HARDCODEADOS:\\n- raceId: 26dc137a-34e2-44a0-918b-a5af620cf281\\n- appId: Qmhfu2mx669sRaDe2LOg\\n\\n🎯 USA ESTA VERSIÓN SI:\\n- Las variables no funcionan\\n- Hay problemas de cache en Postman\\n- Necesitas una prueba rápida garantizada\\n\\n📊 RESPUESTA ESPERADA:\\n- success: true\\n- 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)\\n- 7 splits totales\\n- Estados calculados automáticamente"
 					}
 				}
 			]
 		},
+
 		{
 			"name": "👥 Seguimientos",
 			"item": [
@@ -479,6 +523,59 @@
 			]
 		},
 		{
+			"name": "⚙️ Config (Nueva API)",
+			"item": [
+				{
+					"name": "Get Config by Bundle ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/config?bundleId={{bundleId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "config"],
+							"query": [
+								{"key": "bundleId", "value": "{{bundleId}}"}
+							]
+						},
+						"description": "Obtener configuración completa de app con eventos y media por Bundle ID"
+					}
+				},
+				{
+					"name": "Get Config by Race ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/config?raceId={{raceId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "config"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"}
+							]
+						},
+						"description": "Obtener configuración completa de app con eventos y media por Race ID"
+					}
+				},
+				{
+					"name": "Get Config by Race Name",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/config?raceName={{raceName}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "config"],
+							"query": [
+								{"key": "raceName", "value": "{{raceName}}"}
+							]
+						},
+						"description": "Obtener configuración completa de app con eventos y media por Race Name"
+					}
+				}
+			]
+		},
+		{
 			"name": "📤 Upload & Media",
 			"item": [
 				{
@@ -493,7 +590,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"fileName\": \"video.mp4\",\n  \"contentType\": \"video/mp4\",\n  \"description\": \"Video de prueba\"\n}"
+							"raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"fileName\": \"video.mp4\",\n  \"contentType\": \"video/mp4\",\n  \"description\": \"Video de prueba\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/generateUploadUrl",
@@ -515,7 +612,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"url\": \"https://example.com/video.mp4\",\n  \"raceId\": \"{{raceId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"description\": \"Video descargado desde URL\"\n}"
+							"raw": "{\n  \"url\": \"https://example.com/video.mp4\",\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"description\": \"Video descargado desde URL\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/downloadAndUpload",
@@ -523,6 +620,76 @@
 							"path": ["api", "downloadAndUpload"]
 						},
 						"description": "Descargar archivo desde URL y subirlo a Firebase Storage"
+					}
+				},
+				{
+					"name": "🆕 Upload Story (MIGRATED)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"apiKey\": \"9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0\",\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"fileUrl\": \"https://example.com/video.mp4\",\n  \"description\": \"Video de prueba migrado\",\n  \"originType\": \"webhook-test\",\n  \"date\": \"2024-01-15T10:30:00.000Z\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/uploadFullFlow",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "uploadFullFlow"]
+						},
+						"description": "🆕 MIGRADO: Upload story con nueva estructura races/{raceId}/apps/{appId}/events/{eventId}/participants/{participantId}/stories"
+					}
+				},
+				{
+					"name": "🆕 Upload Media (MIGRATED)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "raceId",
+									"value": "{{raceId}}",
+									"type": "text"
+								},
+								{
+									"key": "appId",
+									"value": "{{appId}}",
+									"type": "text"
+								},
+								{
+									"key": "eventId",
+									"value": "{{eventId}}",
+									"type": "text"
+								},
+								{
+									"key": "participantId",
+									"value": "{{participantId}}",
+									"type": "text"
+								},
+								{
+									"key": "description",
+									"value": "Media de prueba migrado",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/uploadMedia",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "uploadMedia"]
+						},
+						"description": "🆕 MIGRADO: Upload media con nueva estructura races/{raceId}/apps/{appId}/events/{eventId}/participants/{participantId}/media"
 					}
 				}
 			]
@@ -591,7 +758,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"test-participant-001\",\n  \"participant\": {\n    \"name\": \"Test\",\n    \"lastName\": \"Participant\",\n    \"dorsal\": \"9999\",\n    \"category\": \"Test\",\n    \"team\": \"Test Team\"\n  },\n  \"stories\": [\n    {\n      \"contentType\": \"ATHELETE_STARTED\",\n      \"description\": \"Participante de prueba iniciando\",\n      \"mediaType\": \"video\",\n      \"fileUrl\": \"https://example.com/video.mp4\"\n    }\n  ]\n}"
+							"raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"test-participant-001\",\n  \"participant\": {\n    \"name\": \"Test\",\n    \"lastName\": \"Participant\",\n    \"dorsal\": \"9999\",\n    \"category\": \"Test\",\n    \"team\": \"Test Team\"\n  },\n  \"stories\": [\n    {\n      \"contentType\": \"ATHLETE_STARTED\",\n      \"description\": \"Participante de prueba iniciando\",\n      \"mediaType\": \"video\",\n      \"fileUrl\": \"https://example.com/video.mp4\"\n    }\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/participants",
@@ -618,14 +785,71 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"fcmToken\": \"token_real_del_dispositivo\",\n  \"deviceInfo\": {\n    \"platform\": \"android\",\n    \"deviceId\": \"device-001\",\n    \"appVersion\": \"1.0.0\"\n  }\n}"
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"fcmToken\": \"token_real_del_dispositivo\",\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"deviceInfo\": {\n    \"platform\": \"android\",\n    \"deviceId\": \"device-001\",\n    \"appVersion\": \"1.0.0\"\n  }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/fcm/register-token",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "fcm", "register-token"]
 						},
-						"description": "Registrar token FCM para push notifications"
+						"description": "Registrar token FCM para push notifications específicas de una carrera. Requiere userId, fcmToken y raceId."
+					}
+				},
+				{
+					"name": "Unregister FCM Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"raceId\": \"race-001-madrid-marathon\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/fcm/unregister-token",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "fcm", "unregister-token"]
+						},
+						"description": "Desregistrar token FCM de un usuario para una carrera específica. Requiere userId y raceId."
+					}
+				},
+				{
+					"name": "Send Push Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"raceId\": \"race-001-madrid-marathon\",\n  \"title\": \"🔔 Notificación Push\",\n  \"body\": \"Esta es una notificación push del sistema\",\n  \"data\": {\n    \"notificationType\": \"manual\",\n    \"timestamp\": \"2024-01-15T10:30:00Z\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/fcm/push-notification",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "fcm", "push-notification"]
+						},
+						"description": "Enviar notificación push con filtros: userId (usuario específico), raceId (carrera específica), userId+raceId (usuario en carrera), o sin filtros (broadcast a todos)."
+					}
+				},
+				{
+					"name": "Get FCM Stats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/fcm/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "fcm", "stats"]
+						},
+						"description": "Obtener estadísticas detalladas de tokens FCM: total de usuarios, tokens por carrera, estadísticas por carrera y notificaciones recientes."
 					}
 				}
 			]
@@ -639,17 +863,17 @@
 		},
 		{
 			"key": "appId",
-			"value": "RtME2RACih6YxgrlmuQR",
+			"value": "Qmhfu2mx669sRaDe2LOg",
 			"type": "string"
 		},
 		{
 			"key": "raceId",
-			"value": "race-001-madrid-marathon",
+			"value": "26dc137a-34e2-44a0-918b-a5af620cf281",
 			"type": "string"
 		},
 		{
 			"key": "eventId",
-			"value": "event-0",
+			"value": "Invitados",
 			"type": "string"
 		},
 		{
@@ -679,7 +903,12 @@
 		},
 		{
 			"key": "bundleId",
-			"value": "live.app.com",
+			"value": "com.live2.app",
+			"type": "string"
+		},
+		{
+			"key": "raceName",
+			"value": "Sin nombre",
 			"type": "string"
 		}
 	]

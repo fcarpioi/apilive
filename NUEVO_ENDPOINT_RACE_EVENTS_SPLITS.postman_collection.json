@@ -1,0 +1,66 @@
+{
+	"info": {
+		"_postman_id": "race-events-splits-new-2025",
+		"name": "🆕 NUEVO: Race Events Splits API",
+		"description": "Colección específica para el nuevo endpoint Race Events Splits",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "🆕 Get Race with Events and Splits",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/races/{{raceId}}/apps/{{appId}}/events_splits",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "races", "{{raceId}}", "apps", "{{appId}}", "events_splits"]
+				},
+				"description": "🎯 NUEVO ENDPOINT: Obtener información completa de una carrera específica, incluyendo todos sus eventos con splits y estados actuales.\n\n📥 PARÁMETROS:\n- raceId: ID de la carrera\n- appId: ID de la aplicación\n\n📤 RESPUESTA:\n- race: Información de la carrera (id, name, timezone, company, idRace)\n- app: Información de la aplicación (id, name)\n- events: Array de eventos con splits, waves, categories y status\n- summary: Resumen con contadores (totalEvents, eventsNotStarted, eventsInProgress, eventsFinished, totalSplits, totalAthletes)\n\n🚦 ESTADOS DE EVENTOS:\n- NOT_STARTED: !wavesStarted && !finished\n- IN_PROGRESS: wavesStarted && !finished\n- FINISHED: finished === true\n\n✅ CASOS DE ERROR:\n- 404 RACE_NOT_FOUND: Race no encontrada\n- 404 APP_NOT_FOUND: App no encontrada en la race\n- 500 INTERNAL_ERROR: Error interno del servidor"
+			}
+		},
+		{
+			"name": "🧪 Test - Race No Encontrada",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/races/race-inexistente/apps/{{appId}}/events_splits",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "races", "race-inexistente", "apps", "{{appId}}", "events_splits"]
+				},
+				"description": "Prueba del caso de error: Race no encontrada (404)"
+			}
+		},
+		{
+			"name": "🧪 Test - App No Encontrada",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/races/{{raceId}}/apps/app-inexistente/events_splits",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "races", "{{raceId}}", "apps", "app-inexistente", "events_splits"]
+				},
+				"description": "Prueba del caso de error: App no encontrada (404)"
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://liveapigateway-3rt3xwiooa-uc.a.run.app",
+			"type": "string"
+		},
+		{
+			"key": "appId",
+			"value": "Qmhfu2mx669sRaDe2LOg",
+			"type": "string"
+		},
+		{
+			"key": "raceId",
+			"value": "26dc137a-34e2-44a0-918b-a5af620cf281",
+			"type": "string"
+		}
+	]
+}

@@ -49,7 +49,11 @@ router.use(express.json({ limit: "10mb" }));
  *               raceId:
                  type: string
                  description: Identificador de la carrera (NUEVO - requerido)
-                 example: "57640500-c3ac-4afa-8f6b-6d55bc5ffd28"
+                 example: "26dc137a-34e2-44a0-918b-a5af620cf281"
+               appId:
+                 type: string
+                 description: Identificador de la aplicación (MIGRADO - requerido)
+                 example: "Qmhfu2mx669sRaDe2LOg"
                eventId:
  *                 type: string
  *                 description: Identificador del evento
@@ -77,6 +81,7 @@ router.use(express.json({ limit: "10mb" }));
  *             required:
  *               - apiKey
  *               - raceId
+ *               - appId
  *               - eventId
  *               - participantId
  *               - fileUrl
@@ -136,8 +141,8 @@ router.post("/uploadFullFlow", async (req, res) => {
         console.log("🚀 [uploadFullFlow] Iniciando proceso...");
         console.log("� [uploadFullFlow] Body recibido:", req.body);
 
-        // ✅ Extraer parámetros del body JSON
-        const { apiKey, raceId, eventId, participantId, fileUrl, description, originType, date } = req.body;
+        // ✅ Extraer parámetros del body JSON (MIGRADO: Agregado appId)
+        const { apiKey, raceId, appId, eventId, participantId, fileUrl, description, originType, date } = req.body;
 
         // 🔐 Verificación de autenticación para webhooks
         const expectedApiKey = process.env.WEBHOOK_API_KEY ||
@@ -153,16 +158,17 @@ router.post("/uploadFullFlow", async (req, res) => {
 
         console.log("✅ [uploadFullFlow] API Key válida");
 
-        // Validar parámetros requeridos
-        if (!raceId || !eventId || !participantId || !fileUrl || !originType) {
+        // Validar parámetros requeridos (MIGRADO: Agregado appId)
+        if (!raceId || !appId || !eventId || !participantId || !fileUrl || !originType) {
             console.error("❌ [uploadFullFlow] Parámetros faltantes:", {
                 raceId: !!raceId,
+                appId: !!appId,
                 eventId: !!eventId,
                 participantId: !!participantId,
                 fileUrl: !!fileUrl,
                 originType: !!originType
             });
-            return res.status(400).json({ message: "raceId, eventId, participantId, fileUrl y originType son requeridos" });
+            return res.status(400).json({ message: "raceId, appId, eventId, participantId, fileUrl y originType son requeridos" });
         }
 
         // Usar fecha proporcionada o fecha actual
@@ -205,9 +211,9 @@ router.post("/uploadFullFlow", async (req, res) => {
         const isImage = contentType.startsWith('image/');
         const mediaType = isVideo ? 'video' : isImage ? 'image' : 'unknown';
 
-        // ✅ 3️⃣ Generar nombre único y path en Firebase Storage (estructura corregida)
+        // ✅ 3️⃣ Generar nombre único y path en Firebase Storage (MIGRADO: Nueva estructura con apps)
         const uniqueFileName = `${uuidv4()}${fileExtension}`;
-        const filePath = `races/${raceId}/events/${eventId}/participants/${participantId}/stories/${uniqueFileName}`;
+        const filePath = `races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${uniqueFileName}`;
 
         console.log("📄 [uploadFullFlow] Archivo generado:", {
             originalFileName,
@@ -244,10 +250,12 @@ router.post("/uploadFullFlow", async (req, res) => {
         // ✅ 5️⃣ Registrar la metadata en Firestore
         console.log("📝 [uploadFullFlow] Registrando metadata en Firestore...");
 
-        // ✅ CORREGIDO: Usar estructura correcta races/events/participants/stories
+        // ✅ MIGRADO: Usar nueva estructura races/apps/events/participants/stories
         const docRef = await firestore
             .collection("races")
             .doc(raceId)
+            .collection("apps")
+            .doc(appId)
             .collection("events")
             .doc(eventId)
             .collection("participants")
@@ -255,6 +263,7 @@ router.post("/uploadFullFlow", async (req, res) => {
             .collection("stories")
             .add({
                 raceId,
+                appId,
                 eventId,
                 participantId,
                 fileName: uniqueFileName,

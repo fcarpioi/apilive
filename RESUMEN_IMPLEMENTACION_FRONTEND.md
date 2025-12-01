@@ -56,7 +56,7 @@ GET /api/apps/feed/extended?appId=RtME2RACih6YxgrlmuQR&raceId=race-001-madrid-ma
 
 #### **Stories por Tipo**
 ```bash
-GET /api/race-events?raceId=race-001-madrid-marathon&appId=RtME2RACih6YxgrlmuQR&eventId=event-0&type=ATHELETE_FINISHED
+GET /api/race-events?raceId=race-001-madrid-marathon&appId=RtME2RACih6YxgrlmuQR&eventId=event-0&type=ATHLETE_FINISHED
 ```
 
 **✅ Estado**: **EXCELENTE** - Con sponsors incluidos
@@ -145,21 +145,21 @@ GET /api/apps/participant?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yxgrl
   "splits": [
     {
       "storyId": "story_gen_123",
-      "type": "ATHELETE_STARTED",
+      "type": "ATHLETE_STARTED",
       "time": "00:00:00",
       "split": "START",
       "checkpoint": "START"
     },
     {
       "storyId": "story_gen_124", 
-      "type": "ATHELETE_CROSSED_TIMING_SPLIT",
+      "type": "ATHLETE_CROSSED_TIMING_SPLIT",
       "time": "00:25:30",
       "split": "5K",
       "checkpoint": "5K"
     },
     {
       "storyId": "story_gen_125",
-      "type": "ATHELETE_FINISHED",
+      "type": "ATHLETE_FINISHED",
       "time": "03:45:20",
       "split": "FINISH",
       "checkpoint": "FINISH"

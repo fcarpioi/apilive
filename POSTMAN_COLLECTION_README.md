@@ -13,13 +13,15 @@
 4. Click en **"Import"**
 
 ### **3. Variables ya configuradas**
-✅ **Todas las variables están preconfiguradas:**
+✅ **Todas las variables están preconfiguradas con datos reales:**
 - `baseUrl`: `https://liveapigateway-3rt3xwiooa-uc.a.run.app`
-- `appId`: `RtME2RACih6YxgrlmuQR`
-- `raceId`: `race-001-madrid-marathon`
-- `eventId`: `event-0`
+- `raceId`: `26dc137a-34e2-44a0-918b-a5af620cf281` *(Race verificada)*
+- `appId`: `Qmhfu2mx669sRaDe2LOg` *(Gijón 2025 - App verificada)*
+- `eventId`: `Invitados` *(Evento real de la race)*
 - `participantId`: `0RGz1Rygpkpe2Z7XumcM`
 - `userId`: `follower-user-001`
+- `bundleId`: `com.live2.app`
+- `raceName`: `Sin nombre` *(Nombre real de la race)*
 
 ---
 
@@ -51,12 +53,12 @@
 
 ### **🏁 Race Events**
 - **Todas las Stories**
-- **Solo Salidas** - `ATHELETE_STARTED`
-- **Solo Checkpoints** - `ATHELETE_CROSSED_TIMING_SPLIT`
-- **Solo Finalizaciones** - `ATHELETE_FINISHED`
+- **Solo Salidas** - `ATHLETE_STARTED`
+- **Solo Checkpoints** - `ATHLETE_CROSSED_TIMING_SPLIT`
+- **Solo Finalizaciones** - `ATHLETE_FINISHED`
+- **🆕 Race with Events and Splits** - ⭐ **NUEVO** - Información completa de carrera con eventos, splits y estados
 
-### **📊 Feed Extended (Estructura Antigua)**
-- **Feed Antiguo** - Sin appId (menos datos)
+
 
 ### **👥 Seguimientos**
 - **Lista de Seguidos** - Por userId
@@ -66,6 +68,11 @@
 - **Apps por Company**
 - **Apps por Bundle ID**
 - **Todas las Companies**
+
+### **⚙️ Config (Nueva API)**
+- **Config por Bundle ID** - `bundleId=com.live2.app`
+- **Config por Race ID** - `raceId={{raceId}}`
+- **Config por Race Name** - `raceName=Madrid Marathon 2024`
 
 ### **📤 Upload & Media**
 - **Generar URL de Upload**
@@ -91,6 +98,8 @@
 3. **`/api/apps/participant`** - Con splits completos
 4. **`/api/sponsors`** - Gestión de sponsors
 5. **`/api/race-events`** - Stories por tipo
+6. **`/api/config`** - ⭐ **NUEVA API** - Configuración completa de app con eventos y media
+7. **`/api/races/{raceId}/apps/{appId}/events_splits`** - ⭐ **NUEVA API** - Race completa con eventos, splits y estados
 
 ### **⚠️ ESTRUCTURA ANTIGUA (Menos datos)**
 6. **`/api/feed/extended`** - Sin appId
@@ -141,6 +150,37 @@
 }
 ```
 
+### **4. Probar Nueva API Config**
+```bash
+⚙️ Config > Get Config by Bundle ID
+```
+**Resultado esperado:**
+```json
+{
+  "app": {
+    "appId": "Qmhfu2mx669sRaDe2LOg",
+    "name": "Gijón 2025",
+    "bundleId": "com.live2.app",
+    "raceId": "26dc137a-34e2-44a0-918b-a5af620cf281",
+    "raceName": "Carrera de la Mujer Gijón 2023 Copia",
+    "eventsCount": 3,
+    "mediaCount": 9,
+    "events": [
+      {
+        "eventId": "Invitados",
+        "media": {
+          "sponsors": [4 elementos],
+          "logos": [1 elemento],
+          "videos": [2 elementos],
+          "images": [2 elementos],
+          "posters": [0 elementos]
+        }
+      }
+    ]
+  }
+}
+```
+
 ---
 
 ## 🚀 **VARIABLES PERSONALIZABLES**
@@ -149,29 +189,108 @@
 1. Click en la colección **"Live API Complete"**
 2. Tab **"Variables"**
 3. Modificar valores:
-   - `raceId` → Tu race ID
-   - `appId` → Tu app ID
-   - `eventId` → Tu event ID
+   - `raceId` → Tu race ID (actual: `26dc137a-34e2-44a0-918b-a5af620cf281`)
+   - `appId` → Tu app ID (actual: `RtME2RACih6YxgrlmuQR`)
+   - `eventId` → Tu event ID (actual: `event-0`)
+   - `bundleId` → Tu bundle ID (actual: `com.live2.app`)
+   - `raceName` → Tu race name (actual: `Carrera de la Mujer Gijón 2023 Copia`)
    - `participantId` → ID de participante específico
 
 ---
 
 ## 📊 **ESTADO DE MIGRACIÓN**
 
-### **✅ COMPLETAMENTE MIGRADOS (6/7)**
+### **✅ COMPLETAMENTE MIGRADOS (8/9)**
 - Búsqueda sin Algolia ✅
 - Apps Feed Extended ✅
 - Participantes con splits ✅
 - Sponsors ✅
 - Race Events ✅
 - Participant con fallback ✅
+- **Config API** ✅ ⭐ **NUEVA**
+- **Race Events Splits API** ✅ ⭐ **NUEVA**
 
-### **⚠️ PARCIALMENTE MIGRADO (1/7)**
+### **⚠️ PARCIALMENTE MIGRADO (1/9)**
 - Feed Extended antiguo (funciona pero menos datos)
 
 ---
 
 ## 🎉 **¡LISTO PARA USAR!**
+
+---
+
+## 🆕 **NUEVO ENDPOINT: Race Events Splits**
+
+### **📍 Endpoint**
+```
+GET /api/races/{raceId}/apps/{appId}/events_splits
+```
+
+### **🎯 Descripción**
+Obtiene información completa de una carrera específica, incluyendo todos sus eventos con splits, waves, categorías y estados actuales.
+
+### **📥 Ejemplo Configurado**
+- **raceId**: `26dc137a-34e2-44a0-918b-a5af620cf281`
+- **appId**: `Qmhfu2mx669sRaDe2LOg` (Gijón 2025)
+
+### **🔗 URL Completa de Ejemplo**
+```
+https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/Qmhfu2mx669sRaDe2LOg/events_splits
+```
+
+### **📤 Respuesta**
+```json
+{
+  "success": true,
+  "data": {
+    "race": {
+      "id": "26dc137a-34e2-44a0-918b-a5af620cf281",
+      "name": "Sin nombre",
+      "timezone": "UTC",
+      "company": "cronochip",
+      "idRace": "26dc137a-34e2-44a0-918b-a5af620cf281"
+    },
+    "app": {
+      "id": "Qmhfu2mx669sRaDe2LOg",
+      "name": "Gijón 2025"
+    },
+    "events": [
+      {
+        "id": "Invitados",
+        "name": "Invitados",
+        "status": {
+          "finished": false,
+          "wavesStarted": false,
+          "state": "NOT_STARTED"
+        },
+        "splits": [...],
+        "waves": [...],
+        "categories": [...]
+      }
+    ],
+    "summary": {
+      "totalEvents": 3,
+      "eventsNotStarted": 2,
+      "eventsInProgress": 0,
+      "eventsFinished": 1,
+      "totalSplits": 7,
+      "totalAthletes": 0
+    }
+  }
+}
+```
+
+### **🚦 Estados de Eventos**
+- **NOT_STARTED**: `!wavesStarted && !finished`
+- **IN_PROGRESS**: `wavesStarted && !finished`
+- **FINISHED**: `finished === true`
+
+### **❌ Casos de Error**
+- **404 RACE_NOT_FOUND**: Race no encontrada
+- **404 APP_NOT_FOUND**: App no encontrada en la race
+- **500 INTERNAL_ERROR**: Error interno del servidor
+
+---
 
 **La colección incluye todos los endpoints principales con:**
 - ✅ Variables preconfiguradas

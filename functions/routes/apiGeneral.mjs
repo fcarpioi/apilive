@@ -11,6 +11,14 @@ import { v4 as uuidv4 } from "uuid";
 // Importar rutas FCM
 import fcmTokensRouter from "./fcmTokens.mjs";
 
+// Importar rutas de upload (MIGRADAS)
+import uploadStoryRouter from "./uploadStory.mjs";
+import uploadMediaRouter from "./uploadMedia.mjs";
+import uploadRouter from "./upload.mjs";
+
+// Importar servicios
+import copernicoService from "../services/copernicoService.mjs";
+
 // Inicializar Firebase Admin (si aún no lo está)
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -655,7 +663,7 @@ router.get("/participant", async (req, res) => {
       try {
         // Obtener splits del participante
         const storiesSnapshot = await participantRef.collection("stories")
-          .where("type", "in", ["ATHELETE_STARTED", "ATHELETE_FINISHED", "ATHELETE_CROSSED_TIMING_SPLIT"])
+          .where("type", "in", ["ATHLETE_STARTED", "ATHLETE_FINISHED", "ATHLETE_CROSSED_TIMING_SPLIT"])
           .orderBy("date", "asc")
           .get();
 
@@ -795,7 +803,7 @@ router.get("/apps/participant", async (req, res) => {
     // Obtener splits/checkpoints del participante desde sus stories
     console.log(`📊 Obteniendo splits para participante: ${participantId}`);
     const storiesSnapshot = await participantRef.collection("stories")
-      .where("type", "in", ["ATHELETE_STARTED", "ATHELETE_FINISHED", "ATHELETE_CROSSED_TIMING_SPLIT"])
+      .where("type", "in", ["ATHLETE_STARTED", "ATHLETE_FINISHED", "ATHLETE_CROSSED_TIMING_SPLIT"])
       .orderBy("date", "asc")
       .get();
 
@@ -879,385 +887,13 @@ router.get("/user/profile", async (req, res) => {
   }
 });
 
-/**
- * @openapi
- * /api/feed/extended:
- *   get:
- *     summary: Obtener el feed extendido (ULTRA-OPTIMIZADO)
- *     description: Retorna el feed con historias, participantes y likes. Soporta userId para seguidos y storyId para historia específica. MIGRADO con Collection Group Queries ultra-rápidas.
- *     parameters:
- *       - in: query
- *         name: raceId
- *         required: true
- *         schema:
- *           type: string
- *         description: Identificador de la carrera (NUEVO - requerido).
- *       - in: query
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *         description: Identificador del evento (NUEVO - requerido).
- *       - in: query
- *         name: userId
- *         required: false
- *         schema:
- *           type: string
- *         description: Identificador del usuario para incluir historias de participantes seguidos.
- *       - in: query
- *         name: storyId
- *         required: false
- *         schema:
- *           type: string
- *         description: Identificador de una historia específica. Si se proporciona, retorna solo esa historia.
- *       - in: query
- *         name: limit
- *         required: false
- *         schema:
- *           type: integer
- *           default: 20
- *           maximum: 100
- *         description: Número máximo de historias a retornar. Optimizado para móvil (default 20, máximo 100).
- *       - in: query
- *         name: offset
- *         required: false
- *         schema:
- *           type: integer
- *           default: 0
- *           minimum: 0
- *         description: Número de historias a omitir para paginación (0 = primera página).
- *     responses:
- *       '200':
- *         description: Feed extendido obtenido exitosamente.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 stories:
- *                   type: array
- *                   items:
- *                     type: object
- *                 pagination:
- *                   type: object
- *                   properties:
- *                     limit:
- *                       type: integer
- *                     offset:
- *                       type: integer
- *                     total:
- *                       type: integer
- *                     hasMore:
- *                       type: boolean
- *                     currentPage:
- *                       type: integer
- *                     totalPages:
- *                       type: integer
- *       '400':
- *         description: Parámetros faltantes o inválidos.
- *       '500':
- *         description: Error interno del servidor.
- */
-router.get("/feed/extended", async (req, res) => {
-  try {
-    const { userId, storyId, raceId, eventId, limit = 20, offset = 0 } = req.query;
-    if (!raceId || !eventId) {
-      return res.status(400).json({ error: "Faltan los parámetros raceId y eventId" });
-    }
-
-    const db = admin.firestore();
-    const startTime = Date.now();
-
-    // CASO ESPECIAL: Si viene storyId, retornar solo esa historia
-    if (storyId) {
-      console.log(`[PERF] Obteniendo historia específica: ${storyId}`);
-
-      try {
-        // Buscar la historia específica usando Collection Group con índice correcto
-        console.log(`[PERF] Buscando historia específica con índice ACTUALIZADO: raceId + eventId + moderationStatus`);
-
-        // Usar EXACTAMENTE la misma consulta que el feed completo (que sabemos que funciona)
-        const storyQuery = db.collectionGroup('stories')
-          .where('raceId', '==', raceId)
-          .where('eventId', '==', eventId)
-          .where('originType', '==', 'automatic_global')
-          .where('moderationStatus', '==', 'approved')
-          .orderBy('date', 'desc')
-          .limit(1000); // Límite alto para asegurar que encontramos la historia
-
-        const storySnapshot = await storyQuery.get();
-        let targetStory = null;
-
-        console.log(`[PERF] Buscando storyId ${storyId} en ${storySnapshot.size} historias aprobadas`);
-
-        // Log de las primeras historias para debug
-        let foundStoryIds = [];
-        let foundTargetStory = false;
-        storySnapshot.forEach((doc, index) => {
-          if (index < 10) { // Solo las primeras 10 para debug
-            foundStoryIds.push(doc.id);
-          }
-          if (doc.id === storyId) {
-            foundTargetStory = true;
-          }
-        });
-        console.log(`[DEBUG] Primeras 10 historias: ${foundStoryIds.join(', ')}`);
-        console.log(`[DEBUG] ¿Historia ${storyId} encontrada en los resultados? ${foundTargetStory}`);
-
-        // Encontrar la historia específica (ya filtrada por la consulta)
-        storySnapshot.forEach(doc => {
-          if (doc.id === storyId) {
-            const data = doc.data();
-            const pathParts = doc.ref.path.split('/');
-            const participantId = pathParts[5];
-
-            targetStory = {
-              storyId: doc.id,
-              raceId,
-              eventId,
-              participantId,
-              ...data
-            };
-            console.log(`[PERF] Historia encontrada: ${storyId}`);
-          }
-        });
-
-        if (!targetStory) {
-          return res.status(404).json({
-            error: "Historia no encontrada",
-            storyId,
-            raceId,
-            eventId
-          });
-        }
-
-        // Enriquecer la historia con datos del participante y likes
-        const { participantId } = targetStory;
-        const participantRef = db.collection("races").doc(raceId)
-          .collection("events").doc(eventId)
-          .collection("participants").doc(participantId);
-
-        const [participantDoc, likesSnapshot] = await Promise.all([
-          participantRef.get(),
-          participantRef.collection("stories").doc(storyId).collection("likes").get()
-        ]);
-
-        const participantData = participantDoc.exists ? participantDoc.data() : null;
-        const totalLikes = likesSnapshot.size;
-
-        const enrichedStory = {
-          ...targetStory,
-          participant: participantData,
-          totalLikes
-        };
-
-        console.log(`[PERF] Historia específica obtenida en ${Date.now() - startTime}ms`);
-
-        return res.status(200).json({
-          stories: [enrichedStory],
-          pagination: {
-            limit: 1,
-            offset: 0,
-            total: 1,
-            hasMore: false,
-            currentPage: 1,
-            totalPages: 1
-          },
-          performance: {
-            totalTime: Date.now() - startTime,
-            queriesExecuted: 1,
-            storiesProcessed: 1,
-            mode: "single_story"
-          }
-        });
-
-      } catch (error) {
-        console.error("Error obteniendo historia específica:", error);
-        return res.status(500).json({
-          error: "Error al obtener la historia específica",
-          details: error.message
-        });
-      }
-    }
-
-    // CASO NORMAL: Feed completo con paginación
-    console.log(`[PERF] Iniciando feed extended - limit:${limit}, offset:${offset}`);
-
-    // Validar parámetros de paginación (ULTRA-OPTIMIZADO)
-    const limitNum = Math.min(parseInt(limit) || 20, 50); // Máximo reducido a 50
-    const offsetNum = Math.max(parseInt(offset) || 0, 0);
-
-    // ESTRATEGIA ULTRA-OPTIMIZADA: Collection Group Queries con seguidos opcionales
-    // Ahora que agregamos el campo raceId, esto funcionará perfectamente
-
-    let step1Time = Date.now();
-
-    // 1. Obtener participantes seguidos (si hay userId)
-    let followedParticipants = [];
-    if (userId) {
-      try {
-        const followingsSnapshot = await db.collection("users").doc(userId)
-          .collection("followings")
-          .where("profileType", "==", "participant")
-          .limit(50) // Límite razonable
-          .get();
-        followingsSnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.profileId) {
-            followedParticipants.push(data.profileId);
-          }
-        });
-      } catch (error) {
-        console.error("Error getting followings:", error);
-      }
-    }
-
-    console.log(`[PERF] Step 1 (followings): ${Date.now() - step1Time}ms - ${followedParticipants.length} found`);
-    let step2Time = Date.now();
-
-    // 2. Collection Group Queries (MUY RÁPIDO)
-    const queries = [];
-
-    // ✅ CORREGIDO: Query separada para contar el total real
-    const totalCountQuery = db.collectionGroup('stories')
-      .where('raceId', '==', raceId)
-      .where('eventId', '==', eventId)
-      .where('originType', '==', 'automatic_global')
-      .where('moderationStatus', '==', 'approved')
-      .count();
-
-    // Query 1: Historias globales (solo las necesarias para paginación)
-    const globalQuery = db.collectionGroup('stories')
-      .where('raceId', '==', raceId)
-      .where('eventId', '==', eventId)
-      .where('originType', '==', 'automatic_global')
-      .where('moderationStatus', '==', 'approved')
-      .orderBy('date', 'desc')
-      .limit(limitNum + offsetNum + 50); // Buffer para paginación
-
-    queries.push(globalQuery.get());
-    queries.push(totalCountQuery.get()); // Agregar query de conteo
-
-    // Query 2: Historias de seguidos (solo si hay seguidos)
-    if (followedParticipants.length > 0) {
-      // Dividir en lotes de 10 para el operador 'in'
-      const batchSize = 10;
-      for (let i = 0; i < followedParticipants.length; i += batchSize) {
-        const batch = followedParticipants.slice(i, i + batchSize);
-        const followedQuery = db.collectionGroup('stories')
-          .where('raceId', '==', raceId)
-          .where('eventId', '==', eventId)
-          .where('participantId', 'in', batch)
-          .where('originType', 'in', ['manual', 'automatic_follow'])
-          .where('moderationStatus', '==', 'approved')
-          .orderBy('date', 'desc')
-          .limit(limitNum);
-
-        queries.push(followedQuery.get());
-      }
-    }
-
-    // 3. Ejecutar todas las consultas en paralelo (SÚPER RÁPIDO)
-    const queryResults = await Promise.all(queries);
-
-    console.log(`[PERF] Step 2 (queries): ${Date.now() - step2Time}ms - ${queries.length} queries executed`);
-    let step3Time = Date.now();
-
-    // ✅ CORREGIDO: Extraer el conteo real del total (último resultado)
-    const totalCountResult = queryResults.pop(); // El último resultado es el conteo
-    const realTotalStories = totalCountResult.data().count;
-
-    // 2. Procesar resultados y deduplicar (solo los snapshots de historias)
-    const storyMap = new Map();
-
-    queryResults.forEach(snapshot => {
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        const storyId = doc.id;
-
-        // Extraer IDs del path del documento
-        const pathParts = doc.ref.path.split('/');
-        const participantId = pathParts[5];
-
-        storyMap.set(storyId, {
-          storyId,
-          raceId,
-          eventId,
-          participantId,
-          ...data
-        });
-      });
-    });
-
-    // 3. Convertir a array, ordenar y paginar
-    let allStories = Array.from(storyMap.values());
-    allStories.sort((a, b) => b.date.toMillis() - a.date.toMillis());
-
-    // ✅ CORREGIDO: Usar el conteo real en lugar del tamaño limitado
-    const paginatedStories = allStories.slice(offsetNum, offsetNum + limitNum);
-
-    console.log(`[PERF] Step 3 (processing): ${Date.now() - step3Time}ms`);
-    let step4Time = Date.now();
-
-    // 6. Enriquecimiento ULTRA-OPTIMIZADO (solo para historias paginadas)
-    const enrichedStories = await Promise.all(
-      paginatedStories.map(async (story) => {
-        try {
-          const { participantId } = story;
-
-          const participantRef = db.collection("races").doc(raceId)
-            .collection("events").doc(eventId)
-            .collection("participants").doc(participantId);
-
-          // OPTIMIZACIÓN: Solo obtener participante, omitir likes si es muy lento
-          const participantDoc = await participantRef.get();
-          const participantData = participantDoc.exists ? participantDoc.data() : null;
-
-          // TEMPORAL: Omitir conteo de likes para máxima velocidad
-          // TODO: Pre-computar likes en un campo del documento
-          const totalLikes = 0;
-
-          return { ...story, participant: participantData, totalLikes };
-        } catch (err) {
-          console.error(`Error enriching story ${story.storyId}:`, err);
-          return { ...story, participant: null, totalLikes: 0 };
-        }
-      })
-    );
-
-    console.log(`[PERF] Step 4 (enrichment): ${Date.now() - step4Time}ms`);
-    console.log(`[PERF] TOTAL TIME: ${Date.now() - startTime}ms`);
-
-    // 7. Respuesta optimizada con conteo real
-    return res.status(200).json({
-      stories: enrichedStories,
-      pagination: {
-        limit: limitNum,
-        offset: offsetNum,
-        total: realTotalStories, // ✅ CORREGIDO: Usar conteo real
-        hasMore: offsetNum + limitNum < realTotalStories,
-        currentPage: Math.floor(offsetNum / limitNum) + 1,
-        totalPages: Math.ceil(realTotalStories / limitNum)
-      },
-      performance: {
-        totalTime: Date.now() - startTime,
-        queriesExecuted: queries.length,
-        storiesProcessed: allStories.length // Historias realmente procesadas
-      }
-    });
-
-  } catch (error) {
-    console.error("Error al obtener el feed extendido:", error);
-    return res.status(500).json({ error: "Error interno del servidor", details: error.message });
-  }
-});
 
 /**
  * @openapi
  * /api/apps/feed/extended:
  *   get:
  *     summary: Feed extendido de historias para estructura con Apps
- *     description: Retorna historias de participantes con información completa, adaptado para la nueva estructura /apps/{appId}/races/{raceId}/events/{eventId}/participants/{participantId}/stories. Incluye paginación optimizada y búsqueda por historia específica.
+ *     description: Retorna historias de participantes con información completa, adaptado para la nueva estructura /apps/{appId}/races/{raceId}/events/{eventId}/participants/{participantId}/stories. Incluye paginación optimizada, búsqueda por historia específica y filtrado por participante específico.
  *     parameters:
  *       - in: query
  *         name: appId
@@ -1282,13 +918,19 @@ router.get("/feed/extended", async (req, res) => {
  *         required: false
  *         schema:
  *           type: string
- *         description: ID del usuario para personalización.
+ *         description: ID del usuario para filtrar por participantes seguidos. Si se proporciona, solo retorna historias de participantes que sigue el usuario.
  *       - in: query
  *         name: storyId
  *         required: false
  *         schema:
  *           type: string
  *         description: ID específico de historia para retornar solo esa historia.
+       - in: query
+         name: participantId
+         required: false
+         schema:
+           type: string
+         description: ID específico de participante para retornar solo sus historias.
  *       - in: query
  *         name: limit
  *         required: false
@@ -1326,6 +968,10 @@ router.get("/feed/extended", async (req, res) => {
  *                         type: string
  *                       participantId:
  *                         type: string
+ *                       type:
+ *                         type: string
+ *                         enum: [ATHLETE_STARTED, ATHLETE_CROSSED_TIMING_SPLIT, ATHLETE_FINISHED, SPONSOR, COMPLETE_AWARD]
+ *                         description: Tipo de evento de la historia
  *                       participant:
  *                         type: object
  *                       totalLikes:
@@ -1354,7 +1000,7 @@ router.get("/feed/extended", async (req, res) => {
  */
 router.get("/apps/feed/extended", async (req, res) => {
   try {
-    const { userId: _userId, storyId, appId, raceId, eventId, limit = 20, offset = 0 } = req.query;
+    const { userId, storyId, appId, raceId, eventId, participantId, limit = 20, offset = 0 } = req.query;
     if (!appId || !raceId || !eventId) {
       return res.status(400).json({ error: "Faltan los parámetros appId, raceId y eventId" });
     }
@@ -1428,6 +1074,7 @@ router.get("/apps/feed/extended", async (req, res) => {
           eventId,
           participantId: foundParticipantId,
           ...foundStory,
+          type: foundStory.type || "ATHLETE_STARTED", // ✅ Agregar campo type con valor por defecto
           participant: foundParticipantData,
           totalLikes: 0 // TODO: Implementar conteo de likes
         };
@@ -1460,12 +1107,131 @@ router.get("/apps/feed/extended", async (req, res) => {
       }
     }
 
+    // CASO ESPECIAL: Si viene participantId, retornar solo las stories de ese participante
+    if (participantId) {
+      console.log(`[PERF] Obteniendo stories del participante específico: ${participantId} en app: ${appId}`);
+
+      try {
+        // Obtener todas las stories del participante específico
+        const storiesSnapshot = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(eventId)
+          .collection('participants').doc(participantId)
+          .collection('stories')
+          .orderBy('date', 'desc')
+          .get();
+
+        if (storiesSnapshot.empty) {
+          console.log(`📭 No se encontraron stories para el participante ${participantId}`);
+          return res.status(200).json({
+            stories: [],
+            pagination: {
+              limit: parseInt(limit) || 20,
+              offset: parseInt(offset) || 0,
+              total: 0,
+              hasMore: false,
+              currentPage: 1,
+              totalPages: 0
+            },
+            performance: {
+              totalTime: Date.now() - startTime,
+              queriesExecuted: 1,
+              storiesProcessed: 0
+            }
+          });
+        }
+
+        // Obtener datos del participante
+        const participantDoc = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(eventId)
+          .collection('participants').doc(participantId)
+          .get();
+
+        const participantData = participantDoc.exists ? participantDoc.data() : {};
+
+        // Procesar stories del participante
+        const stories = storiesSnapshot.docs.map(storyDoc => {
+          const storyData = storyDoc.data();
+          return {
+            storyId: storyDoc.id,
+            appId,
+            raceId,
+            eventId,
+            participantId,
+            ...storyData,
+            type: storyData.type || "ATHLETE_STARTED", // ✅ Agregar campo type con valor por defecto
+            participant: {
+              id: participantId,
+              name: participantData.name || 'Participante',
+              lastName: participantData.lastName || '',
+              dorsal: participantData.dorsal || '',
+              category: participantData.category || '',
+              team: participantData.team || '',
+              ...participantData
+            }
+          };
+        });
+
+        console.log(`✅ [PERF] Participante específico completado en ${Date.now() - startTime}ms - ${stories.length} stories`);
+
+        return res.status(200).json({
+          stories,
+          pagination: {
+            limit: parseInt(limit) || 20,
+            offset: parseInt(offset) || 0,
+            total: stories.length,
+            hasMore: false,
+            currentPage: 1,
+            totalPages: 1
+          },
+          performance: {
+            totalTime: Date.now() - startTime,
+            queriesExecuted: 2,
+            storiesProcessed: stories.length
+          }
+        });
+
+      } catch (error) {
+        console.error(`❌ Error obteniendo stories del participante ${participantId}:`, error);
+        return res.status(500).json({
+          error: "Error obteniendo stories del participante",
+          details: error.message
+        });
+      }
+    }
+
     // FLUJO NORMAL: Feed completo con paginación
     console.log(`[PERF] Iniciando feed extendido para app: ${appId}, race: ${raceId}, event: ${eventId}`);
 
     const limitNum = Math.min(parseInt(limit) || 20, 100);
     const offsetNum = parseInt(offset) || 0;
 
+    let step1Time = Date.now();
+
+    // 1. Obtener participantes seguidos (si hay userId)
+    let followedParticipants = [];
+    if (userId) {
+      try {
+        console.log(`[PERF] Obteniendo participantes seguidos para usuario: ${userId}`);
+        const followingsSnapshot = await db.collection("users").doc(userId)
+          .collection("followings")
+          .where("profileType", "==", "participant")
+          .limit(50) // Límite razonable
+          .get();
+        followingsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.profileId) {
+            followedParticipants.push(data.profileId);
+          }
+        });
+        console.log(`[PERF] Encontrados ${followedParticipants.length} participantes seguidos`);
+      } catch (error) {
+        console.error("Error obteniendo participantes seguidos:", error);
+      }
+    }
+
+    console.log(`[PERF] Step 1 (followings): ${Date.now() - step1Time}ms - ${followedParticipants.length} found`);
     let step2Time = Date.now();
 
     // 1. Obtener todos los participantes del evento en la app - ESTRUCTURA CORRECTA: races/apps/events
@@ -1496,8 +1262,37 @@ router.get("/apps/feed/extended", async (req, res) => {
 
     console.log(`📱 Encontrados ${participantsSnapshot.size} participantes en app ${appId}`);
 
-    // 2. Obtener todas las stories de todos los participantes
-    const allStoriesPromises = participantsSnapshot.docs.map(async (participantDoc) => {
+    // 2. Filtrar participantes por seguidos (si hay userId)
+    let participantsToProcess = participantsSnapshot.docs;
+    if (userId && followedParticipants.length > 0) {
+      participantsToProcess = participantsSnapshot.docs.filter(participantDoc =>
+        followedParticipants.includes(participantDoc.id)
+      );
+      console.log(`🎯 Filtrando por ${followedParticipants.length} participantes seguidos: ${participantsToProcess.length} encontrados`);
+    }
+
+    if (participantsToProcess.length === 0) {
+      console.log("📭 No se encontraron participantes después del filtrado");
+      return res.status(200).json({
+        stories: [],
+        pagination: {
+          limit: limitNum,
+          offset: offsetNum,
+          total: 0,
+          hasMore: false,
+          currentPage: 1,
+          totalPages: 0
+        },
+        performance: {
+          totalTime: Date.now() - startTime,
+          queriesExecuted: 1,
+          storiesProcessed: 0
+        }
+      });
+    }
+
+    // 3. Obtener stories de los participantes (filtrados o todos)
+    const allStoriesPromises = participantsToProcess.map(async (participantDoc) => {
       const participantId = participantDoc.id;
       const participantData = participantDoc.data();
 
@@ -1509,21 +1304,25 @@ router.get("/apps/feed/extended", async (req, res) => {
         .orderBy('date', 'desc')
         .get();
 
-      return storiesSnapshot.docs.map(storyDoc => ({
-        storyId: storyDoc.id,
-        appId,
-        raceId,
-        eventId,
-        participantId,
-        participant: participantData,
-        ...storyDoc.data()
-      }));
+      return storiesSnapshot.docs.map(storyDoc => {
+        const storyData = storyDoc.data();
+        return {
+          storyId: storyDoc.id,
+          appId,
+          raceId,
+          eventId,
+          participantId,
+          participant: participantData,
+          ...storyData,
+          type: storyData.type || "ATHLETE_STARTED" // ✅ Agregar campo type con valor por defecto
+        };
+      });
     });
 
     const allStoriesArrays = await Promise.all(allStoriesPromises);
     const allStories = allStoriesArrays.flat();
 
-    console.log(`[PERF] Step 2 (queries): ${Date.now() - step2Time}ms - ${participantsSnapshot.size} participantes procesados`);
+    console.log(`[PERF] Step 2 (queries): ${Date.now() - step2Time}ms - ${participantsToProcess.length} participantes procesados`);
     let step3Time = Date.now();
 
     // 3. Ordenar todas las stories por fecha
@@ -1627,7 +1426,7 @@ router.get("/apps/feed/extended", async (req, res) => {
  *                   properties:
  *                     type:
  *                       type: string
- *                       enum: [ATHELETE_CROSSED_TIMING_SPLIT, ATHELETE_STARTED, ATHELETE_FINISHED, SPONSOR]
+ *                       enum: [ATHLETE_CROSSED_TIMING_SPLIT, ATHLETE_STARTED, ATHLETE_FINISHED, SPONSOR]
  *                       description: Tipo de evento de la story
  *                     fileUrl:
  *                       type: string
@@ -1737,7 +1536,7 @@ router.post("/participants", async (req, res) => {
           duration: story.duration || 0,
           testData: story.testData || false,
           // NUEVOS CAMPOS REQUERIDOS
-          type: story.type || "ATHELETE_STARTED", // Tipo de evento por defecto
+          type: story.type || "ATHLETE_STARTED", // Tipo de evento por defecto
           splitTime: story.splitTime || {} // Datos de split time
         };
 
@@ -2387,7 +2186,7 @@ router.post("/migrate-participants", async (req, res) => {
         // 7. Crear las 3 stories obligatorias con tipos y splits
         const storiesToCreate = [
           {
-            type: "ATHELETE_STARTED",
+            type: "ATHLETE_STARTED",
             fileUrl: existingFileUrl,
             description: `${oldParticipantData.name || 'Participante'} inicia la carrera`,
             splitTime: {
@@ -2398,7 +2197,7 @@ router.post("/migrate-participants", async (req, res) => {
             }
           },
           {
-            type: "ATHELETE_CROSSED_TIMING_SPLIT",
+            type: "ATHLETE_CROSSED_TIMING_SPLIT",
             fileUrl: existingFileUrl,
             description: `${oldParticipantData.name || 'Participante'} pasa por checkpoint intermedio`,
             splitTime: {
@@ -2409,7 +2208,7 @@ router.post("/migrate-participants", async (req, res) => {
             }
           },
           {
-            type: "ATHELETE_FINISHED",
+            type: "ATHLETE_FINISHED",
             fileUrl: existingFileUrl,
             description: `${oldParticipantData.name || 'Participante'} cruza la meta`,
             splitTime: {
@@ -2507,8 +2306,8 @@ router.post("/migrate-participants", async (req, res) => {
  * @openapi
  * /api/checkpoint-participant:
  *   post:
- *     summary: Webhook para recibir datos de checkpoint de participantes
- *     description: Recibe información cuando un participante pasa por un punto de control y actualiza la base de datos
+ *     summary: Webhook para recibir datos de checkpoint de participantes (Integración Copernico)
+ *     description: Recibe información cuando un participante pasa por un punto de control, obtiene datos de Copernico API y actualiza la base de datos
  *     requestBody:
  *       required: true
  *       content:
@@ -2516,45 +2315,64 @@ router.post("/migrate-participants", async (req, res) => {
  *           schema:
  *             type: object
  *             properties:
- *               participantData:
+ *               competitionId:
+ *                 type: string
+ *                 description: ID de la competición (raceId)
+ *               type:
+ *                 type: string
+ *                 enum: [detection, modification]
+ *                 description: Tipo de evento
+ *               participantId:
+ *                 type: string
+ *                 description: ID del participante en Copernico
+ *               extraData:
  *                 type: object
- *                 description: Información completa del participante
- *               checkpointData:
- *                 type: object
- *                 description: Información del checkpoint
- *               raceId:
+ *                 properties:
+ *                   point:
+ *                     type: string
+ *                     description: Punto de control
+ *               apiKey:
  *                 type: string
- *                 description: ID de la carrera
- *               eventId:
- *                 type: string
- *                 description: ID del evento
- *               appId:
- *                 type: string
- *                 description: ID de la aplicación
+ *                 description: API key para autenticación
  *     responses:
  *       '200':
  *         description: Datos procesados exitosamente
  *       '400':
  *         description: Datos inválidos
+ *       '401':
+ *         description: API key inválida
+ *       '404':
+ *         description: Participante no encontrado en Copernico
  *       '500':
  *         description: Error interno del servidor
  */
 router.post("/checkpoint-participant", async (req, res) => {
   try {
-    console.log("🎯 Webhook checkpoint recibido:", JSON.stringify(req.body, null, 2));
+    console.log("🎯 Webhook checkpoint Copernico recibido:", JSON.stringify(req.body, null, 2));
 
-    const participantFull = req.body;
+    const { competitionId, type, participantId, extraData, apiKey } = req.body;
 
     // Validaciones básicas
-    if (!participantFull || !participantFull.id) {
+    if (!competitionId || !participantId || !type) {
+      console.error("❌ Parámetros requeridos faltantes");
       return res.status(400).json({
-        error: "Datos de participante inválidos - se requiere ID",
-        received: req.body
+        error: "Parámetros requeridos faltantes",
+        required: ["competitionId", "participantId", "type"],
+        received: { competitionId, participantId, type }
+      });
+    }
+
+    // Validar tipo de evento
+    if (!['detection', 'modification'].includes(type)) {
+      console.error("❌ Tipo de evento inválido");
+      return res.status(400).json({
+        error: "Tipo de evento inválido",
+        validTypes: ["detection", "modification"],
+        received: type
       });
     }
 
     // Validar API Key para autenticación máquina-a-máquina
-    const apiKey = participantFull.apiKey || req.headers['x-api-key'];
     const expectedApiKey = process.env.WEBHOOK_API_KEY || "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0";
 
     if (!apiKey || apiKey !== expectedApiKey) {
@@ -2562,92 +2380,113 @@ router.post("/checkpoint-participant", async (req, res) => {
       return res.status(401).json({ error: "API key inválida" });
     }
 
-    // Extraer eventId del payload AWS
-    const eventId = participantFull.events?.[0]?.event;
-    if (!eventId) {
-      return res.status(400).json({
-        error: "No se encontró eventId en los datos del participante",
-        received: participantFull.events
+    console.log(`📋 Procesando evento ${type} para participante: ${participantId} en competición: ${competitionId}`);
+
+    // Obtener datos del participante desde Copernico API
+    console.log("🌐 Obteniendo datos del participante desde Copernico...");
+    let copernicoData;
+    try {
+      copernicoData = await copernicoService.getParticipantData(competitionId, participantId);
+    } catch (error) {
+      console.error("❌ Error obteniendo datos de Copernico:", error.message);
+      return res.status(404).json({
+        error: "No se pudo obtener datos del participante desde Copernico",
+        participantId,
+        competitionId,
+        details: error.message
       });
     }
+
+    // Transformar datos de Copernico al formato interno
+    const transformedData = copernicoService.transformCopernicoData(copernicoData);
+    const { participant: participantData, times, rankings } = transformedData;
+
+    console.log(`✅ Datos obtenidos de Copernico para: ${participantData.fullName} (${participantData.dorsal})`);
 
     const db = admin.firestore();
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
-    console.log(`📋 Procesando participante: ${participantFull.name || participantFull.fullname} (ID: ${participantFull.id}) para eventId: ${eventId}`);
+    // 1. Buscar todas las ubicaciones donde existe este eventId (usando el eventId de Copernico)
+    const eventId = participantData.eventId;
+    console.log(`🔍 Buscando ubicaciones para eventId: ${eventId} (desde Copernico)`);
 
-    // 1. Buscar todas las ubicaciones donde existe este eventId
-    console.log("🔍 Buscando ubicaciones del eventId...");
-
-    // Por ahora, usar ubicación conocida para testing - luego implementar búsqueda completa
     const locations = [];
 
-    // Verificar ubicación conocida - verificar si existe el documento del evento
-    const knownRaceId = "race-001-madrid-marathon";
-    const knownAppId = "RtME2RACih6YxgrlmuQR";
+    // Implementar búsqueda dinámica en todas las races/apps
+    console.log(`🔍 Buscando eventId ${eventId} en todas las races/apps...`);
 
-    const eventRef = db.collection('races').doc(knownRaceId)
-      .collection('apps').doc(knownAppId)
-      .collection('events').doc(eventId);
+    const racesSnapshot = await db.collection('races').get();
+    console.log(`📊 Revisando ${racesSnapshot.size} races...`);
 
-    const eventDoc = await eventRef.get();
+    for (const raceDoc of racesSnapshot.docs) {
+      const currentRaceId = raceDoc.id;
 
-    if (eventDoc.exists) {
-      locations.push({
-        raceId: knownRaceId,
-        appId: knownAppId,
-        eventId: eventId
-      });
-      console.log(`📍 Encontrado eventId ${eventId} en ubicación conocida: races/${knownRaceId}/apps/${knownAppId}/events/${eventId}`);
-      console.log(`📋 Datos del evento:`, eventDoc.data());
-    } else {
-      console.log(`⚠️ No existe el documento del evento: races/${knownRaceId}/apps/${knownAppId}/events/${eventId}`);
+      try {
+        const appsSnapshot = await db.collection('races').doc(currentRaceId)
+          .collection('apps').get();
+
+        if (appsSnapshot.size > 0) {
+          console.log(`🔍 Revisando ${appsSnapshot.size} apps en race ${currentRaceId}`);
+
+          for (const appDoc of appsSnapshot.docs) {
+            const currentAppId = appDoc.id;
+
+            // Verificar si existe el evento en esta ubicación
+            const eventRef = db.collection('races').doc(currentRaceId)
+              .collection('apps').doc(currentAppId)
+              .collection('events').doc(eventId);
+
+            const eventDoc = await eventRef.get();
+
+            if (eventDoc.exists) {
+              locations.push({
+                raceId: currentRaceId,
+                appId: currentAppId,
+                eventId: eventId
+              });
+              console.log(`📍 ✅ Encontrado eventId ${eventId} en: races/${currentRaceId}/apps/${currentAppId}/events/${eventId}`);
+              console.log(`📋 Datos del evento:`, eventDoc.data());
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`⚠️ Error revisando race ${currentRaceId}:`, error.message);
+        // Continuar con la siguiente race
+      }
     }
 
-    // TODO: Implementar búsqueda completa en todas las races/apps cuando sea necesario
-    // const racesSnapshot = await db.collection('races').get();
-    // for (const raceDoc of racesSnapshot.docs) { ... }
-
     if (locations.length === 0) {
+      console.log(`❌ No se encontraron ubicaciones para eventId: ${eventId}`);
       return res.status(404).json({
         error: `No se encontraron ubicaciones para eventId: ${eventId}`,
         eventId: eventId,
-        suggestion: "Verificar que el eventId existe en la estructura /races/{raceId}/apps/{appId}/events/{eventId}"
+        racesSearched: racesSnapshot.size,
+        suggestion: "Verificar que el eventId existe en la estructura /races/{raceId}/apps/{appId}/events/{eventId}",
+        searchDetails: {
+          totalRacesSearched: racesSnapshot.size,
+          searchTimestamp: new Date().toISOString()
+        }
       });
     }
 
-    console.log(`📍 Encontradas ${locations.length} ubicaciones para eventId ${eventId}:`, locations);
+    console.log(`📍 ✅ Encontradas ${locations.length} ubicaciones para eventId ${eventId}:`, locations);
 
-    // 2. Preparar datos del participante (comunes para todas las ubicaciones)
-    const participantData = {
-      name: participantFull.name || "",
-      lastName: participantFull.surname || "",
-      fullName: participantFull.fullname || `${participantFull.name || ""} ${participantFull.surname || ""}`.trim(),
-      dorsal: participantFull.events?.[0]?.dorsal || "",
-      category: participantFull.events?.[0]?.category || "",
-      externalId: participantFull.id,
-      birthdate: participantFull.birthdate || "",
-      gender: participantFull.gender || "",
-      team: participantFull.events?.[0]?.team || "",
-      club: participantFull.events?.[0]?.club || "",
-      featured: participantFull.events?.[0]?.featured || false,
-      status: participantFull.events?.[0]?.status || "notstarted",
-      realStatus: participantFull.events?.[0]?.realStatus || "notstarted",
-      event: participantFull.events?.[0]?.event || "",
-      chip: participantFull.events?.[0]?.chip || [],
-      wave: participantFull.events?.[0]?.wave || "",
-      locations: participantFull.locations || [],
-      extraFields: {
-        extrafield1: participantFull.extrafield1 || "",
-        extrafield2: participantFull.extrafield2 || "",
-        extrafield3: participantFull.extrafield3 || "",
-        extrafield4: participantFull.extrafield4 || "",
-        extrafield5: participantFull.extrafield5 || ""
-      },
-      eventId,
-      webhookProcessedAt: timestamp,
-      updatedAt: timestamp
-    };
+    // 2. Los datos del participante ya están preparados desde Copernico
+    console.log(`📋 Usando datos del participante desde Copernico:`, {
+      name: participantData.fullName,
+      dorsal: participantData.dorsal,
+      category: participantData.category,
+      externalId: participantData.externalId,
+      eventId: participantData.eventId,
+      status: participantData.status,
+      featured: participantData.featured
+    });
+
+    // Agregar metadatos de procesamiento
+    participantData.webhookProcessedAt = timestamp;
+    participantData.updatedAt = timestamp;
+    participantData.webhookType = type;
+    participantData.competitionId = competitionId;
 
     // 3. Procesar participante en cada ubicación encontrada
     const results = [];
@@ -2669,7 +2508,7 @@ router.post("/checkpoint-participant", async (req, res) => {
           .collection('apps').doc(appId)
           .collection('events').doc(locationEventId)
           .collection('participants')
-          .where('externalId', '==', participantFull.id)
+          .where('externalId', '==', participantData.externalId)
           .limit(1)
           .get();
 
@@ -2698,16 +2537,16 @@ router.post("/checkpoint-participant", async (req, res) => {
 
         // 4. Procesar tiempos y crear stories para cada checkpoint en esta ubicación
         const storiesCreated = [];
-        const times = participantFull.events?.[0]?.times || {};
+        const copernicoTimes = times || {}; // Usar los times transformados de Copernico
 
-        for (const [pointName, pointTime] of Object.entries(times)) {
+        for (const [pointName, pointTime] of Object.entries(copernicoTimes)) {
           try {
             // Determinar tipo de story basado en el punto
-            let storyType = "ATHELETE_CROSSED_TIMING_SPLIT";
+            let storyType = "ATHLETE_CROSSED_TIMING_SPLIT";
             if (pointName.toLowerCase().includes('start') || pointName.toLowerCase().includes('salida')) {
-              storyType = "ATHELETE_STARTED";
+              storyType = "ATHLETE_STARTED";
             } else if (pointName.toLowerCase().includes('finish') || pointName.toLowerCase().includes('meta')) {
-              storyType = "ATHELETE_FINISHED";
+              storyType = "ATHLETE_FINISHED";
             }
 
             // Crear datos de la story
@@ -2801,7 +2640,7 @@ router.post("/checkpoint-participant", async (req, res) => {
           eventId: locationEventId,
           participant: {
             id: participantId,
-            externalId: participantFull.id,
+            externalId: participantData.externalId,
             name: locationParticipantData.fullName,
             dorsal: locationParticipantData.dorsal,
             status: locationParticipantData.status,
@@ -2875,7 +2714,7 @@ router.post("/checkpoint-participant", async (req, res) => {
  *         required: false
  *         schema:
  *           type: string
- *           enum: [ATHELETE_CROSSED_TIMING_SPLIT, COMPLETE_AWARD, ATHELETE_STARTED, SPONSOR, ATHELETE_FINISHED]
+ *           enum: [ATHLETE_CROSSED_TIMING_SPLIT, COMPLETE_AWARD, ATHLETE_STARTED, SPONSOR, ATHLETE_FINISHED]
  *         description: Filtrar por tipo de evento
  *       - in: query
  *         name: limit
@@ -2986,7 +2825,7 @@ router.get("/race-events", async (req, res) => {
 
         const story = {
           storyId: storyDoc.id,
-          type: storyData.type || "ATHELETE_STARTED",
+          type: storyData.type || "ATHLETE_STARTED",
           participant: participantData,
           split_time: storyData.splitTime || {},
           image_url: isImage ? (storyData.fileUrl || "") : "",
@@ -3766,37 +3605,72 @@ router.get("/apps", async (req, res) => {
 
       console.log(`🔄 Procesando app: ${appId}`);
 
-      // 5. Obtener races de esta app - ESTRUCTURA CORREGIDA: races/apps
-      // Necesitamos buscar en todas las races donde esta app esté presente
-      const racesSnapshot = await db.collection('races').get();
-
+      // 5. Obtener races de esta app - USAR raceId del documento de la app
       const races = [];
 
-      for (const raceDoc of racesSnapshot.docs) {
-        const raceData = raceDoc.data();
-        const raceId = raceDoc.id;
+      // Si la app tiene un raceId, buscar directamente en esa race
+      console.log(`🔍 [getApps] App ${appId} - raceId: ${appData.raceId}, keys: ${Object.keys(appData).join(', ')}`);
 
-        // 6. Verificar si esta app existe en esta race
-        const appInRaceDoc = await db.collection('races').doc(raceId)
-          .collection('apps').doc(appId).get();
+      if (appData.raceId || appData.linkedRaceId) {
+        const raceId = appData.raceId || appData.linkedRaceId;
+        console.log(`🔍 [getApps] App ${appId} tiene raceId: ${raceId}`);
 
-        if (appInRaceDoc.exists) {
-          // 7. Obtener events de esta race para esta app - ESTRUCTURA CORREGIDA: races/apps/events
-          const eventsSnapshot = await db.collection('races').doc(raceId)
-            .collection('apps').doc(appId)
-            .collection('events').get();
+        try {
+          // Obtener datos de la race
+          console.log(`🔍 [getApps] Buscando race: ${raceId}`);
+          const raceDoc = await db.collection('races').doc(raceId).get();
+          console.log(`🔍 [getApps] Race doc exists: ${raceDoc.exists}`);
 
-          const events = eventsSnapshot.docs.map(eventDoc => ({
-            eventId: eventDoc.id,
-            ...eventDoc.data()
-          }));
+          if (raceDoc.exists) {
+            const raceData = raceDoc.data();
+            console.log(`✅ [getApps] Race ${raceId} encontrada: ${raceData.name || 'Sin nombre'}`);
 
-          races.push({
-            raceId,
-            ...raceData,
-            events: events,
-            eventsCount: events.length
-          });
+            // 6. Obtener events y media de esta app en esta race
+            const eventsSnapshot = await db.collection('races').doc(raceId)
+              .collection('apps').doc(appId)
+              .collection('events').get();
+
+            const mediaSnapshot = await db.collection('races').doc(raceId)
+              .collection('apps').doc(appId)
+              .collection('media').get();
+
+            console.log(`📊 [getApps] Events: ${eventsSnapshot.size}, Media: ${mediaSnapshot.size}`);
+
+            if (!eventsSnapshot.empty || !mediaSnapshot.empty) {
+              // 7. Procesar events (ya obtenidos arriba)
+              const events = eventsSnapshot.docs.map(eventDoc => ({
+                eventId: eventDoc.id,
+                ...eventDoc.data()
+              }));
+
+              // 8. Procesar media (ya obtenida arriba)
+              const media = mediaSnapshot.docs.map(mediaDoc => ({
+                mediaId: mediaDoc.id,
+                ...mediaDoc.data()
+              }));
+
+              // Organizar media por tipo para fácil acceso (usando campo 'type' existente)
+              const mediaByType = {
+                sponsors: media.filter(m => m.type === 'sponsors'),
+                logos: media.filter(m => m.type === 'logos'),
+                videos: media.filter(m => m.type === 'videos'),
+                images: media.filter(m => m.type === 'images'),
+                posters: media.filter(m => m.type === 'posters'),
+                all: media
+              };
+
+              races.push({
+                raceId,
+                ...raceData,
+                events: events,
+                eventsCount: events.length,
+                media: mediaByType,
+                mediaCount: media.length
+              });
+            }
+          }
+        } catch (raceError) {
+          console.error(`❌ [getApps] Error procesando race ${raceId} para app ${appId}:`, raceError);
         }
       }
 
@@ -3825,6 +3699,263 @@ router.get("/apps", async (req, res) => {
 
   } catch (error) {
     console.error("❌ Error en GET /api/apps:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      message: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/config:
+ *   get:
+ *     summary: Obtener configuración de app específica con eventos y media
+ *     description: |
+ *       Obtiene la configuración completa de una app específica incluyendo:
+ *       - Datos de la app
+ *       - Eventos de la race/app
+ *       - Media organizada por tipo (misma para todos los eventos)
+
+       **Requiere al menos uno de los parámetros:** raceId, bundleId, o raceName
+ *     tags:
+ *       - Config
+ *     parameters:
+ *       - in: query
+ *         name: raceId
+ *         schema:
+ *           type: string
+ *         description: ID de la race
+ *         example: "26dc137a-34e2-44a0-918b-a5af620cf281"
+ *       - in: query
+ *         name: bundleId
+ *         schema:
+ *           type: string
+ *         description: Bundle ID de la app
+ *         example: "com.live2.app"
+ *       - in: query
+ *         name: raceName
+ *         schema:
+ *           type: string
+ *         description: Nombre de la race
+ *         example: "Carrera de la Mujer Gijón 2023 Copia"
+ *     responses:
+ *       200:
+ *         description: Configuración de la app obtenida exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 app:
+ *                   type: object
+ *                   properties:
+ *                     appId:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     raceId:
+ *                       type: string
+ *                     raceName:
+ *                       type: string
+ *                     events:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           eventId:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           media:
+ *                             type: object
+ *                             properties:
+ *                               sponsors:
+ *                                 type: array
+ *                               logos:
+ *                                 type: array
+ *                               videos:
+ *                                 type: array
+ *                               images:
+ *                                 type: array
+ *                               posters:
+ *                                 type: array
+ *       400:
+ *         description: Parámetros faltantes o inválidos
+ *       404:
+ *         description: App no encontrada
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.get("/config", async (req, res) => {
+  try {
+    const { raceId, bundleId, raceName } = req.query;
+
+    // Validar que al menos un filtro esté presente
+    if (!raceId && !bundleId && !raceName) {
+      return res.status(400).json({
+        error: "Se requiere al menos uno de los siguientes parámetros: raceId, bundleId, raceName",
+        required: ["raceId", "bundleId", "raceName"]
+      });
+    }
+
+    console.log(`⚙️ [getConfig] Buscando app - raceId: ${raceId}, bundleId: ${bundleId}, raceName: ${raceName}`);
+
+    const db = admin.firestore();
+    let targetApp = null;
+    let targetRaceId = null;
+
+    // 1. Buscar la app según los filtros proporcionados - ESTRUCTURA CORRECTA: races/apps
+    if (raceId) {
+      // Buscar por raceId - buscar apps en esa race específica
+      const appsSnapshot = await db.collection('races').doc(raceId)
+        .collection('apps').get();
+
+      if (!appsSnapshot.empty) {
+        // Tomar la primera app encontrada en esa race
+        targetApp = { id: appsSnapshot.docs[0].id, ...appsSnapshot.docs[0].data() };
+        targetRaceId = raceId;
+      }
+    } else {
+      // Buscar por bundleId o raceName - OPTIMIZADO: solo buscar en race conocida primero
+      console.log(`🔍 [getConfig] Búsqueda optimizada por bundleId/raceName`);
+
+      // Primero intentar en la race que sabemos que tiene datos
+      const knownRaceId = "26dc137a-34e2-44a0-918b-a5af620cf281";
+      console.log(`🔍 [getConfig] Buscando primero en race conocida: ${knownRaceId}`);
+
+      const knownAppsSnapshot = await db.collection('races').doc(knownRaceId)
+        .collection('apps').get();
+
+      console.log(`🔍 [getConfig] Encontradas ${knownAppsSnapshot.size} apps en race conocida`);
+
+      for (const appDoc of knownAppsSnapshot.docs) {
+        const appData = appDoc.data();
+        console.log(`🔍 [getConfig] Revisando app ${appDoc.id} - bundleId: "${appData.bundleId}", raceName: "${appData.raceName}"`);
+
+        if ((bundleId && appData.bundleId === bundleId) ||
+            (raceName && appData.raceName === raceName)) {
+          targetApp = { id: appDoc.id, ...appData };
+          targetRaceId = knownRaceId;
+          console.log(`✅ [getConfig] App encontrada en race conocida: ${appDoc.id}`);
+          break;
+        }
+      }
+
+      // Si no se encontró en la race conocida, buscar en todas las demás
+      if (!targetApp) {
+        console.log(`🔍 [getConfig] No encontrada en race conocida, buscando en todas las races`);
+        const racesSnapshot = await db.collection('races').get();
+
+        for (const raceDoc of racesSnapshot.docs) {
+          const currentRaceId = raceDoc.id;
+
+          // Saltar la race que ya revisamos
+          if (currentRaceId === knownRaceId) continue;
+
+          const appsSnapshot = await db.collection('races').doc(currentRaceId)
+            .collection('apps').get();
+
+          if (appsSnapshot.size > 0) {
+            console.log(`🔍 [getConfig] Revisando ${appsSnapshot.size} apps en race ${currentRaceId}`);
+
+            for (const appDoc of appsSnapshot.docs) {
+              const appData = appDoc.data();
+
+              if ((bundleId && appData.bundleId === bundleId) ||
+                  (raceName && appData.raceName === raceName)) {
+                targetApp = { id: appDoc.id, ...appData };
+                targetRaceId = currentRaceId;
+                console.log(`✅ [getConfig] App encontrada: ${appDoc.id}`);
+                break;
+              }
+            }
+          }
+
+          if (targetApp) break;
+        }
+      }
+    }
+
+    if (!targetApp || !targetRaceId) {
+      return res.status(404).json({
+        error: "App no encontrada",
+        filters: { raceId, bundleId, raceName }
+      });
+    }
+
+    console.log(`✅ [getConfig] App encontrada: ${targetApp.name} (${targetApp.id}) en race: ${targetRaceId}`);
+
+    // 2. Obtener datos de la race
+    const raceDoc = await db.collection('races').doc(targetRaceId).get();
+    const raceData = raceDoc.exists ? raceDoc.data() : {};
+
+    // 3. Obtener eventos de esta app en esta race
+    const eventsSnapshot = await db.collection('races').doc(targetRaceId)
+      .collection('apps').doc(targetApp.id)
+      .collection('events').get();
+
+    // 4. Obtener media de esta app en esta race
+    const mediaSnapshot = await db.collection('races').doc(targetRaceId)
+      .collection('apps').doc(targetApp.id)
+      .collection('media').get();
+
+    const media = mediaSnapshot.docs.map(mediaDoc => ({
+      mediaId: mediaDoc.id,
+      ...mediaDoc.data()
+    }));
+
+    // 5. Organizar media por tipo (sin array 'all' redundante)
+    const mediaByType = {
+      sponsors: media.filter(m => m.type === 'sponsors'),
+      logos: media.filter(m => m.type === 'logos'),
+      videos: media.filter(m => m.type === 'videos'),
+      images: media.filter(m => m.type === 'images'),
+      posters: media.filter(m => m.type === 'posters')
+    };
+
+    console.log(`📊 [getConfig] Eventos: ${eventsSnapshot.size}, Media: ${media.length}`);
+
+    // 6. Procesar eventos e incluir la misma media en cada uno
+    const events = eventsSnapshot.docs.map(eventDoc => ({
+      eventId: eventDoc.id,
+      ...eventDoc.data(),
+      media: mediaByType // La misma media para todos los eventos
+    }));
+
+    // 7. Respuesta
+    const { sponsors, images, videos, logos, ...cleanAppData } = targetApp; // Excluir media antigua
+    const response = {
+      app: {
+        appId: targetApp.id,
+        name: targetApp.name,
+        raceId: targetRaceId,
+        raceName: raceData.name || targetApp.raceName,
+        bundleId: targetApp.bundleId,
+        ...cleanAppData, // Incluir datos de la app SIN media antigua
+        events: events,
+        eventsCount: events.length,
+        mediaCount: media.length
+      },
+      summary: {
+        totalEvents: events.length,
+        totalMedia: media.length,
+        mediaByType: {
+          sponsors: mediaByType.sponsors.length,
+          logos: mediaByType.logos.length,
+          videos: mediaByType.videos.length,
+          images: mediaByType.images.length,
+          posters: mediaByType.posters.length
+        }
+      }
+    };
+
+    console.log(`✅ [getConfig] Configuración obtenida exitosamente`);
+
+    return res.status(200).json(response);
+
+  } catch (error) {
+    console.error("❌ Error en GET /api/config:", error);
     return res.status(500).json({
       error: "Error interno del servidor",
       message: error.message
@@ -4398,389 +4529,8 @@ async function generateAutomaticStoryForCheckpoint(checkpointData) {
   }
 }
 
-/**
- * @openapi
- * /api/participant-checkpoint:
- *   post:
- *     summary: Endpoint simplificado para cambios de participantes (NUEVO FLUJO)
- *     description: Recibe datos completos del participante de AWS y procesa todos los checkpoints.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               runnerId:
- *                 type: string
- *                 description: ID del corredor
- *               raceId:
- *                 type: string
- *                 description: ID de la carrera
- *               eventId:
- *                 type: string
- *                 description: ID del evento
- *               apiKey:
- *                 type: string
- *                 description: API key para autenticación
- *               data:
- *                 type: object
- *                 description: Datos completos del participante desde AWS
- *                 properties:
- *                   id:
- *                     type: string
- *                   name:
- *                     type: string
- *                   fullname:
- *                     type: string
- *                   events:
- *                     type: array
- *                     items:
- *                       type: object
- *                       properties:
- *                         dorsal:
- *                           type: string
- *                         times:
- *                           type: object
- *                           description: Checkpoints con formato POINT-NAME
- *             required:
- *               - runnerId
- *               - raceId
- *               - eventId
- *               - apiKey
- *               - data
- *     responses:
- *       '200':
- *         description: Checkpoint procesado correctamente.
- *       '409':
- *         description: Historia ya existe para este checkpoint.
- *       '401':
- *         description: API key inválida.
- *       '400':
- *         description: Parámetros faltantes.
- *       '500':
- *         description: Error interno del servidor.
- */
-router.post("/participant-checkpoint", async (req, res) => {
-  try {
-    console.log("🔔 Cambio de participante recibido:", JSON.stringify(req.body, null, 2));
 
-    let { runnerId, raceId, eventId, apiKey, data } = req.body;
 
-    // 🧪 TEMPORAL: Mapeo de IDs para pruebas (BORRAR DESPUÉS)
-    const originalRaceId = raceId;
-    const originalEventId = eventId;
-
-    if (raceId === "ponle-freno-valencia-2025" || eventId === "ponle-freno-valencia-2025") {
-      raceId = "683ea9b3-4878-4ec9-912e-4419ac1f1da3";
-      eventId = "683ea9b3-4878-4ec9-912e-4419ac1f1da3";
-
-      // Log del mapeo
-      const mappingLog = {
-        timestamp: new Date().toISOString(),
-        action: "ID_MAPPING",
-        original: { raceId: originalRaceId, eventId: originalEventId },
-        mapped: { raceId, eventId },
-        runnerId: runnerId
-      };
-
-      console.log("🔄 MAPEO TEMPORAL DE IDs:", JSON.stringify(mappingLog, null, 2));
-
-      // Guardar en archivo de log
-      try {
-        const fs = require('fs');
-        const logEntry = JSON.stringify(mappingLog) + '\n';
-        fs.appendFileSync('/tmp/id-mapping.log', logEntry);
-      } catch (logError) {
-        console.error("⚠️ Error guardando log de mapeo:", logError);
-      }
-    }
-
-    if (raceId === "683ea9b3-4878-4ec9-912e-4419ac1f1da3") {
-      eventId = "683ea9b3-4878-4ec9-912e-4419ac1f1da3";
-
-      if (originalEventId !== eventId) {
-        const mappingLog = {
-          timestamp: new Date().toISOString(),
-          action: "EVENTID_SYNC",
-          original: { raceId: originalRaceId, eventId: originalEventId },
-          synced: { raceId, eventId },
-          runnerId: runnerId
-        };
-
-        console.log("🔄 SINCRONIZACIÓN DE EVENTID:", JSON.stringify(mappingLog, null, 2));
-
-        try {
-          const fs = require('fs');
-          const logEntry = JSON.stringify(mappingLog) + '\n';
-          fs.appendFileSync('/tmp/id-mapping.log', logEntry);
-        } catch (logError) {
-          console.error("⚠️ Error guardando log de sincronización:", logError);
-        }
-      }
-    }
-
-    // 1. Validar API key
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0";
-    if (!apiKey || apiKey !== expectedApiKey) {
-      console.error("❌ API key inválida");
-      return res.status(401).json({ error: "API key inválida" });
-    }
-
-    // 2. Validar parámetros requeridos
-    if (!runnerId || !raceId || !eventId || !data) {
-      console.error("❌ Parámetros faltantes");
-      return res.status(400).json({
-        error: "Parámetros faltantes",
-        required: ["runnerId", "raceId", "eventId", "data"],
-        received: { runnerId: !!runnerId, raceId: !!raceId, eventId: !!eventId, data: !!data }
-      });
-    }
-
-    // 3. Validar estructura de datos
-    if (!data.events || !Array.isArray(data.events) || data.events.length === 0) {
-      console.error("❌ Estructura de datos inválida: falta events");
-      return res.status(400).json({
-        error: "Estructura de datos inválida",
-        expected: "data.events debe ser un array con al menos un evento"
-      });
-    }
-
-    console.log("✅ Validación exitosa");
-    console.log(`📊 Procesando participante: runnerId=${runnerId}`);
-
-    const db = admin.firestore();
-
-    // 4. Extraer información del participante
-    const runnerBib = data.events[0]?.dorsal || null;
-    const runnerName = data.name || data.fullname || "Participante";
-
-    console.log(`👤 Datos del participante: ${runnerName}, dorsal: ${runnerBib}`);
-
-    // 5. Buscar el participante por runnerId o runnerBib
-    let participantId = null;
-    const participantsRef = db.collection("races").doc(raceId)
-      .collection("events").doc(eventId)
-      .collection("participants");
-
-    console.log(`🔍 Buscando participante: runnerId=${runnerId}, bib=${runnerBib}`);
-
-    // Intentar buscar por runnerId primero
-    const participantByIdQuery = await participantsRef
-      .where("runnerId", "==", runnerId)
-      .get();
-
-    if (!participantByIdQuery.empty) {
-      participantId = participantByIdQuery.docs[0].id;
-      console.log(`✅ Participante encontrado por runnerId: ${participantId}`);
-    } else if (runnerBib) {
-      // Si no se encuentra por runnerId, buscar por número de dorsal
-      // ✅ CORREGIDO: Buscar por 'dorsal' en lugar de 'bib'
-      const participantByBibQuery = await participantsRef
-        .where("dorsal", "==", runnerBib)
-        .get();
-
-      if (!participantByBibQuery.empty) {
-        participantId = participantByBibQuery.docs[0].id;
-        console.log(`✅ Participante encontrado por bib: ${participantId}`);
-      }
-    }
-
-    if (!participantId) {
-      console.error(`❌ Participante no encontrado: runnerId=${runnerId}, bib=${runnerBib}`);
-      return res.status(404).json({
-        error: "Participante no encontrado",
-        runnerId,
-        runnerBib
-      });
-    }
-
-    // 6. Procesar checkpoints del evento
-    const eventData = data.events[0]; // Tomar el primer evento
-    const times = eventData.times || {};
-
-    console.log(`📍 Procesando ${Object.keys(times).length} checkpoints...`);
-
-    let newCheckpointsProcessed = 0;
-    let storiesCreated = 0;
-    const processedCheckpoints = [];
-
-    // Procesar cada checkpoint en times
-    for (const [pointName, timeData] of Object.entries(times)) {
-      try {
-        console.log(`\n🔍 Procesando checkpoint: ${pointName}`);
-
-        // Extraer datos del checkpoint
-        const checkpointId = pointName;
-        const timestamp = new Date(timeData.raw?.originalTime || timeData.raw?.rawTime || Date.now());
-        const streamId = timeData.raw?.device || `stream-${pointName}-${runnerId}`; // Usar device como streamId o generar uno
-
-        console.log(`⏰ Timestamp: ${timestamp.toISOString()}`);
-        console.log(`📹 StreamId: ${streamId}`);
-
-        // Verificar si el checkpoint ya existe
-        const checkpointRef = db.collection("races").doc(raceId)
-          .collection("events").doc(eventId)
-          .collection("participants").doc(participantId)
-          .collection("checkpoints").doc(checkpointId);
-
-        const existingCheckpoint = await checkpointRef.get();
-
-        if (!existingCheckpoint.exists) {
-          // Guardar checkpoint nuevo
-          const checkpointData = {
-            runnerId,
-            runnerBib: runnerBib || null,
-            checkpointId,
-            timestamp: admin.firestore.Timestamp.fromDate(timestamp),
-            streamId,
-            timeData: timeData, // Guardar todos los datos del tiempo
-            receivedAt: admin.firestore.FieldValue.serverTimestamp(),
-            processed: true,
-            source: "aws_endpoint"
-          };
-
-          await checkpointRef.set(checkpointData);
-          console.log(`✅ Checkpoint guardado: ${checkpointId}`);
-          newCheckpointsProcessed++;
-        } else {
-          console.log(`⚠️ Checkpoint ya existe: ${checkpointId}`);
-        }
-
-        // Verificar si ya existe historia para este checkpoint
-        const storiesRef = db.collection("races").doc(raceId)
-          .collection("events").doc(eventId)
-          .collection("participants").doc(participantId)
-          .collection("stories");
-
-        const existingStoryQuery = await storiesRef
-          .where("checkpointInfo.checkpointId", "==", checkpointId)
-          .limit(1)
-          .get();
-
-        if (!existingStoryQuery.empty) {
-          console.log(`⚠️ Historia ya existe para checkpoint: ${checkpointId}`);
-          processedCheckpoints.push({
-            checkpointId,
-            action: "skipped",
-            reason: "story_exists",
-            storyId: existingStoryQuery.docs[0].id
-          });
-          continue; // Pasar al siguiente checkpoint
-        }
-
-        // Generar clip de video si streamId es válido
-        let clipUrl = null;
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-        if (uuidRegex.test(streamId)) {
-          try {
-            clipUrl = await generateVideoClip({
-              streamId,
-              timestamp: timestamp.toISOString(),
-              raceId,
-              eventId,
-              participantId,
-              checkpointId
-            });
-            console.log(`✅ Clip de video generado: ${clipUrl}`);
-          } catch (clipError) {
-            console.error("⚠️ Error generando clip de video:", clipError);
-          }
-        } else {
-          console.log(`⚠️ StreamId no es UUID válido, no se puede generar clip: ${streamId}`);
-        }
-
-        // Crear historia automática con estructura completa
-        const storyData = {
-          participantId,
-          raceId,
-          eventId,
-          description: `${runnerName} pasó por ${checkpointId} - Historia generada automáticamente`,
-          moderationStatus: "approved",
-          originType: "automatic_checkpoint",
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          date: admin.firestore.FieldValue.serverTimestamp(),
-          // ✅ Campos del archivo/video
-          fileUrl: clipUrl || null,
-          fileName: clipUrl ? `clip_${checkpointId}_${Date.now()}.mp4` : null,
-          filePath: clipUrl ? `races/${raceId}/events/${eventId}/participants/${participantId}/stories/clip_${checkpointId}_${Date.now()}.mp4` : null,
-          contentType: clipUrl ? "video/mp4" : null,
-          mediaType: clipUrl ? "video" : null,
-          sourceUrl: clipUrl || null,
-          fileSize: 0, // Se actualizará cuando se conozca el tamaño real
-          duration: clipUrl ? 20 : null, // Clips de 20 segundos
-          // ✅ Información del checkpoint
-          checkpointInfo: {
-            checkpointId,
-            timestamp: admin.firestore.Timestamp.fromDate(timestamp),
-            runnerId,
-            runnerBib,
-            streamId,
-            timeData: timeData
-          },
-          // ✅ Información de generación completa
-          generationInfo: {
-            source: "aws_endpoint_simple",
-            generatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            hasVideoClip: !!clipUrl,
-            clipUrl: clipUrl || null,
-            startTime: clipUrl ? new Date(timestamp.getTime() - 10000).toISOString() : null,
-            endTime: clipUrl ? new Date(timestamp.getTime() + 10000).toISOString() : null,
-            streamId: streamId
-          }
-        };
-
-        const storyRef = await storiesRef.add(storyData);
-        console.log(`✅ Historia creada: ${storyRef.id}`);
-        storiesCreated++;
-
-        processedCheckpoints.push({
-          checkpointId,
-          action: "created",
-          storyId: storyRef.id,
-          clipGenerated: !!clipUrl
-        });
-
-      } catch (checkpointError) {
-        console.error(`❌ Error procesando checkpoint ${pointName}:`, checkpointError);
-        processedCheckpoints.push({
-          checkpointId: pointName,
-          action: "error",
-          error: checkpointError.message
-        });
-      }
-    }
-
-    // Respuesta final con resumen del procesamiento
-    console.log(`\n📊 Resumen del procesamiento:`);
-    console.log(`   - Checkpoints nuevos: ${newCheckpointsProcessed}`);
-    console.log(`   - Historias creadas: ${storiesCreated}`);
-    console.log(`   - Total procesados: ${processedCheckpoints.length}`);
-
-    return res.status(200).json({
-      success: true,
-      message: `Participante procesado correctamente`,
-      data: {
-        participantId,
-        participantName: runnerName,
-        runnerId,
-        runnerBib,
-        checkpointsProcessed: processedCheckpoints.length,
-        newCheckpoints: newCheckpointsProcessed,
-        storiesCreated: storiesCreated,
-        checkpoints: processedCheckpoints
-      }
-    });
-
-  } catch (error) {
-    console.error("❌ Error procesando cambio de participante:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      details: error.message
-    });
-  }
-});
 
 // ========================================
 // CÓDIGO ANTERIOR (COMENTADO - NO ELIMINAR)
@@ -4801,6 +4551,388 @@ router.post("/participant-checkpoint", async (req, res) => {
 
 // 🔥 Configurar rutas FCM
 router.use("/fcm", fcmTokensRouter);
+
+// 🔥 Configurar rutas de upload (MIGRADAS)
+router.use("/", uploadStoryRouter);
+router.use("/", uploadMediaRouter);
+router.use("/", uploadRouter);
+
+// 🔥 Importar gestores de WebSocket de Copernico
+import copernicoSubscriptionManager from '../websocket/copernicoSubscriptionManager.mjs';
+import copernicoWebSocketClient from '../websocket/copernicoWebSocketClient.mjs';
+import copernicoMonitor from '../websocket/copernicoMonitor.mjs';
+
+// ========================================
+// ENDPOINTS COPERNICO WEBSOCKET
+// ========================================
+
+/**
+ * @openapi
+ * /api/copernico/subscribe:
+ *   post:
+ *     summary: Suscribirse a actualizaciones de atletas de Copernico
+ *     description: Establece una suscripción WebSocket para recibir actualizaciones en tiempo real de atletas específicos.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera en Copernico
+ *               participantIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Lista de IDs de participantes (opcional, si no se especifica se suscribe a todos)
+ *               apiKey:
+ *                 type: string
+ *                 description: API key para autenticación
+ *             required:
+ *               - raceId
+ *               - apiKey
+ *     responses:
+ *       '200':
+ *         description: Suscripción establecida correctamente.
+ *       '401':
+ *         description: API key inválida.
+ *       '400':
+ *         description: Parámetros faltantes.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.post("/copernico/subscribe", async (req, res) => {
+  try {
+    console.log("🎯 [Copernico] Solicitud de suscripción:", JSON.stringify(req.body, null, 2));
+
+    const { raceId, participantIds, apiKey } = req.body;
+
+    // Validaciones básicas
+    if (!raceId || !apiKey) {
+      console.error("❌ [Copernico] Parámetros requeridos faltantes");
+      return res.status(400).json({
+        error: "Parámetros requeridos faltantes",
+        required: ["raceId", "apiKey"],
+        received: { raceId: !!raceId, apiKey: !!apiKey }
+      });
+    }
+
+    // Validar API key
+    const expectedApiKey = process.env.WEBHOOK_API_KEY || '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+    if (apiKey !== expectedApiKey) {
+      console.error("❌ [Copernico] API key inválida");
+      return res.status(401).json({ error: "API key inválida" });
+    }
+
+    // Establecer suscripción
+    const result = await copernicoSubscriptionManager.subscribeToRace(raceId, participantIds);
+
+    console.log("✅ [Copernico] Suscripción establecida:", result);
+
+    res.status(200).json({
+      success: true,
+      message: "Suscripción establecida correctamente",
+      data: result
+    });
+
+  } catch (error) {
+    console.error("❌ [Copernico] Error en suscripción:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/copernico/unsubscribe:
+ *   post:
+ *     summary: Desuscribirse de actualizaciones de una carrera
+ *     description: Cancela la suscripción WebSocket para una carrera específica.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera
+ *               apiKey:
+ *                 type: string
+ *                 description: API key para autenticación
+ *             required:
+ *               - raceId
+ *               - apiKey
+ *     responses:
+ *       '200':
+ *         description: Desuscripción exitosa.
+ *       '401':
+ *         description: API key inválida.
+ *       '400':
+ *         description: Parámetros faltantes.
+ */
+router.post("/copernico/unsubscribe", async (req, res) => {
+  try {
+    console.log("🛑 [Copernico] Solicitud de desuscripción:", JSON.stringify(req.body, null, 2));
+
+    const { raceId, apiKey } = req.body;
+
+    // Validaciones básicas
+    if (!raceId || !apiKey) {
+      return res.status(400).json({
+        error: "Parámetros requeridos faltantes",
+        required: ["raceId", "apiKey"]
+      });
+    }
+
+    // Validar API key
+    const expectedApiKey = process.env.WEBHOOK_API_KEY || '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+    if (apiKey !== expectedApiKey) {
+      return res.status(401).json({ error: "API key inválida" });
+    }
+
+    // Desuscribirse
+    copernicoSubscriptionManager.unsubscribeFromRace(raceId);
+
+    console.log("✅ [Copernico] Desuscripción exitosa");
+
+    res.status(200).json({
+      success: true,
+      message: "Desuscripción exitosa"
+    });
+
+  } catch (error) {
+    console.error("❌ [Copernico] Error en desuscripción:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/copernico/status:
+ *   get:
+ *     summary: Obtener estado de las conexiones WebSocket de Copernico
+ *     description: Devuelve información sobre el estado actual de las conexiones y suscripciones.
+ *     responses:
+ *       '200':
+ *         description: Estado obtenido correctamente.
+ */
+router.get("/copernico/status", async (req, res) => {
+  try {
+    const status = copernicoSubscriptionManager.getSubscriptionStatus();
+
+    res.status(200).json({
+      success: true,
+      data: status
+    });
+
+  } catch (error) {
+    console.error("❌ [Copernico] Error obteniendo estado:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/copernico/test-connection:
+ *   post:
+ *     summary: Probar conexión WebSocket con Copernico
+ *     description: Endpoint para testing que establece una conexión temporal y verifica el funcionamiento.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera para probar
+ *               environment:
+ *                 type: string
+ *                 enum: [dev, pro, alpha, demo]
+ *                 description: Ambiente de Copernico a usar
+ *               apiKey:
+ *                 type: string
+ *                 description: API key para autenticación
+ *             required:
+ *               - raceId
+ *               - apiKey
+ *     responses:
+ *       '200':
+ *         description: Prueba de conexión exitosa.
+ *       '401':
+ *         description: API key inválida.
+ *       '400':
+ *         description: Parámetros faltantes.
+ *       '500':
+ *         description: Error en la conexión.
+ */
+router.post("/copernico/test-connection", async (req, res) => {
+  try {
+    console.log("🧪 [Copernico] Prueba de conexión:", JSON.stringify(req.body, null, 2));
+
+    const { raceId, environment, apiKey } = req.body;
+
+    // Validaciones básicas
+    if (!raceId || !apiKey) {
+      return res.status(400).json({
+        error: "Parámetros requeridos faltantes",
+        required: ["raceId", "apiKey"]
+      });
+    }
+
+    // Validar API key
+    const expectedApiKey = process.env.WEBHOOK_API_KEY || '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+    if (apiKey !== expectedApiKey) {
+      return res.status(401).json({ error: "API key inválida" });
+    }
+
+    // Cambiar ambiente si se especifica
+    if (environment && ['dev', 'pro', 'alpha', 'demo'].includes(environment)) {
+      copernicoWebSocketClient.config.env = environment;
+      console.log(`🔧 [Copernico] Ambiente cambiado a: ${environment}`);
+    }
+
+    // Intentar conexión
+    const connectionResult = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout de conexión (10 segundos)'));
+      }, 10000);
+
+      try {
+        copernicoWebSocketClient.connect(raceId);
+
+        // Esperar a que se establezca la conexión
+        const checkConnection = setInterval(() => {
+          if (copernicoWebSocketClient.isConnected) {
+            clearInterval(checkConnection);
+            clearTimeout(timeout);
+            resolve({
+              connected: true,
+              raceId,
+              environment: copernicoWebSocketClient.config.env,
+              socketUrl: copernicoWebSocketClient.config[copernicoWebSocketClient.config.env].socket
+            });
+          }
+        }, 500);
+
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+
+    console.log("✅ [Copernico] Prueba de conexión exitosa:", connectionResult);
+
+    res.status(200).json({
+      success: true,
+      message: "Conexión establecida correctamente",
+      data: connectionResult
+    });
+
+  } catch (error) {
+    console.error("❌ [Copernico] Error en prueba de conexión:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/copernico/metrics:
+ *   get:
+ *     summary: Obtener métricas de monitoreo del WebSocket de Copernico
+ *     description: Devuelve métricas detalladas sobre conexiones, mensajes y alertas.
+ *     responses:
+ *       '200':
+ *         description: Métricas obtenidas correctamente.
+ */
+router.get("/copernico/metrics", async (req, res) => {
+  try {
+    const metrics = copernicoMonitor.getMetrics();
+    const recentAlerts = copernicoMonitor.getRecentAlerts(10);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        metrics,
+        recentAlerts,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ [Copernico] Error obteniendo métricas:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/copernico/reset-metrics:
+ *   post:
+ *     summary: Resetear métricas de monitoreo
+ *     description: Reinicia todas las métricas y alertas del sistema de monitoreo.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               apiKey:
+ *                 type: string
+ *                 description: API key para autenticación
+ *             required:
+ *               - apiKey
+ *     responses:
+ *       '200':
+ *         description: Métricas reseteadas correctamente.
+ *       '401':
+ *         description: API key inválida.
+ */
+router.post("/copernico/reset-metrics", async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+
+    // Validar API key
+    const expectedApiKey = process.env.WEBHOOK_API_KEY || '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+    if (!apiKey || apiKey !== expectedApiKey) {
+      return res.status(401).json({ error: "API key inválida" });
+    }
+
+    copernicoMonitor.resetMetrics();
+
+    res.status(200).json({
+      success: true,
+      message: "Métricas reseteadas correctamente"
+    });
+
+  } catch (error) {
+    console.error("❌ [Copernico] Error reseteando métricas:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 /**
  * @openapi
@@ -4970,11 +5102,11 @@ router.post("/generate-test-data", async (req, res) => {
         // Determinar tipo de historia
         let storyType;
         if (checkpoint.name === "START") {
-          storyType = "ATHELETE_STARTED";
+          storyType = "ATHLETE_STARTED";
         } else if (checkpoint.name === "FINISH") {
-          storyType = "ATHELETE_FINISHED";
+          storyType = "ATHLETE_FINISHED";
         } else {
-          storyType = "ATHELETE_CROSSED_TIMING_SPLIT";
+          storyType = "ATHLETE_CROSSED_TIMING_SPLIT";
         }
 
         const storyData = {
@@ -5043,6 +5175,480 @@ router.post("/generate-test-data", async (req, res) => {
     return res.status(500).json({
       error: "Error interno del servidor",
       details: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/media:
+ *   get:
+ *     summary: Obtener media de apps con filtros
+ *     description: >
+ *       Obtiene media desde la estructura races/apps/media con filtros por race, app y tipo.
+ *       Siempre requiere raceId como filtro base.
+ *     parameters:
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la carrera (obligatorio)
+ *         example: "race-001-madrid-marathon"
+ *       - in: query
+ *         name: appId
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación (opcional, filtra por app específica)
+ *         example: "RtME2RACih6YxgrlmuQR"
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: ["sponsors", "logos", "videos", "images", "posters"]
+ *         description: Tipo de media (opcional)
+ *         example: "sponsors"
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           enum: ["promotional", "event", "participant", "branding"]
+ *         description: Categoría de media (opcional)
+ *         example: "promotional"
+ *       - in: query
+ *         name: group
+ *         schema:
+ *           type: string
+ *         description: Grupo de media (opcional)
+ *         example: "sponsors"
+ *     responses:
+ *       '200':
+ *         description: Media obtenida exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 media:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 total:
+ *                   type: integer
+ *                 filters:
+ *                   type: object
+ *       '400':
+ *         description: Parámetros faltantes (raceId es obligatorio)
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.get("/media", async (req, res) => {
+  try {
+    const { raceId, appId, type, category, group } = req.query;
+
+    // raceId es obligatorio
+    if (!raceId) {
+      return res.status(400).json({
+        error: "El parámetro raceId es obligatorio",
+        required: ["raceId"],
+        optional: ["appId", "type", "category", "group"]
+      });
+    }
+
+    console.log(`🎬 [getMedia] Obteniendo media - Race: ${raceId}${appId ? `, App: ${appId}` : ' (todas las apps)'}`);
+
+    const db = admin.firestore();
+    let allMedia = [];
+
+    if (appId) {
+      // Filtro específico por app
+      console.log(`🔍 [getMedia] Buscando en app específica: ${appId}`);
+
+      let mediaQuery = db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('media');
+
+      // Aplicar filtros adicionales
+      if (type) {
+        mediaQuery = mediaQuery.where('type', '==', type);
+      }
+      if (category) {
+        mediaQuery = mediaQuery.where('category', '==', category);
+      }
+      if (group) {
+        mediaQuery = mediaQuery.where('groupName', '==', group);
+      }
+
+      mediaQuery = mediaQuery.orderBy('createdAt', 'desc');
+
+      const mediaSnapshot = await mediaQuery.get();
+      allMedia = mediaSnapshot.docs.map(doc => ({
+        mediaId: doc.id,
+        raceId,
+        appId,
+        ...doc.data()
+      }));
+
+    } else {
+      // Buscar en todas las apps de la race
+      console.log(`🔍 [getMedia] Buscando en todas las apps de la race: ${raceId}`);
+
+      const appsSnapshot = await db.collection('races').doc(raceId)
+        .collection('apps').get();
+
+      for (const appDoc of appsSnapshot.docs) {
+        const currentAppId = appDoc.id;
+
+        let mediaQuery = db.collection('races').doc(raceId)
+          .collection('apps').doc(currentAppId)
+          .collection('media');
+
+        // Aplicar filtros adicionales
+        if (type) {
+          mediaQuery = mediaQuery.where('type', '==', type);
+        }
+        if (category) {
+          mediaQuery = mediaQuery.where('category', '==', category);
+        }
+        if (group) {
+          mediaQuery = mediaQuery.where('groupName', '==', group);
+        }
+
+        mediaQuery = mediaQuery.orderBy('createdAt', 'desc');
+
+        const mediaSnapshot = await mediaQuery.get();
+        const appMedia = mediaSnapshot.docs.map(doc => ({
+          mediaId: doc.id,
+          raceId,
+          appId: currentAppId,
+          ...doc.data()
+        }));
+
+        allMedia.push(...appMedia);
+      }
+    }
+
+    console.log(`✅ [getMedia] Encontrados ${allMedia.length} elementos de media`);
+
+    return res.status(200).json({
+      media: allMedia,
+      total: allMedia.length,
+      filters: { raceId, appId, type, category, group },
+      summary: {
+        byType: allMedia.reduce((acc, item) => {
+          acc[item.type] = (acc[item.type] || 0) + 1;
+          return acc;
+        }, {}),
+        byCategory: allMedia.reduce((acc, item) => {
+          acc[item.category] = (acc[item.category] || 0) + 1;
+          return acc;
+        }, {}),
+        byGroup: allMedia.reduce((acc, item) => {
+          acc[item.groupName] = (acc[item.groupName] || 0) + 1;
+          return acc;
+        }, {})
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ [getMedia] Error:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      message: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/races/{raceId}/apps/{appId}/events_splits:
+ *   get:
+ *     summary: Get Race with Events and Status
+ *     description: Retorna la información completa de una carrera específica, incluyendo todos sus eventos con splits y estados actuales.
+ *     parameters:
+ *       - in: path
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la carrera
+ *       - in: path
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación
+ *     responses:
+ *       '200':
+ *         description: Información completa de la carrera con eventos y splits
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     race:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                         timezone:
+ *                           type: string
+ *                         company:
+ *                           type: string
+ *                         idRace:
+ *                           type: string
+ *                     app:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                     events:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                           distance:
+ *                             type: number
+ *                           startTime:
+ *                             type: string
+ *                           athletes:
+ *                             type: number
+ *                           company:
+ *                             type: string
+ *                           idRace:
+ *                             type: string
+ *                           status:
+ *                             type: object
+ *                             properties:
+ *                               finished:
+ *                                 type: boolean
+ *                               wavesStarted:
+ *                                 type: boolean
+ *                               state:
+ *                                 type: string
+ *                                 enum: [NOT_STARTED, IN_PROGRESS, FINISHED]
+ *                           waves:
+ *                             type: array
+ *                           splits:
+ *                             type: array
+ *                           categories:
+ *                             type: array
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalEvents:
+ *                           type: number
+ *                         eventsNotStarted:
+ *                           type: number
+ *                         eventsInProgress:
+ *                           type: number
+ *                         eventsFinished:
+ *                           type: number
+ *                         totalSplits:
+ *                           type: number
+ *                         totalAthletes:
+ *                           type: number
+ *       '404':
+ *         description: Carrera o aplicación no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 error:
+ *                   type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                     message:
+ *                       type: string
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.get("/races/:raceId/apps/:appId/events_splits", async (req, res) => {
+  try {
+    const { raceId, appId } = req.params;
+
+    console.log(`🏁 [getRaceEventsWithSplits] Obteniendo race: ${raceId}, app: ${appId}`);
+
+    const db = admin.firestore();
+
+    // 1. Obtener datos de la carrera
+    const raceDoc = await db.collection('races').doc(raceId).get();
+    if (!raceDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "RACE_NOT_FOUND",
+          message: `Race with ID ${raceId} not found`
+        }
+      });
+    }
+
+    const raceData = raceDoc.data();
+    console.log(`✅ [getRaceEventsWithSplits] Race encontrada: ${raceData.name || 'Sin nombre'}`);
+
+    // 2. Obtener datos de la app
+    const appDoc = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId).get();
+
+    if (!appDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "APP_NOT_FOUND",
+          message: `App with ID ${appId} not found in race ${raceId}`
+        }
+      });
+    }
+
+    const appData = appDoc.data();
+    console.log(`✅ [getRaceEventsWithSplits] App encontrada: ${appData.name || 'Sin nombre'}`);
+
+    // 3. Obtener todos los eventos de esta app en esta race
+    const eventsSnapshot = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId)
+      .collection('events').get();
+
+    console.log(`📊 [getRaceEventsWithSplits] Eventos encontrados: ${eventsSnapshot.size}`);
+
+    // 4. Procesar cada evento
+    const events = [];
+    let totalSplits = 0;
+    let totalAthletes = 0;
+    let eventsNotStarted = 0;
+    let eventsInProgress = 0;
+    let eventsFinished = 0;
+
+    for (const eventDoc of eventsSnapshot.docs) {
+      const eventData = eventDoc.data();
+      const eventInfo = eventData.event_info || {};
+      const copernicoData = eventData.copernico_data || {};
+
+      // Extraer splits de copernico_data
+      const splits = copernicoData.splits || [];
+      totalSplits += splits.length;
+
+      // Extraer waves de copernico_data
+      const waves = copernicoData.waves || [];
+
+      // Extraer categories de copernico_data
+      const categories = copernicoData.categories || [];
+
+      // Calcular estado del evento
+      const finished = copernicoData.finished || false;
+      const wavesStarted = copernicoData.wavesStarted || false;
+
+      let state = "NOT_STARTED";
+      if (finished) {
+        state = "FINISHED";
+        eventsFinished++;
+      } else if (wavesStarted) {
+        state = "IN_PROGRESS";
+        eventsInProgress++;
+      } else {
+        eventsNotStarted++;
+      }
+
+      // Contar atletas (si está disponible)
+      const athletes = eventInfo.athletes || copernicoData.athletes || 0;
+      totalAthletes += athletes;
+
+      // Construir objeto del evento
+      const eventObj = {
+        id: eventDoc.id,
+        name: eventInfo.name || eventDoc.id,
+        type: eventInfo.type || "standard",
+        distance: eventInfo.distance || copernicoData.distance || 0,
+        startTime: eventInfo.startTime || copernicoData.startTime || null,
+        athletes: athletes,
+        company: raceData.company || eventInfo.company || "cronochip",
+        idRace: raceData.idRace || raceData.id || raceId,
+        status: {
+          finished: finished,
+          wavesStarted: wavesStarted,
+          state: state
+        },
+        waves: waves.map(wave => ({
+          name: wave.name || "Salida",
+          startTime: wave.startTime || null,
+          started: wave.started || false
+        })),
+        splits: splits.map((split, index) => ({
+          name: split.name || `Split ${index + 1}`,
+          distance: split.distance || 0,
+          type: split.type || "standard",
+          physicalLocation: split.physicalLocation || split.name || `Split ${index + 1}`,
+          order: split.order || index + 1
+        })),
+        categories: categories.map(category => ({
+          name: category.name || "General",
+          gender: category.gender || "mixed",
+          isAgeBased: category.isAgeBased || false,
+          from: category.from || null,
+          to: category.to || null
+        }))
+      };
+
+      events.push(eventObj);
+    }
+
+    // 5. Construir respuesta
+    const response = {
+      success: true,
+      data: {
+        race: {
+          id: raceDoc.id,
+          name: raceData.name || "Sin nombre",
+          timezone: raceData.timezone || "UTC",
+          company: raceData.company || "cronochip",
+          idRace: raceData.idRace || raceData.id || raceId
+        },
+        app: {
+          id: appDoc.id,
+          name: appData.name || "Sin nombre"
+        },
+        events: events,
+        summary: {
+          totalEvents: events.length,
+          eventsNotStarted: eventsNotStarted,
+          eventsInProgress: eventsInProgress,
+          eventsFinished: eventsFinished,
+          totalSplits: totalSplits,
+          totalAthletes: totalAthletes
+        }
+      }
+    };
+
+    console.log(`✅ [getRaceEventsWithSplits] Respuesta generada: ${events.length} eventos, ${totalSplits} splits`);
+
+    return res.status(200).json(response);
+
+  } catch (error) {
+    console.error("❌ [getRaceEventsWithSplits] Error:", error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Error interno del servidor"
+      }
     });
   }
 });

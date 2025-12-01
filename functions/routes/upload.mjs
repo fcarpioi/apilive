@@ -74,11 +74,11 @@ router.post("/generateUploadUrl", async (req, res) => {
     try {
         console.log("🚀 [generateUploadUrl] Generando URL de subida para Firebase Storage...");
 
-        const { raceId, eventId, participantId, fileName, contentType } = req.body;
+        const { raceId, appId, eventId, participantId, fileName, contentType } = req.body;
 
-        if (!raceId || !eventId || !participantId || !fileName) {
+        if (!raceId || !appId || !eventId || !participantId || !fileName) {
             return res.status(400).json({
-                message: "raceId, eventId, participantId y fileName son obligatorios"
+                message: "raceId, appId, eventId, participantId y fileName son obligatorios"
             });
         }
 
@@ -90,10 +90,10 @@ router.post("/generateUploadUrl", async (req, res) => {
             contentType
         });
 
-        // ✅ Generar nombre único del archivo
+        // ✅ Generar nombre único del archivo (MIGRADO: Nueva estructura con apps)
         const fileExtension = path.extname(fileName);
         const uniqueFileName = `${uuidv4()}${fileExtension}`;
-        const filePath = `races/${raceId}/events/${eventId}/participants/${participantId}/stories/${uniqueFileName}`;
+        const filePath = `races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${uniqueFileName}`;
 
         console.log("📄 [generateUploadUrl] Archivo generado:", {
             originalFileName: fileName,
@@ -242,10 +242,10 @@ router.post("/uploadToFirebase", async (req, res) => {
             return res.status(400).json({ message: "Archivo vacío" });
         }
 
-        // ✅ Generar nombre único y path
+        // ✅ Generar nombre único y path (MIGRADO: Nueva estructura con apps)
         const fileExtension = path.extname(fileName);
         const uniqueFileName = `${uuidv4()}${fileExtension}`;
-        const filePath = `races/${raceId}/events/${eventId}/participants/${participantId}/stories/${uniqueFileName}`;
+        const filePath = `races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${uniqueFileName}`;
 
         // Determinar tipo de media
         const isVideo = contentType.startsWith('video/');
@@ -266,6 +266,7 @@ router.post("/uploadToFirebase", async (req, res) => {
                 contentType: contentType,
                 metadata: {
                     raceId,
+                    appId,
                     eventId,
                     participantId,
                     mediaType,
@@ -281,10 +282,12 @@ router.post("/uploadToFirebase", async (req, res) => {
 
         console.log("✅ [uploadToFirebase] Archivo subido a Firebase Storage:", publicUrl);
 
-        // ✅ Registrar metadata en Firestore
+        // ✅ Registrar metadata en Firestore (MIGRADO: Nueva estructura con apps)
         const docRef = await firestore
             .collection("races")
             .doc(raceId)
+            .collection("apps")
+            .doc(appId)
             .collection("events")
             .doc(eventId)
             .collection("participants")
@@ -292,6 +295,7 @@ router.post("/uploadToFirebase", async (req, res) => {
             .collection("stories")
             .add({
                 raceId,
+                appId,
                 eventId,
                 participantId,
                 fileName: uniqueFileName,
@@ -391,16 +395,17 @@ router.post("/confirmUpload", async (req, res) => {
     try {
         console.log("🚀 [confirmUpload] Confirmando subida y registrando metadata...");
 
-        const { raceId, eventId, participantId, filePath, fileType, description, fileName } = req.body;
+        const { raceId, appId, eventId, participantId, filePath, fileType, description, fileName } = req.body;
 
-        if (!raceId || !eventId || !participantId || !filePath || !fileType || !description) {
+        if (!raceId || !appId || !eventId || !participantId || !filePath || !fileType || !description) {
             return res.status(400).json({
-                message: "raceId, eventId, participantId, filePath, fileType y description son obligatorios"
+                message: "raceId, appId, eventId, participantId, filePath, fileType y description son obligatorios"
             });
         }
 
         console.log("📡 [confirmUpload] Parámetros recibidos:", {
             raceId,
+            appId,
             eventId,
             participantId,
             filePath,
@@ -417,10 +422,12 @@ router.post("/confirmUpload", async (req, res) => {
         const isImage = fileType.startsWith('image/');
         const mediaType = isVideo ? 'video' : isImage ? 'image' : 'unknown';
 
-        // ✅ Registrar metadata en Firestore
+        // ✅ Registrar metadata en Firestore (MIGRADO: Nueva estructura con apps)
         const docRef = await firestore
             .collection("races")
             .doc(raceId)
+            .collection("apps")
+            .doc(appId)
             .collection("events")
             .doc(eventId)
             .collection("participants")
@@ -428,6 +435,7 @@ router.post("/confirmUpload", async (req, res) => {
             .collection("stories")
             .add({
                 raceId,
+                appId,
                 eventId,
                 participantId,
                 filePath,

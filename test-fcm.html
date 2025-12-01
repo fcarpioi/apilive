@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba FCM - TimingSense</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .token-display {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            word-break: break-all;
+            font-family: monospace;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Prueba de Firebase Cloud Messaging</h1>
+        <p>Esta página te permite probar las notificaciones push de TimingSense.</p>
+        
+        <div id="status" class="status info">
+            ⏳ Listo para comenzar...
+        </div>
+        
+        <div>
+            <button id="requestPermission">🔔 Solicitar Permisos y Obtener Token</button>
+            <button id="sendPush" disabled>🔔 Enviar Notificación Push</button>
+        </div>
+        
+        <div id="tokenDisplay" class="token-display" style="display: none;">
+            <strong>Token FCM:</strong><br>
+            <span id="tokenValue"></span>
+        </div>
+        
+        <div id="userIdDisplay" style="display: none;">
+            <strong>User ID:</strong> <span id="userIdValue"></span>
+        </div>
+    </div>
+
+    <script type="module">
+        // Importar funciones de Firebase
+        import { requestNotificationPermission, sendPushNotification } from './firebase-config.js';
+        
+        let currentToken = null;
+        let currentUserId = null;
+        
+        // Referencias a elementos DOM
+        const statusDiv = document.getElementById('status');
+        const requestBtn = document.getElementById('requestPermission');
+        const sendPushBtn = document.getElementById('sendPush');
+        const tokenDisplay = document.getElementById('tokenDisplay');
+        const tokenValue = document.getElementById('tokenValue');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const userIdValue = document.getElementById('userIdValue');
+        
+        // Función para mostrar estado
+        function showStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        // Solicitar permisos y obtener token
+        requestBtn.addEventListener('click', async () => {
+            requestBtn.disabled = true;
+            showStatus('⏳ Solicitando permisos...', 'info');
+            
+            try {
+                const token = await requestNotificationPermission();
+                
+                if (token) {
+                    currentToken = token;
+                    currentUserId = 'web-user-' + Date.now();
+                    
+                    // Mostrar token
+                    tokenValue.textContent = token;
+                    tokenDisplay.style.display = 'block';
+                    
+                    // Mostrar user ID
+                    userIdValue.textContent = currentUserId;
+                    userIdDisplay.style.display = 'block';
+                    
+                    // Habilitar botón de push
+                    sendPushBtn.disabled = false;
+                    
+                    showStatus('✅ Token FCM obtenido y registrado exitosamente!', 'success');
+                } else {
+                    showStatus('❌ No se pudo obtener el token FCM. Verifica los permisos.', 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Error: ' + error.message, 'error');
+            }
+            
+            requestBtn.disabled = false;
+        });
+        
+        // Enviar notificación push
+        sendPushBtn.addEventListener('click', async () => {
+            if (!currentUserId) {
+                showStatus('❌ Primero debes obtener el token FCM', 'error');
+                return;
+            }
+
+            sendPushBtn.disabled = true;
+            showStatus('⏳ Enviando notificación push...', 'info');
+
+            try {
+                const result = await sendPushNotification(
+                    currentUserId,
+                    '🔔 Notificación desde Web',
+                    'Esta es una notificación push enviada desde la aplicación web',
+                    { source: 'web_test' }
+                );
+
+                if (result && result.success) {
+                    showStatus('✅ Notificación push enviada! Revisa tu dispositivo.', 'success');
+                } else {
+                    showStatus('⚠️ Notificación enviada pero puede haber fallado. Revisa la consola.', 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Error enviando notificación: ' + error.message, 'error');
+            }
+
+            sendPushBtn.disabled = false;
+        });
+        
+        // Verificar soporte de Service Workers
+        if ('serviceWorker' in navigator) {
+            showStatus('✅ Service Workers soportados', 'success');
+        } else {
+            showStatus('❌ Service Workers no soportados en este navegador', 'error');
+        }
+    </script>
+</body>
+</html>

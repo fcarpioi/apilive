@@ -80,21 +80,21 @@ if (participantData.featured) {
 ```javascript
 // REEMPLAZAR líneas 48-55 con:
 switch (storyData.type) {
-  case 'ATHELETE_FINISHED':
+  case 'ATHLETE_FINISHED':
     console.log("🏁 Finalización - enviando a todos");
     await sendNotificationToAllUsers(storyData, participantData, {
       raceId, appId, eventId, participantId, storyId
     });
     break;
-    
-  case 'ATHELETE_STARTED':
+
+  case 'ATHLETE_STARTED':
     console.log("🚀 Inicio - enviando solo a seguidores");
     await sendNotificationToFollowers(participantId, storyData, participantData, {
       raceId, appId, eventId, participantId, storyId
     });
     break;
-    
-  case 'ATHELETE_CROSSED_TIMING_SPLIT':
+
+  case 'ATHLETE_CROSSED_TIMING_SPLIT':
     console.log("⏱️ Checkpoint - enviando solo a seguidores");
     await sendNotificationToFollowers(participantId, storyData, participantData, {
       raceId, appId, eventId, participantId, storyId

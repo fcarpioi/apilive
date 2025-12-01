@@ -141,13 +141,13 @@ function createNotificationPayload(storyData, participantData, storyInfo) {
   let eventType = 'pasó por un checkpoint';
   let emoji = '🏃';
   
-  if (storyData.type === 'ATHELETE_STARTED') {
+  if (storyData.type === 'ATHLETE_STARTED') {
     eventType = 'inició la carrera';
     emoji = '🚀';
-  } else if (storyData.type === 'ATHELETE_FINISHED') {
+  } else if (storyData.type === 'ATHLETE_FINISHED') {
     eventType = 'terminó la carrera';
     emoji = '🏁';
-  } else if (storyData.type === 'ATHELETE_CROSSED_TIMING_SPLIT') {
+  } else if (storyData.type === 'ATHLETE_CROSSED_TIMING_SPLIT') {
     const checkpoint = storyData.split_time?.checkpoint || 'checkpoint';
     eventType = `pasó por ${checkpoint}`;
     emoji = '⏱️';

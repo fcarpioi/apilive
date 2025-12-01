@@ -10,7 +10,7 @@ Este documento describe cómo el backend de AWS debe llamar al API de Firebase p
 
 ### **URL del Endpoint:**
 ```
-POST https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway/api/participant-checkpoint
+POST https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway/api/checkpoint-participant
 ```
 
 ### **API Key:**
@@ -31,18 +31,12 @@ application/json
 
 ```json
 {
-  "runnerId": "string",     // ID único del corredor
-  "raceId": "string",       // ID de la carrera
-  "eventId": "string",      // ID del evento
   "apiKey": "string",       // API key de autenticación
-  "data": {                 // Datos completos del participante
-    "id": "string",
-    "name": "string",
-    "fullname": "string",
-    "surname": "string",
-    "birthdate": "string",
-    "gender": "string",
-    "events": [
+  "id": "string",           // ID único del participante
+  "name": "string",
+  "surname": "string",
+  "fullname": "string",
+  "events": [
       {
         "status": "string",
         "realStatus": "string", 
@@ -99,7 +93,7 @@ application/json
     "extrafield3": "string",
     "extrafield4": "string",
     "extrafield5": "string"
-  }
+  ]
 }
 ```
 
@@ -109,17 +103,11 @@ application/json
 
 ```json
 {
-  "runnerId": "runner_12345",
-  "raceId": "madrid_marathon_2024",
-  "eventId": "marathon_42k",
   "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
-  "data": {
-    "id": "runner_12345",
-    "name": "María",
-    "fullname": "María García López",
-    "surname": "García López",
-    "birthdate": "1985-03-15",
-    "gender": "F",
+  "id": "runner_12345",
+  "name": "María",
+  "surname": "García López",
+  "fullname": "María García López",
     "events": [
       {
         "status": "running",
@@ -204,7 +192,7 @@ application/json
     "extrafield3": "",
     "extrafield4": "",
     "extrafield5": ""
-  }
+  ]
 }
 ```
 
@@ -295,17 +283,14 @@ application/json
 ## 🧪 **Testing con cURL**
 
 ```bash
-curl -X POST https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway/api/participant-checkpoint \
+curl -X POST https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway/api/checkpoint-participant \
   -H "Content-Type: application/json" \
   -d '{
-    "runnerId": "test_runner",
-    "raceId": "test_race",
-    "eventId": "test_event",
     "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
-    "data": {
-      "id": "test_runner",
-      "name": "Test Runner",
-      "fullname": "Test Runner Full",
+    "id": "test_runner",
+    "name": "Test Runner",
+    "surname": "Runner",
+    "fullname": "Test Runner Full",
       "events": [
         {
           "dorsal": "T001",
@@ -319,7 +304,6 @@ curl -X POST https://us-central1-live-copernico.cloudfunctions.net/liveApiGatewa
           }
         }
       ]
-    }
   }'
 ```
 
