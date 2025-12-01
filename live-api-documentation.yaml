@@ -596,6 +596,267 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/users:
+    post:
+      tags:
+        - Users
+      summary: Crear usuario
+      description: Crea un nuevo usuario en el sistema con un ID específico. Solo requiere el userId como parámetro inicial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  description: Identificador único del usuario (requerido)
+                  example: "user-123-abc"
+              required:
+                - userId
+      responses:
+        '201':
+          description: Usuario creado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Usuario creado exitosamente."
+                  userId:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      createdAt:
+                        type: string
+                      updatedAt:
+                        type: string
+                      status:
+                        type: string
+        '400':
+          description: Parámetros faltantes o usuario ya existe.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Users
+      summary: Listar usuarios
+      description: Obtiene una lista paginada de usuarios del sistema con filtros opcionales.
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Número máximo de usuarios a retornar.
+        - in: query
+          name: offset
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Número de usuarios a omitir (para paginación).
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [active, inactive, deleted, suspended]
+          description: Filtrar por estado del usuario.
+        - in: query
+          name: search
+          required: false
+          schema:
+            type: string
+          description: Buscar por nombre, email o ID de usuario.
+      responses:
+        '200':
+          description: Lista de usuarios obtenida exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      limit:
+                        type: integer
+                      offset:
+                        type: integer
+                      hasMore:
+                        type: boolean
+        '400':
+          description: Parámetros inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/users/{userId}:
+    put:
+      tags:
+        - Users
+      summary: Actualizar usuario
+      description: Actualiza la información completa de un usuario existente.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: Identificador del usuario a actualizar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profile:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "Juan"
+                    lastName:
+                      type: string
+                      example: "Pérez"
+                    email:
+                      type: string
+                      format: email
+                      example: "juan.perez@email.com"
+                    phone:
+                      type: string
+                      example: "+34612345678"
+                    avatar:
+                      type: string
+                      example: "https://example.com/avatar.jpg"
+                    birthdate:
+                      type: string
+                      format: date
+                      example: "1990-05-15"
+                    gender:
+                      type: string
+                      enum: [male, female, other]
+                      example: "male"
+                    preferences:
+                      type: object
+                      example: {"notifications": true, "language": "es"}
+                status:
+                  type: string
+                  enum: [active, inactive, suspended]
+                  example: "active"
+      responses:
+        '200':
+          description: Usuario actualizado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Usuario actualizado exitosamente."
+                  userId:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Parámetros inválidos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Usuario no encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Users
+      summary: Eliminar usuario
+      description: Elimina un usuario del sistema. Realiza soft delete marcando el usuario como inactivo y limpia datos relacionados.
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+          description: Identificador del usuario a eliminar.
+      responses:
+        '200':
+          description: Usuario eliminado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Usuario eliminado exitosamente."
+                  userId:
+                    type: string
+                  deletedAt:
+                    type: string
+                  cleanupSummary:
+                    type: object
+                    properties:
+                      raceTokensRemoved:
+                        type: integer
+                      globalTokensRemoved:
+                        type: integer
+                      followingsRemoved:
+                        type: integer
+        '404':
+          description: Usuario no encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/participant:
     get:
       tags:
@@ -1585,23 +1846,82 @@ components:
         id:
           type: string
           description: Identificador del usuario
-        email:
+        status:
           type: string
-          format: email
-          description: Email del usuario
-        name:
-          type: string
-          description: Nombre del usuario
+          enum: [active, inactive, deleted, suspended]
+          description: Estado del usuario
         profile:
           type: object
-          description: Información del perfil
+          properties:
+            name:
+              type: string
+              description: Nombre del usuario
+            lastName:
+              type: string
+              description: Apellido del usuario
+            email:
+              type: string
+              format: email
+              description: Email del usuario
+            phone:
+              type: string
+              description: Teléfono del usuario
+            avatar:
+              type: string
+              description: URL del avatar del usuario
+            birthdate:
+              type: string
+              format: date
+              description: Fecha de nacimiento
+            gender:
+              type: string
+              enum: [male, female, other]
+              description: Género del usuario
+            preferences:
+              type: object
+              description: Preferencias del usuario
+        createdAt:
+          type: string
+          format: date-time
+          description: Fecha de creación
+        updatedAt:
+          type: string
+          format: date-time
+          description: Fecha de última actualización
+        lastActiveAt:
+          type: string
+          format: date-time
+          description: Fecha de última actividad
+        fcmTokenUpdatedAt:
+          type: string
+          format: date-time
+          description: Fecha de última actualización del token FCM
+        hasToken:
+          type: boolean
+          description: Indica si el usuario tiene token FCM
+        platform:
+          type: string
+          enum: [android, ios, web]
+          description: Plataforma del dispositivo
       example:
         id: "user123"
-        email: "user@example.com"
-        name: "Jane Smith"
+        status: "active"
         profile:
+          name: "Jane"
+          lastName: "Smith"
+          email: "jane.smith@example.com"
+          phone: "+34612345678"
           avatar: "https://example.com/avatar.jpg"
-          preferences: {}
+          birthdate: "1990-05-15"
+          gender: "female"
+          preferences:
+            notifications: true
+            language: "es"
+        createdAt: "2024-01-15T10:30:00Z"
+        updatedAt: "2024-01-15T10:30:00Z"
+        lastActiveAt: "2024-01-15T10:30:00Z"
+        hasToken: true
+        platform: "ios"
 
     SearchParticipant:
       type: object

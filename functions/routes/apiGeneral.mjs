@@ -1040,6 +1040,594 @@ router.get("/user/profile", async (req, res) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/users:
+ *   post:
+ *     summary: Crear usuario
+ *     description: Crea un nuevo usuario en el sistema con un ID específico. Solo requiere el userId como parámetro inicial.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: Identificador único del usuario (requerido)
+ *                 example: "user-123-abc"
+ *             required:
+ *               - userId
+ *     responses:
+ *       '201':
+ *         description: Usuario creado exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Usuario creado exitosamente."
+ *                 userId:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     createdAt:
+ *                       type: string
+ *                     updatedAt:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *       '400':
+ *         description: Parámetros faltantes o usuario ya existe.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.post("/users", async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        message: "userId es obligatorio.",
+      });
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(userId);
+
+    // Verificar si el usuario ya existe
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      return res.status(400).json({
+        message: "El usuario ya existe.",
+        userId: userId
+      });
+    }
+
+    // Crear usuario básico
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const userData = {
+      id: userId,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      status: "active",
+      // Campos opcionales que se pueden agregar después
+      fcmToken: null,
+      fcmTokenUpdatedAt: null,
+      lastActiveAt: null,
+      deviceInfo: null,
+      profile: {
+        name: null,
+        lastName: null,
+        email: null,
+        phone: null,
+        avatar: null,
+        birthdate: null,
+        gender: null,
+        preferences: {}
+      }
+    };
+
+    await userRef.set(userData);
+
+    return res.status(201).json({
+      message: "Usuario creado exitosamente.",
+      userId: userId,
+      user: {
+        id: userId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: "active"
+      }
+    });
+  } catch (error) {
+    console.error("Error al crear usuario:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/users/{userId}:
+ *   put:
+ *     summary: Actualizar usuario
+ *     description: Actualiza la información completa de un usuario existente.
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador del usuario a actualizar.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               profile:
+ *                 type: object
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                     example: "Juan"
+ *                   lastName:
+ *                     type: string
+ *                     example: "Pérez"
+ *                   email:
+ *                     type: string
+ *                     format: email
+ *                     example: "juan.perez@email.com"
+ *                   phone:
+ *                     type: string
+ *                     example: "+34612345678"
+ *                   avatar:
+ *                     type: string
+ *                     example: "https://example.com/avatar.jpg"
+ *                   birthdate:
+ *                     type: string
+ *                     format: date
+ *                     example: "1990-05-15"
+ *                   gender:
+ *                     type: string
+ *                     enum: [male, female, other]
+ *                     example: "male"
+ *                   preferences:
+ *                     type: object
+ *                     example: {"notifications": true, "language": "es"}
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, suspended]
+ *                 example: "active"
+ *     responses:
+ *       '200':
+ *         description: Usuario actualizado exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Usuario actualizado exitosamente."
+ *                 userId:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *       '400':
+ *         description: Parámetros inválidos.
+ *       '404':
+ *         description: Usuario no encontrado.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.put("/users/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const updateData = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        message: "userId es obligatorio.",
+      });
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(userId);
+
+    // Verificar si el usuario existe
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({
+        message: "El usuario no existe.",
+        userId: userId
+      });
+    }
+
+    // Preparar datos de actualización
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const userUpdateData = {
+      ...updateData,
+      updatedAt: timestamp
+    };
+
+    // Si se actualiza el perfil, hacer merge con el perfil existente
+    if (updateData.profile) {
+      const currentData = userDoc.data();
+      userUpdateData.profile = {
+        ...currentData.profile,
+        ...updateData.profile
+      };
+    }
+
+    await userRef.update(userUpdateData);
+
+    // Obtener datos actualizados
+    const updatedDoc = await userRef.get();
+    const updatedData = updatedDoc.data();
+
+    return res.status(200).json({
+      message: "Usuario actualizado exitosamente.",
+      userId: userId,
+      user: {
+        id: userId,
+        ...updatedData,
+        createdAt: updatedData.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: updatedData.updatedAt?.toDate?.()?.toISOString() || null,
+        fcmTokenUpdatedAt: updatedData.fcmTokenUpdatedAt?.toDate?.()?.toISOString() || null,
+        lastActiveAt: updatedData.lastActiveAt?.toDate?.()?.toISOString() || null
+      }
+    });
+  } catch (error) {
+    console.error("Error al actualizar usuario:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/users/{userId}:
+ *   delete:
+ *     summary: Eliminar usuario
+ *     description: Elimina un usuario del sistema. Realiza soft delete marcando el usuario como inactivo y limpia datos relacionados.
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador del usuario a eliminar.
+ *     responses:
+ *       '200':
+ *         description: Usuario eliminado exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Usuario eliminado exitosamente."
+ *                 userId:
+ *                   type: string
+ *                 deletedAt:
+ *                   type: string
+ *                 cleanupSummary:
+ *                   type: object
+ *                   properties:
+ *                     raceTokensRemoved:
+ *                       type: integer
+ *                     globalTokensRemoved:
+ *                       type: integer
+ *                     followingsRemoved:
+ *                       type: integer
+ *       '404':
+ *         description: Usuario no encontrado.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.delete("/users/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        message: "userId es obligatorio.",
+      });
+    }
+
+    const db = admin.firestore();
+    const userRef = db.collection("users").doc(userId);
+
+    // Verificar si el usuario existe
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({
+        message: "El usuario no existe.",
+        userId: userId
+      });
+    }
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const deletedAt = new Date().toISOString();
+
+    // 1. Soft delete del usuario principal
+    await userRef.update({
+      status: "deleted",
+      deletedAt: timestamp,
+      updatedAt: timestamp,
+      // Limpiar datos sensibles
+      fcmToken: null,
+      fcmTokenUpdatedAt: null,
+      deviceInfo: null,
+      profile: {
+        name: "[DELETED]",
+        lastName: "[DELETED]",
+        email: null,
+        phone: null,
+        avatar: null,
+        birthdate: null,
+        gender: null,
+        preferences: {}
+      }
+    });
+
+    let cleanupSummary = {
+      raceTokensRemoved: 0,
+      globalTokensRemoved: 0,
+      followingsRemoved: 0
+    };
+
+    // 2. Limpiar tokens FCM por carrera (subcollection)
+    const raceTokensSnapshot = await db.collection('users').doc(userId)
+      .collection('race-tokens').get();
+
+    const raceTokensBatch = db.batch();
+    raceTokensSnapshot.docs.forEach(doc => {
+      raceTokensBatch.update(doc.ref, {
+        isActive: false,
+        deletedAt: timestamp
+      });
+      cleanupSummary.raceTokensRemoved++;
+    });
+
+    if (raceTokensSnapshot.docs.length > 0) {
+      await raceTokensBatch.commit();
+    }
+
+    // 3. Limpiar índices globales de tokens FCM
+    const globalTokensSnapshot = await db.collection('race-fcm-tokens')
+      .where('userId', '==', userId).get();
+
+    const globalTokensBatch = db.batch();
+    globalTokensSnapshot.docs.forEach(doc => {
+      globalTokensBatch.update(doc.ref, {
+        isActive: false,
+        deletedAt: timestamp
+      });
+      cleanupSummary.globalTokensRemoved++;
+    });
+
+    if (globalTokensSnapshot.docs.length > 0) {
+      await globalTokensBatch.commit();
+    }
+
+    // 4. Limpiar seguimientos del usuario
+    const followingsSnapshot = await db.collection('users').doc(userId)
+      .collection('followings').get();
+
+    const followingsBatch = db.batch();
+    followingsSnapshot.docs.forEach(doc => {
+      followingsBatch.delete(doc.ref);
+      cleanupSummary.followingsRemoved++;
+    });
+
+    if (followingsSnapshot.docs.length > 0) {
+      await followingsBatch.commit();
+    }
+
+    console.log(`🗑️ Usuario ${userId} eliminado. Cleanup:`, cleanupSummary);
+
+    return res.status(200).json({
+      message: "Usuario eliminado exitosamente.",
+      userId: userId,
+      deletedAt: deletedAt,
+      cleanupSummary: cleanupSummary
+    });
+  } catch (error) {
+    console.error("Error al eliminar usuario:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @openapi
+ * /api/users:
+ *   get:
+ *     summary: Listar usuarios
+ *     description: Obtiene una lista paginada de usuarios del sistema con filtros opcionales.
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *         description: Número máximo de usuarios a retornar.
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Número de usuarios a omitir (para paginación).
+ *       - in: query
+ *         name: status
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive, deleted, suspended]
+ *         description: Filtrar por estado del usuario.
+ *       - in: query
+ *         name: search
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Buscar por nombre, email o ID de usuario.
+ *     responses:
+ *       '200':
+ *         description: Lista de usuarios obtenida exitosamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       profile:
+ *                         type: object
+ *                       status:
+ *                         type: string
+ *                       createdAt:
+ *                         type: string
+ *                       updatedAt:
+ *                         type: string
+ *                       lastActiveAt:
+ *                         type: string
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     offset:
+ *                       type: integer
+ *                     hasMore:
+ *                       type: boolean
+ *       '400':
+ *         description: Parámetros inválidos.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.get("/users", async (req, res) => {
+  try {
+    const {
+      limit = 20,
+      offset = 0,
+      status = null,
+      search = null
+    } = req.query;
+
+    const limitNum = Math.min(parseInt(limit) || 20, 100);
+    const offsetNum = parseInt(offset) || 0;
+
+    const db = admin.firestore();
+    let query = db.collection("users");
+
+    // Filtrar por estado si se proporciona
+    if (status) {
+      query = query.where("status", "==", status);
+    }
+
+    // Ordenar por fecha de creación (más recientes primero)
+    query = query.orderBy("createdAt", "desc");
+
+    // Aplicar paginación
+    if (offsetNum > 0) {
+      // Para offset, necesitamos obtener todos los documentos hasta el offset
+      // En producción, sería mejor usar cursor-based pagination
+      query = query.limit(limitNum + offsetNum);
+    } else {
+      query = query.limit(limitNum);
+    }
+
+    const snapshot = await query.get();
+
+    // Procesar resultados
+    let users = [];
+    snapshot.docs.forEach(doc => {
+      const userData = doc.data();
+
+      // Aplicar filtro de búsqueda si se proporciona
+      if (search) {
+        const searchLower = search.toLowerCase();
+        const matchesId = doc.id.toLowerCase().includes(searchLower);
+        const matchesName = userData.profile?.name?.toLowerCase().includes(searchLower);
+        const matchesLastName = userData.profile?.lastName?.toLowerCase().includes(searchLower);
+        const matchesEmail = userData.profile?.email?.toLowerCase().includes(searchLower);
+
+        if (!matchesId && !matchesName && !matchesLastName && !matchesEmail) {
+          return; // Skip this user
+        }
+      }
+
+      users.push({
+        id: doc.id,
+        profile: userData.profile || {},
+        status: userData.status || "unknown",
+        createdAt: userData.createdAt?.toDate?.()?.toISOString() || null,
+        updatedAt: userData.updatedAt?.toDate?.()?.toISOString() || null,
+        lastActiveAt: userData.lastActiveAt?.toDate?.()?.toISOString() || null,
+        fcmTokenUpdatedAt: userData.fcmTokenUpdatedAt?.toDate?.()?.toISOString() || null,
+        hasToken: !!userData.fcmToken,
+        platform: userData.deviceInfo?.platform || null
+      });
+    });
+
+    // Aplicar offset manualmente si hay búsqueda
+    if (offsetNum > 0) {
+      users = users.slice(offsetNum, offsetNum + limitNum);
+    }
+
+    // Obtener total de usuarios para paginación
+    let totalQuery = db.collection("users");
+    if (status) {
+      totalQuery = totalQuery.where("status", "==", status);
+    }
+    const totalSnapshot = await totalQuery.count().get();
+    const total = totalSnapshot.data().count;
+
+    return res.status(200).json({
+      users: users,
+      pagination: {
+        total: total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: (offsetNum + limitNum) < total,
+        returned: users.length
+      }
+    });
+  } catch (error) {
+    console.error("Error al listar usuarios:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
+  }
+});
 
 /**
  * @openapi

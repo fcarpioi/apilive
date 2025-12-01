@@ -523,6 +523,119 @@
 			]
 		},
 		{
+			"name": "👤 Gestión de Usuarios",
+			"item": [
+				{
+					"name": "Crear Usuario",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"user-test-001\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"]
+						},
+						"description": "Crear un nuevo usuario con un ID específico. Solo requiere userId como parámetro inicial."
+					}
+				},
+				{
+					"name": "Listar Usuarios",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users?limit=10&offset=0&status=active",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"],
+							"query": [
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "0"},
+								{"key": "status", "value": "active"}
+							]
+						},
+						"description": "Obtener lista paginada de usuarios con filtros opcionales."
+					}
+				},
+				{
+					"name": "Buscar Usuarios",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users?search=juan&limit=5",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users"],
+							"query": [
+								{"key": "search", "value": "juan"},
+								{"key": "limit", "value": "5"}
+							]
+						},
+						"description": "Buscar usuarios por nombre, email o ID."
+					}
+				},
+				{
+					"name": "Obtener Perfil de Usuario",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/user/profile?userId={{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "user", "profile"],
+							"query": [
+								{"key": "userId", "value": "{{userId}}"}
+							]
+						},
+						"description": "Obtener el perfil completo de un usuario específico."
+					}
+				},
+				{
+					"name": "Actualizar Usuario",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"profile\": {\n    \"name\": \"Juan\",\n    \"lastName\": \"Pérez\",\n    \"email\": \"juan.perez@email.com\",\n    \"phone\": \"+34612345678\",\n    \"birthdate\": \"1990-05-15\",\n    \"gender\": \"male\",\n    \"preferences\": {\n      \"notifications\": true,\n      \"language\": \"es\"\n    }\n  },\n  \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "{{userId}}"]
+						},
+						"description": "Actualizar información completa de un usuario existente."
+					}
+				},
+				{
+					"name": "Eliminar Usuario",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/users/{{userId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "users", "{{userId}}"]
+						},
+						"description": "Eliminar usuario (soft delete). Marca como inactivo y limpia datos relacionados."
+					}
+				}
+			]
+		},
+		{
 			"name": "📱 Apps & Companies",
 			"item": [
 				{
