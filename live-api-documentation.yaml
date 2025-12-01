@@ -360,7 +360,7 @@ paths:
       tags:
         - Social
       summary: Dar like a una historia
-      description: Agrega un like a una historia de un participante en un evento. MIGRADO para nueva estructura.
+      description: Agrega un like a una historia de un participante en un evento. MIGRADO para nueva estructura races/apps/events.
       requestBody:
         required: true
         content:
@@ -372,6 +372,10 @@ paths:
                   type: string
                   description: Identificador de la carrera (NUEVO - requerido)
                   example: "race123"
+                appId:
+                  type: string
+                  description: Identificador de la aplicación (NUEVO - requerido)
+                  example: "app456"
                 eventId:
                   type: string
                   example: "marathon2024"
@@ -386,6 +390,7 @@ paths:
                   example: "user123"
               required:
                 - raceId
+                - appId
                 - eventId
                 - participantId
                 - storyId
@@ -407,6 +412,8 @@ paths:
                     type: string
                   raceId:
                     type: string
+                  appId:
+                    type: string
                   eventId:
                     type: string
                   participantId:
@@ -414,7 +421,7 @@ paths:
                   storyId:
                     type: string
         '400':
-          description: Parámetros faltantes.
+          description: Parámetros faltantes o el usuario ya dio like.
           content:
             application/json:
               schema:
@@ -437,7 +444,7 @@ paths:
       tags:
         - Social
       summary: Contar likes de un participante
-      description: Retorna el total de likes de un participante en un evento. MIGRADO para nueva estructura.
+      description: Retorna el total de likes de un participante en un evento. MIGRADO para nueva estructura races/apps/events.
       parameters:
         - in: query
           name: raceId
@@ -446,6 +453,13 @@ paths:
             type: string
           description: Identificador de la carrera (NUEVO - requerido).
           example: "race123"
+        - in: query
+          name: appId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la aplicación (NUEVO - requerido).
+          example: "app456"
         - in: query
           name: eventId
           required: true
@@ -472,6 +486,8 @@ paths:
                     type: string
                   raceId:
                     type: string
+                  appId:
+                    type: string
                   eventId:
                     type: string
                   totalLikes:
@@ -485,6 +501,90 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Participante no encontrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/unlike:
+    post:
+      tags:
+        - Social
+      summary: Quitar like de una historia
+      description: Elimina un like de una historia de un participante en un evento. Usa la nueva estructura races/apps/events.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                raceId:
+                  type: string
+                  description: Identificador de la carrera (requerido)
+                  example: "race123"
+                appId:
+                  type: string
+                  description: Identificador de la aplicación (requerido)
+                  example: "app456"
+                eventId:
+                  type: string
+                  example: "marathon2024"
+                participantId:
+                  type: string
+                  example: "participant456"
+                storyId:
+                  type: string
+                  example: "story789"
+                userId:
+                  type: string
+                  example: "user123"
+              required:
+                - raceId
+                - appId
+                - eventId
+                - participantId
+                - storyId
+                - userId
+      responses:
+        '200':
+          description: Like eliminado correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Like eliminado correctamente."
+                  likeId:
+                    type: string
+                  userId:
+                    type: string
+                  raceId:
+                    type: string
+                  appId:
+                    type: string
+                  eventId:
+                    type: string
+                  participantId:
+                    type: string
+                  storyId:
+                    type: string
+        '400':
+          description: Parámetros faltantes o el usuario no había dado like.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: La historia no existe.
           content:
             application/json:
               schema:

@@ -427,7 +427,7 @@ router.post("/unfollow", async (req, res) => {
  * /api/like:
  *   post:
  *     summary: Dar like a una historia
- *     description: Agrega un like a una historia de un participante en un evento. MIGRADO para nueva estructura.
+ *     description: Agrega un like a una historia de un participante en un evento. MIGRADO para nueva estructura races/apps/events.
  *     requestBody:
  *       required: true
  *       content:
@@ -438,6 +438,9 @@ router.post("/unfollow", async (req, res) => {
  *               raceId:
  *                 type: string
  *                 description: Identificador de la carrera (NUEVO - requerido)
+ *               appId:
+ *                 type: string
+ *                 description: Identificador de la aplicación (NUEVO - requerido)
  *               eventId:
  *                 type: string
  *               participantId:
@@ -448,6 +451,7 @@ router.post("/unfollow", async (req, res) => {
  *                 type: string
  *             required:
  *               - raceId
+ *               - appId
  *               - eventId
  *               - participantId
  *               - storyId
@@ -464,31 +468,53 @@ router.post("/unfollow", async (req, res) => {
  */
 router.post("/like", async (req, res) => {
   try {
-    const { raceId, eventId, participantId, storyId, userId } = req.body;
-    if (!raceId || !eventId || !participantId || !storyId || !userId) {
+    const { raceId, appId, eventId, participantId, storyId, userId } = req.body;
+    if (!raceId || !appId || !eventId || !participantId || !storyId || !userId) {
       return res.status(400).json({
-        message: "raceId, eventId, participantId, storyId y userId son obligatorios.",
+        message: "raceId, appId, eventId, participantId, storyId y userId son obligatorios.",
       });
     }
     const db = admin.firestore();
+
+    // Usar la estructura correcta: races/apps/events/participants/stories
     const storyRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
       .collection("events").doc(eventId)
       .collection("participants").doc(participantId)
       .collection("stories").doc(storyId);
+
     const storyDoc = await storyRef.get();
     if (!storyDoc.exists) {
-      return res.status(404).json({ message: "La historia no existe." });
+      return res.status(404).json({
+        message: "La historia no existe.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+      });
     }
+
+    // Verificar si el usuario ya dio like a esta historia
+    const existingLike = await storyRef.collection("likes")
+      .where("userId", "==", userId)
+      .get();
+
+    if (!existingLike.empty) {
+      return res.status(400).json({
+        message: "El usuario ya dio like a esta historia.",
+        likeId: existingLike.docs[0].id
+      });
+    }
+
     const likeRef = storyRef.collection("likes").doc();
     await likeRef.set({
       userId,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
+
     return res.status(200).json({
       message: "Like agregado correctamente.",
       likeId: likeRef.id,
       userId,
       raceId,
+      appId,
       eventId,
       participantId,
       storyId,
@@ -504,7 +530,7 @@ router.post("/like", async (req, res) => {
  * /api/likes/count:
  *   get:
  *     summary: Contar likes de un participante
- *     description: Retorna el total de likes de un participante en un evento. MIGRADO para nueva estructura.
+ *     description: Retorna el total de likes de un participante en un evento. MIGRADO para nueva estructura races/apps/events.
  *     parameters:
  *       - in: query
  *         name: raceId
@@ -512,6 +538,12 @@ router.post("/like", async (req, res) => {
  *         schema:
  *           type: string
  *         description: Identificador de la carrera (NUEVO - requerido).
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador de la aplicación (NUEVO - requerido).
  *       - in: query
  *         name: eventId
  *         required: true
@@ -534,6 +566,10 @@ router.post("/like", async (req, res) => {
  *               properties:
  *                 participantId:
  *                   type: string
+ *                 raceId:
+ *                   type: string
+ *                 appId:
+ *                   type: string
  *                 eventId:
  *                   type: string
  *                 totalLikes:
@@ -548,23 +584,34 @@ router.post("/like", async (req, res) => {
  */
 router.get("/likes/count", async (req, res) => {
   try {
-    const { raceId, eventId, participantId } = req.query;
-    if (!raceId || !eventId || !participantId) {
+    const { raceId, appId, eventId, participantId } = req.query;
+    if (!raceId || !appId || !eventId || !participantId) {
       return res.status(400).json({
-        message: "raceId, eventId y participantId son obligatorios.",
+        message: "raceId, appId, eventId y participantId son obligatorios.",
       });
     }
     const db = admin.firestore();
-    const participantRef = db.collection("races").doc(raceId).collection("events").doc(eventId).collection("participants").doc(participantId);
+
+    // Usar la estructura correcta: races/apps/events/participants
+    const participantRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants").doc(participantId);
+
     const participantDoc = await participantRef.get();
     if (!participantDoc.exists) {
-      return res.status(404).json({ message: "El participante no existe en este evento." });
+      return res.status(404).json({
+        message: "El participante no existe en este evento.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
+      });
     }
+
     let totalLikes = 0;
     const storiesSnapshot = await participantRef.collection("stories").get();
     if (storiesSnapshot.empty) {
-      return res.status(200).json({ raceId, participantId, eventId, totalLikes: 0 });
+      return res.status(200).json({ raceId, appId, participantId, eventId, totalLikes: 0 });
     }
+
     const likeCounts = await Promise.all(
       storiesSnapshot.docs.map(async (storyDoc) => {
         const likesSnapshot = await storyDoc.ref.collection("likes").get();
@@ -572,9 +619,115 @@ router.get("/likes/count", async (req, res) => {
       })
     );
     totalLikes = likeCounts.reduce((sum, count) => sum + count, 0);
-    return res.status(200).json({ raceId, participantId, eventId, totalLikes });
+
+    return res.status(200).json({
+      raceId,
+      appId,
+      participantId,
+      eventId,
+      totalLikes
+    });
   } catch (error) {
     console.error("Error al contar los likes:", error);
+    return res.status(500).json({ message: "Error interno del servidor", error: error.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/unlike:
+ *   post:
+ *     summary: Quitar like de una historia
+ *     description: Elimina un like de una historia de un participante en un evento. Usa la nueva estructura races/apps/events.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: Identificador de la carrera (requerido)
+ *               appId:
+ *                 type: string
+ *                 description: Identificador de la aplicación (requerido)
+ *               eventId:
+ *                 type: string
+ *               participantId:
+ *                 type: string
+ *               storyId:
+ *                 type: string
+ *               userId:
+ *                 type: string
+ *             required:
+ *               - raceId
+ *               - appId
+ *               - eventId
+ *               - participantId
+ *               - storyId
+ *               - userId
+ *     responses:
+ *       '200':
+ *         description: Like eliminado correctamente.
+ *       '400':
+ *         description: Parámetros faltantes o el usuario no había dado like.
+ *       '404':
+ *         description: La historia no existe.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.post("/unlike", async (req, res) => {
+  try {
+    const { raceId, appId, eventId, participantId, storyId, userId } = req.body;
+    if (!raceId || !appId || !eventId || !participantId || !storyId || !userId) {
+      return res.status(400).json({
+        message: "raceId, appId, eventId, participantId, storyId y userId son obligatorios.",
+      });
+    }
+    const db = admin.firestore();
+
+    // Usar la estructura correcta: races/apps/events/participants/stories
+    const storyRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants").doc(participantId)
+      .collection("stories").doc(storyId);
+
+    const storyDoc = await storyRef.get();
+    if (!storyDoc.exists) {
+      return res.status(404).json({
+        message: "La historia no existe.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+      });
+    }
+
+    // Buscar el like del usuario
+    const existingLike = await storyRef.collection("likes")
+      .where("userId", "==", userId)
+      .get();
+
+    if (existingLike.empty) {
+      return res.status(400).json({
+        message: "El usuario no había dado like a esta historia."
+      });
+    }
+
+    // Eliminar el like
+    await existingLike.docs[0].ref.delete();
+
+    return res.status(200).json({
+      message: "Like eliminado correctamente.",
+      likeId: existingLike.docs[0].id,
+      userId,
+      raceId,
+      appId,
+      eventId,
+      participantId,
+      storyId,
+    });
+  } catch (error) {
+    console.error("Error al eliminar like:", error);
     return res.status(500).json({ message: "Error interno del servidor", error: error.message });
   }
 });

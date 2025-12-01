@@ -439,7 +439,7 @@
 		},
 
 		{
-			"name": "👥 Seguimientos",
+			"name": "👥 Social (Seguimientos & Likes)",
 			"item": [
 				{
 					"name": "Get User Following",
@@ -455,6 +455,69 @@
 							]
 						},
 						"description": "Obtener lista de participantes seguidos por un usuario"
+					}
+				},
+				{
+					"name": "Dar Like a Historia",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"storyId\": \"{{storyId}}\",\n  \"userId\": \"{{userId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/like",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "like"]
+						},
+						"description": "Agregar un like a una historia específica. MIGRADO para nueva estructura races/apps/events."
+					}
+				},
+				{
+					"name": "Quitar Like de Historia",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"storyId\": \"{{storyId}}\",\n  \"userId\": \"{{userId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/unlike",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "unlike"]
+						},
+						"description": "Eliminar un like de una historia específica. Usa la nueva estructura races/apps/events."
+					}
+				},
+				{
+					"name": "Contar Likes de Participante",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/likes/count?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&participantId={{participantId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "likes", "count"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "participantId", "value": "{{participantId}}"}
+							]
+						},
+						"description": "Obtener el total de likes de todas las historias de un participante. MIGRADO para nueva estructura races/apps/events."
 					}
 				}
 			]
