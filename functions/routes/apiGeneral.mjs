@@ -3049,6 +3049,12 @@ router.post("/migrate-participants", async (req, res) => {
  *   post:
  *     summary: Webhook para recibir datos de checkpoint de participantes (Integración Copernico)
  *     description: Recibe información cuando un participante pasa por un punto de control, obtiene datos de Copernico API y actualiza la base de datos
+ *     parameters:
+ *       - in: header
+ *         name: apiKey
+ *         schema:
+ *           type: string
+ *         description: API key para autenticación (alternativa al body)
  *     requestBody:
  *       required: true
  *       content:
@@ -3074,7 +3080,11 @@ router.post("/migrate-participants", async (req, res) => {
  *                     description: Punto de control
  *               apiKey:
  *                 type: string
- *                 description: API key para autenticación
+ *                 description: API key para autenticación (alternativa al header)
+ *             required:
+ *               - competitionId
+ *               - type
+ *               - participantId
  *     responses:
  *       '200':
  *         description: Datos procesados exitosamente
@@ -3091,7 +3101,7 @@ router.post("/checkpoint-participant", async (req, res) => {
   try {
     console.log("🎯 Webhook checkpoint Copernico recibido:", JSON.stringify(req.body, null, 2));
 
-    const { competitionId, type, participantId, extraData, apiKey } = req.body;
+    const { competitionId, type, participantId, extraData, apiKey: bodyApiKey } = req.body;
 
     // Validaciones básicas
     if (!competitionId || !participantId || !type) {
@@ -3114,11 +3124,17 @@ router.post("/checkpoint-participant", async (req, res) => {
     }
 
     // Validar API Key para autenticación máquina-a-máquina
+    // Aceptar API key tanto en header como en body para flexibilidad
+    const headerApiKey = req.headers.apikey || req.headers.apiKey || req.headers['api-key'];
+    const apiKey = bodyApiKey || headerApiKey;
     const expectedApiKey = process.env.WEBHOOK_API_KEY || "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0";
 
     if (!apiKey || apiKey !== expectedApiKey) {
-      console.error("❌ API key inválida");
-      return res.status(401).json({ error: "API key inválida" });
+      console.error("❌ API key inválida. Recibida:", apiKey ? "***" + apiKey.slice(-4) : "null");
+      return res.status(401).json({
+        error: "API key inválida",
+        hint: "Envía la API key en el header 'apiKey' o en el body como 'apiKey'"
+      });
     }
 
     console.log(`📋 Procesando evento ${type} para participante: ${participantId} en competición: ${competitionId}`);
