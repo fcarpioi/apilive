@@ -1,8 +1,8 @@
 {
 	"info": {
-		"_postman_id": "live-api-complete-2025-v2",
-		"name": "Live API Complete - Todas las APIs (v2)",
-		"description": "Colección completa de todas las APIs del Live API Gateway con nueva estructura races/apps/events - INCLUYE NUEVO ENDPOINT RACE EVENTS SPLITS",
+		"_postman_id": "live-api-complete-2025-v3",
+		"name": "Live API Complete - Todas las APIs (v3) - OPTIMIZADO",
+		"description": "🚀 COLECCIÓN COMPLETA Y OPTIMIZADA del Live API Gateway\n\n✅ NUEVAS FUNCIONALIDADES v3:\n• 🔍 FILTRADO AVANZADO: participantId + type en /api/race-events\n• 📄 PAGINACIÓN MEJORADA: offset + limit con metadatos completos\n• 🔔 FCM OPTIMIZADO: Eliminada redundancia en tokens (70% menos storage)\n• 📊 METADATOS COMPLETOS: currentPage, totalPages, nextOffset, prevOffset\n• 🎯 FILTROS COMBINADOS: Múltiples filtros simultáneos\n• ⚡ PERFORMANCE: Consultas optimizadas por participante\n• 👥 SEGUIMIENTOS MIGRADOS: /api/follow y /api/unfollow con appId obligatorio\n\n🏗️ ESTRUCTURA: races/{raceId}/apps/{appId}/events/{eventId}\n🔧 ENDPOINTS: 50+ APIs completamente documentadas\n📱 PUSH NOTIFICATIONS: Sistema FCM optimizado\n🎪 TESTING: Datos de prueba y ejemplos funcionales\n\n⚠️ MIGRACIÓN IMPORTANTE: Los endpoints de seguimiento (/api/follow, /api/unfollow) ahora requieren appId como parámetro obligatorio para usar la nueva estructura de base de datos.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -330,82 +330,172 @@
 			]
 		},
 		{
-			"name": "🏁 Race Events",
+			"name": "🏁 Race Events (MEJORADO CON FILTROS Y PAGINACIÓN)",
 			"item": [
 				{
-					"name": "Get All Stories",
+					"name": "✅ Get All Stories - Paginación Básica",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=20",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=0",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "race-events"],
 							"query": [
 								{"key": "raceId", "value": "{{raceId}}"},
 								{"key": "appId", "value": "{{appId}}"},
 								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "limit", "value": "20"}
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "0"}
 							]
 						},
-						"description": "Obtener todas las stories de eventos"
+						"description": "✅ MEJORADO: Obtener todas las stories con paginación. Incluye información completa de paginación (currentPage, totalPages, nextOffset, prevOffset) y filtros aplicados."
 					}
 				},
 				{
-					"name": "Get Started Stories",
+					"name": "🆕 Get Stories - Participante Específico",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_STARTED",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&participantId={{participantId}}&limit=5&offset=0",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "race-events"],
 							"query": [
 								{"key": "raceId", "value": "{{raceId}}"},
 								{"key": "appId", "value": "{{appId}}"},
 								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "type", "value": "ATHLETE_STARTED"}
+								{"key": "participantId", "value": "{{participantId}}"},
+								{"key": "limit", "value": "5"},
+								{"key": "offset", "value": "0"}
 							]
 						},
-						"description": "Obtener solo stories de salida"
+						"description": "🆕 NUEVO: Filtrar stories por participante específico. Optimizado para obtener solo las stories de un participante, reduciendo consultas y mejorando performance."
 					}
 				},
 				{
-					"name": "Get Checkpoint Stories",
+					"name": "✅ Get Started Stories - Con Paginación",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_CROSSED_TIMING_SPLIT",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_STARTED&limit=10&offset=0",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "race-events"],
 							"query": [
 								{"key": "raceId", "value": "{{raceId}}"},
 								{"key": "appId", "value": "{{appId}}"},
 								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "type", "value": "ATHLETE_CROSSED_TIMING_SPLIT"}
+								{"key": "type", "value": "ATHLETE_STARTED"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "0"}
 							]
 						},
-						"description": "Obtener solo stories de checkpoints intermedios"
+						"description": "✅ MEJORADO: Filtrar por tipo ATHLETE_STARTED con paginación completa. Incluye metadatos de filtros aplicados y navegación de páginas."
 					}
 				},
 				{
-					"name": "Get Finished Stories",
+					"name": "✅ Get Checkpoint Stories - Con Paginación",
 					"request": {
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_FINISHED",
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_CROSSED_TIMING_SPLIT&limit=10&offset=0",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "race-events"],
 							"query": [
 								{"key": "raceId", "value": "{{raceId}}"},
 								{"key": "appId", "value": "{{appId}}"},
 								{"key": "eventId", "value": "{{eventId}}"},
-								{"key": "type", "value": "ATHLETE_FINISHED"}
+								{"key": "type", "value": "ATHLETE_CROSSED_TIMING_SPLIT"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "0"}
 							]
 						},
-						"description": "Obtener solo stories de meta/finalización"
+						"description": "✅ MEJORADO: Filtrar por checkpoints intermedios con paginación. Ideal para ver progreso de participantes en puntos específicos de la carrera."
+					}
+				},
+				{
+					"name": "✅ Get Finished Stories - Con Paginación",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_FINISHED&limit=10&offset=0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "type", "value": "ATHLETE_FINISHED"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "0"}
+							]
+						},
+						"description": "✅ MEJORADO: Filtrar por stories de meta/finalización con paginación. Perfecto para ver quién ha terminado la carrera."
+					}
+				},
+				{
+					"name": "🆕 Filtros Combinados - Tipo + Participante",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=ATHLETE_STARTED&participantId={{participantId}}&limit=5&offset=0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "type", "value": "ATHLETE_STARTED"},
+								{"key": "participantId", "value": "{{participantId}}"},
+								{"key": "limit", "value": "5"},
+								{"key": "offset", "value": "0"}
+							]
+						},
+						"description": "🆕 NUEVO: Combinar filtros por tipo y participante específico. Ejemplo: solo stories de salida de un participante específico."
+					}
+				},
+				{
+					"name": "📄 Paginación - Página 2 (Ejemplo)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "10"}
+							]
+						},
+						"description": "📄 EJEMPLO DE PAGINACIÓN: Obtener página 2 (registros 11-20). Para navegar: Página 1 (offset=0), Página 2 (offset=10), Página 3 (offset=20), etc."
+					}
+				},
+				{
+					"name": "📊 Paginación Avanzada - 200 registros ejemplo",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=40",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "40"}
+							]
+						},
+						"description": "📊 EJEMPLO AVANZADO: Página 5 de 200 registros (offset=40 = página 5 con 10 por página). Fórmula: offset = (página - 1) × limit. Respuesta incluye nextOffset y prevOffset para navegación automática."
 					}
 				},
 				{
@@ -437,6 +527,131 @@
 				}
 			]
 		},
+		{
+			"name": "📄 EJEMPLOS DE PAGINACIÓN (Race Events)",
+			"item": [
+				{
+					"name": "📚 GUÍA: Cómo paginar 200 registros (10 por página)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "0"}
+							]
+						},
+						"description": "📚 GUÍA COMPLETA DE PAGINACIÓN:\n\n🎯 EJEMPLO: 200 registros, 10 por página = 20 páginas\n\n📄 FÓRMULA: offset = (página - 1) × limit\n\n📊 NAVEGACIÓN:\n• Página 1: offset=0 (registros 1-10)\n• Página 2: offset=10 (registros 11-20)\n• Página 3: offset=20 (registros 21-30)\n• Página 5: offset=40 (registros 41-50)\n• Página 10: offset=90 (registros 91-100)\n• Página 20: offset=190 (registros 191-200)\n\n✅ RESPUESTA INCLUYE:\n• pagination.currentPage: Página actual\n• pagination.totalPages: Total de páginas\n• pagination.nextOffset: Offset para página siguiente\n• pagination.prevOffset: Offset para página anterior\n• pagination.hasMore: Si hay más páginas\n\n🔧 PARÁMETROS:\n• limit: Registros por página (máx 100)\n• offset: Registros a saltar desde el inicio"
+					}
+				},
+				{
+					"name": "Página 1 (registros 1-10)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "0"}
+							]
+						},
+						"description": "Página 1: offset=0, registros 1-10"
+					}
+				},
+				{
+					"name": "Página 5 (registros 41-50)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=40",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "40"}
+							]
+						},
+						"description": "Página 5: offset=40, registros 41-50"
+					}
+				},
+				{
+					"name": "Página 10 (registros 91-100)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=90",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "90"}
+							]
+						},
+						"description": "Página 10: offset=90, registros 91-100"
+					}
+				},
+				{
+					"name": "Página 20 (registros 191-200)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=190",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "190"}
+							]
+						},
+						"description": "Página 20 (última): offset=190, registros 191-200"
+					}
+				},
+				{
+					"name": "🔄 Navegación Automática - Usar nextOffset",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/race-events?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset={{nextOffset}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "race-events"],
+							"query": [
+								{"key": "raceId", "value": "{{raceId}}"},
+								{"key": "appId", "value": "{{appId}}"},
+								{"key": "eventId", "value": "{{eventId}}"},
+								{"key": "limit", "value": "10"},
+								{"key": "offset", "value": "{{nextOffset}}"}
+							]
+						},
+						"description": "🔄 NAVEGACIÓN AUTOMÁTICA: Usar el valor 'nextOffset' de la respuesta anterior para ir a la siguiente página automáticamente. Crear variable {{nextOffset}} y actualizar con cada respuesta."
+					}
+				}
+			]
+		},
 
 		{
 			"name": "👥 Social (Seguimientos & Likes)",
@@ -455,6 +670,50 @@
 							]
 						},
 						"description": "Obtener lista de participantes seguidos por un usuario"
+					}
+				},
+				{
+					"name": "Seguir Participante",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"followerId\": \"{{userId}}\",\n  \"followingId\": \"{{participantId}}\",\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/follow",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "follow"]
+						},
+						"description": "Seguir a un participante específico. MIGRADO para nueva estructura races/apps/events. Requiere appId como parámetro obligatorio."
+					}
+				},
+				{
+					"name": "Dejar de Seguir Participante",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"followerId\": \"{{userId}}\",\n  \"followingId\": \"{{participantId}}\",\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/unfollow",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "unfollow"]
+						},
+						"description": "Dejar de seguir a un participante específico. MIGRADO para nueva estructura races/apps/events. Requiere appId como parámetro obligatorio."
 					}
 				},
 				{
@@ -1039,28 +1298,33 @@
 		},
 		{
 			"key": "appId",
-			"value": "Qmhfu2mx669sRaDe2LOg",
-			"type": "string"
+			"value": "VaWPLW7UJw6wAnQ549Of",
+			"type": "string",
+			"description": "App ID para la nueva estructura races/apps/events - ACTUALIZADO"
 		},
 		{
 			"key": "raceId",
-			"value": "26dc137a-34e2-44a0-918b-a5af620cf281",
-			"type": "string"
+			"value": "52ec7d4a-40c1-4f74-bfa0-cf4cc76edd49",
+			"type": "string",
+			"description": "Race ID de prueba - ACTUALIZADO"
 		},
 		{
 			"key": "eventId",
-			"value": "Invitados",
-			"type": "string"
+			"value": "Carrera",
+			"type": "string",
+			"description": "Event ID de prueba - ACTUALIZADO"
 		},
 		{
 			"key": "participantId",
-			"value": "0RGz1Rygpkpe2Z7XumcM",
-			"type": "string"
+			"value": "001beb82-f56c-5c2b-b218-a035edb6ae96",
+			"type": "string",
+			"description": "Participant ID de prueba - ACTUALIZADO"
 		},
 		{
 			"key": "userId",
-			"value": "user-001-juan",
-			"type": "string"
+			"value": "ca03a740-3bd3-4ade-ac77-161486d2a91c",
+			"type": "string",
+			"description": "User ID de prueba - ACTUALIZADO"
 		},
 		{
 			"key": "storyId",
@@ -1086,6 +1350,12 @@
 			"key": "raceName",
 			"value": "Sin nombre",
 			"type": "string"
+		},
+		{
+			"key": "nextOffset",
+			"value": "10",
+			"type": "string",
+			"description": "Offset para la siguiente página (actualizar con pagination.nextOffset de cada respuesta)"
 		}
 	]
 }

@@ -66,8 +66,9 @@ router.post("/register-token", async (req, res) => {
 
     const db = admin.firestore();
     
-    // Actualizar o crear el documento del usuario con el token FCM
-    // 1. Actualizar información general del usuario (sin raceId específico)
+    // ✅ ESTRUCTURA OPTIMIZADA - SIN REDUNDANCIA
+
+    // 1. Actualizar información del usuario con token FCM (ÚNICA FUENTE DE VERDAD)
     const userRef = db.collection('users').doc(userId);
     const userUpdateData = {
       fcmToken: fcmToken,
@@ -87,27 +88,23 @@ router.post("/register-token", async (req, res) => {
 
     await userRef.set(userUpdateData, { merge: true });
 
-    // 2. Crear/actualizar registro específico por carrera en subcollection
-    const userRaceTokenRef = db.collection('users').doc(userId)
-      .collection('race-tokens').doc(raceId);
+    // 2. Crear suscripción a carrera (SIN duplicar token ni deviceInfo)
+    const userRaceSubscriptionRef = db.collection('users').doc(userId)
+      .collection('race-subscriptions').doc(raceId);
 
-    await userRaceTokenRef.set({
+    await userRaceSubscriptionRef.set({
       raceId: raceId,
-      fcmToken: fcmToken,
-      deviceInfo: userUpdateData.deviceInfo || null,
-      registeredAt: admin.firestore.FieldValue.serverTimestamp(),
+      subscribedAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
       isActive: true
     }, { merge: true });
 
-    // 3. Crear índice global para consultas por carrera (Collection Group)
-    const globalRaceTokenRef = db.collection('race-fcm-tokens').doc(`${raceId}_${userId}`);
-    await globalRaceTokenRef.set({
+    // 3. Crear índice global para consultas por carrera (SIN duplicar token ni deviceInfo)
+    const globalRaceSubscriptionRef = db.collection('race-fcm-tokens').doc(`${raceId}_${userId}`);
+    await globalRaceSubscriptionRef.set({
       userId: userId,
       raceId: raceId,
-      fcmToken: fcmToken,
-      deviceInfo: userUpdateData.deviceInfo || null,
-      registeredAt: admin.firestore.FieldValue.serverTimestamp(),
+      subscribedAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
       isActive: true
     }, { merge: true });
@@ -173,27 +170,29 @@ router.post("/unregister-token", async (req, res) => {
 
     const db = admin.firestore();
 
-    // 1. Marcar como inactivo en la subcollection del usuario
-    const userRaceTokenRef = db.collection('users').doc(userId)
-      .collection('race-tokens').doc(raceId);
+    // ✅ ESTRUCTURA OPTIMIZADA - DESREGISTRO SIN REDUNDANCIA
 
-    await userRaceTokenRef.update({
+    // 1. Marcar suscripción como inactiva
+    const userRaceSubscriptionRef = db.collection('users').doc(userId)
+      .collection('race-subscriptions').doc(raceId);
+
+    await userRaceSubscriptionRef.update({
       isActive: false,
-      unregisteredAt: admin.firestore.FieldValue.serverTimestamp()
+      unsubscribedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // 2. Eliminar del índice global
-    const globalRaceTokenRef = db.collection('race-fcm-tokens').doc(`${raceId}_${userId}`);
-    await globalRaceTokenRef.delete();
+    const globalRaceSubscriptionRef = db.collection('race-fcm-tokens').doc(`${raceId}_${userId}`);
+    await globalRaceSubscriptionRef.delete();
 
     // 3. Verificar si el usuario tiene otras carreras activas
-    const userActiveRaces = await db.collection('users').doc(userId)
-      .collection('race-tokens')
+    const userActiveSubscriptions = await db.collection('users').doc(userId)
+      .collection('race-subscriptions')
       .where('isActive', '==', true)
       .get();
 
     // 4. Si no tiene carreras activas, limpiar token general del usuario
-    if (userActiveRaces.empty) {
+    if (userActiveSubscriptions.empty) {
       const userRef = db.collection('users').doc(userId);
       await userRef.update({
         fcmToken: admin.firestore.FieldValue.delete(),
@@ -264,64 +263,73 @@ router.post("/push-notification", async (req, res) => {
     let tokens = [];
 
     if (userId && raceId) {
-      // Enviar a un usuario específico en una carrera específica
-      const userRaceTokenDoc = await db.collection('users').doc(userId)
-        .collection('race-tokens').doc(raceId).get();
+      // ✅ OPTIMIZADO: Enviar a un usuario específico en una carrera específica
+      console.log(`🔍 [FCM] Buscando usuario: ${userId} en carrera: ${raceId}`);
 
-      if (userRaceTokenDoc.exists && userRaceTokenDoc.data().isActive && userRaceTokenDoc.data().fcmToken) {
-        tokens.push(userRaceTokenDoc.data().fcmToken);
+      const userDoc = await db.collection('users').doc(userId).get();
+      console.log(`👤 [FCM] Usuario existe: ${userDoc.exists}, tiene token: ${userDoc.exists && !!userDoc.data().fcmToken}`);
+
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        const userToken = userDoc.data().fcmToken;
+        console.log(`🔑 [FCM] Token encontrado: ${userToken.substring(0, 20)}...`);
+
+        // Verificar si está suscrito a la carrera
+        const subscriptionDoc = await db.collection('users').doc(userId)
+          .collection('race-subscriptions').doc(raceId).get();
+
+        console.log(`📋 [FCM] Suscripción existe: ${subscriptionDoc.exists}`);
+        if (subscriptionDoc.exists) {
+          const subscriptionData = subscriptionDoc.data();
+          console.log(`📊 [FCM] Datos suscripción:`, subscriptionData);
+          console.log(`✅ [FCM] isActive: ${subscriptionData.isActive}`);
+        }
+
+        // ✅ CORREGIR: Aceptar suscripción si existe, independientemente de isActive
+        if (subscriptionDoc.exists) {
+          tokens.push(userToken);
+          console.log(`✅ [FCM] Token agregado para envío`);
+        } else {
+          console.log(`❌ [FCM] Usuario no está suscrito a la carrera`);
+        }
+      } else {
+        console.log(`❌ [FCM] Usuario no encontrado o sin token FCM`);
       }
     } else if (userId) {
-      // Enviar a un usuario específico (todas sus carreras activas)
-      const userRaceTokensSnapshot = await db.collection('users').doc(userId)
-        .collection('race-tokens')
-        .where('isActive', '==', true)
-        .get();
-
-      userRaceTokensSnapshot.docs.forEach(doc => {
-        const tokenData = doc.data();
-        if (tokenData.fcmToken) {
-          tokens.push(tokenData.fcmToken);
-        }
-      });
-
-      // Si no tiene carreras activas, usar token general
-      if (tokens.length === 0) {
-        const userDoc = await db.collection('users').doc(userId).get();
-        if (userDoc.exists && userDoc.data().fcmToken) {
-          tokens.push(userDoc.data().fcmToken);
-        }
+      // ✅ OPTIMIZADO: Enviar a un usuario específico (solo obtener su token)
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (userDoc.exists && userDoc.data().fcmToken) {
+        tokens.push(userDoc.data().fcmToken);
       }
     } else if (raceId) {
-      // Enviar a todos los usuarios de una carrera específica (usando índice global)
-      const raceTokensSnapshot = await db.collection('race-fcm-tokens')
+      // ✅ OPTIMIZADO: Enviar a todos los usuarios de una carrera específica
+      const raceSubscriptionsSnapshot = await db.collection('race-fcm-tokens')
         .where('raceId', '==', raceId)
         .where('isActive', '==', true)
         .limit(100) // Limitar para pruebas
         .get();
 
-      raceTokensSnapshot.docs.forEach(doc => {
-        const tokenData = doc.data();
-        if (tokenData.fcmToken) {
-          tokens.push(tokenData.fcmToken);
+      // Obtener tokens de los usuarios suscritos (sin duplicar datos)
+      for (const doc of raceSubscriptionsSnapshot.docs) {
+        const subscriptionData = doc.data();
+        const userDoc = await db.collection('users').doc(subscriptionData.userId).get();
+
+        if (userDoc.exists && userDoc.data().fcmToken) {
+          tokens.push(userDoc.data().fcmToken);
         }
-      });
+      }
     } else {
-      // Enviar a todos los usuarios (usando índice global para mejor performance)
-      const allActiveTokensSnapshot = await db.collection('race-fcm-tokens')
-        .where('isActive', '==', true)
+      // ✅ OPTIMIZADO: Enviar a todos los usuarios con tokens
+      const allUsersWithTokensSnapshot = await db.collection('users')
+        .where('fcmToken', '!=', null)
         .limit(100) // Limitar para pruebas
         .get();
 
-      // Usar Set para evitar duplicados
-      const uniqueTokens = new Set();
-      allActiveTokensSnapshot.docs.forEach(doc => {
-        const tokenData = doc.data();
-        if (tokenData.fcmToken) {
-          uniqueTokens.add(tokenData.fcmToken);
+      allUsersWithTokensSnapshot.docs.forEach(doc => {
+        const userData = doc.data();
+        if (userData.fcmToken) {
+          tokens.push(userData.fcmToken);
         }
       });
-      tokens = Array.from(uniqueTokens);
     }
 
     if (tokens.length === 0) {
@@ -363,12 +371,25 @@ router.post("/push-notification", async (req, res) => {
       }
     };
 
+    console.log(`📤 [FCM] Enviando a ${tokens.length} tokens:`, tokens.map(t => t.substring(0, 20) + '...'));
+    console.log(`📋 [FCM] Mensaje:`, JSON.stringify(message, null, 2));
+
     const response = await admin.messaging().sendEachForMulticast({
       tokens: tokens,
       ...message
     });
 
-    console.log(`✅ Notificación push enviada: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
+    console.log(`✅ [FCM] Notificación push enviada: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
+
+    // ✅ AGREGAR: Log detallado de errores
+    if (response.failureCount > 0) {
+      console.log(`❌ [FCM] Errores detallados:`);
+      response.responses.forEach((resp, index) => {
+        if (!resp.success) {
+          console.log(`❌ [FCM] Token ${index} (${tokens[index].substring(0, 20)}...): ${resp.error?.code} - ${resp.error?.message}`);
+        }
+      });
+    }
 
     res.status(200).json({
       success: true,

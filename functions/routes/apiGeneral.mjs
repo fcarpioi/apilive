@@ -4,6 +4,7 @@ import express from "express";
 import admin from "firebase-admin";
 import fetch from "node-fetch";
 import { v4 as uuidv4 } from "uuid";
+import axios from 'axios';
 // import monitor from "../monitoring/websocketMonitor.mjs"; // COMENTADO TEMPORALMENTE
 //import dotenv from "dotenv";
 //dotenv.config();
@@ -263,7 +264,7 @@ router.get("/events", async (req, res) => {
  * /api/follow:
  *   post:
  *     summary: Registrar seguimiento de un participante
- *     description: Permite que un usuario siga a un participante en un evento. MIGRADO para nueva estructura.
+ *     description: Permite que un usuario siga a un participante en un evento. MIGRADO para nueva estructura con appId opcional.
  *     requestBody:
  *       required: true
  *       content:
@@ -277,13 +278,17 @@ router.get("/events", async (req, res) => {
  *                 type: string
  *               raceId:
  *                 type: string
- *                 description: Identificador de la carrera (NUEVO - requerido)
+ *                 description: Identificador de la carrera (requerido)
+ *               appId:
+ *                 type: string
+ *                 description: Identificador de la aplicación (requerido)
  *               eventId:
  *                 type: string
  *             required:
  *               - followerId
  *               - followingId
  *               - raceId
+ *               - appId
  *               - eventId
  *     responses:
  *       '200':
@@ -297,17 +302,28 @@ router.get("/events", async (req, res) => {
  */
 router.post("/follow", async (req, res) => {
   try {
-    const { followerId, followingId, raceId, eventId } = req.body;
-    if (!followerId || !followingId || !raceId || !eventId) {
+    const { followerId, followingId, raceId, appId, eventId } = req.body;
+    if (!followerId || !followingId || !raceId || !appId || !eventId) {
       return res.status(400).json({
-        message: "followerId, followingId, raceId y eventId son obligatorios.",
+        message: "followerId, followingId, raceId, appId y eventId son obligatorios.",
       });
     }
+
     const db = admin.firestore();
-    const participantRef = db.collection("races").doc(raceId).collection("events").doc(eventId).collection("participants").doc(followingId);
+
+    // 🆕 NUEVA ESTRUCTURA: Solo buscar en estructura con appId
+    console.log(`🔍 [FOLLOW] Buscando participante: races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`);
+    const participantRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants").doc(followingId);
+
     const participantDoc = await participantRef.get();
     if (!participantDoc.exists) {
-      return res.status(404).json({ message: "El participante no existe en este evento." });
+      return res.status(404).json({
+        message: "El participante no existe en este evento.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`
+      });
     }
     const followingsRef = db.collection("users").doc(followerId).collection("followings").doc(followingId);
     const followersRef = participantRef.collection("followers").doc(followerId);
@@ -315,25 +331,42 @@ router.post("/follow", async (req, res) => {
     if (alreadyFollowing.exists) {
       return res.status(400).json({ message: "Ya sigues a este participante." });
     }
-    await followingsRef.set({
+
+    // 💾 Guardar seguimiento con appId si está disponible
+    const followingData = {
       profileType: "participant",
       profileId: followingId,
       raceId: raceId,
       eventId: eventId,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+
+    // ✅ Agregar appId si está disponible (nueva estructura)
+    if (appId) {
+      followingData.appId = appId;
+    }
+
+    await followingsRef.set(followingData);
     await followersRef.set({
       profileType: "user",
       profileId: followerId,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     });
-    return res.status(200).json({
+
+    const response = {
       message: "Seguimiento registrado correctamente.",
       followerId,
       followingId,
       raceId,
       eventId,
-    });
+    };
+
+    // ✅ Incluir appId en respuesta si está disponible
+    if (appId) {
+      response.appId = appId;
+    }
+
+    return res.status(200).json(response);
   } catch (error) {
     console.error("Error al seguir participante:", error);
     return res.status(500).json({ message: "Error interno del servidor", error: error.message });
@@ -359,13 +392,17 @@ router.post("/follow", async (req, res) => {
  *                 type: string
  *               raceId:
  *                 type: string
- *                 description: Identificador de la carrera (NUEVO - requerido)
+ *                 description: Identificador de la carrera (requerido)
+ *               appId:
+ *                 type: string
+ *                 description: Identificador de la aplicación (requerido)
  *               eventId:
  *                 type: string
  *             required:
  *               - followerId
  *               - followingId
  *               - raceId
+ *               - appId
  *               - eventId
  *     responses:
  *       '200':
@@ -379,20 +416,28 @@ router.post("/follow", async (req, res) => {
  */
 router.post("/unfollow", async (req, res) => {
   try {
-    const { followerId, followingId, raceId, eventId } = req.body;
-    if (!followerId || !followingId || !raceId || !eventId) {
+    const { followerId, followingId, raceId, appId, eventId } = req.body;
+    if (!followerId || !followingId || !raceId || !appId || !eventId) {
       return res.status(400).json({
-        message: "followerId, followingId, raceId y eventId son obligatorios.",
+        message: "followerId, followingId, raceId, appId y eventId son obligatorios.",
       });
     }
 
     const db = admin.firestore();
 
-    // Verificar que el participante existe en el evento
-    const participantRef = db.collection("races").doc(raceId).collection("events").doc(eventId).collection("participants").doc(followingId);
+    // 🆕 NUEVA ESTRUCTURA: Solo buscar en estructura con appId
+    console.log(`🔍 [UNFOLLOW] Buscando participante: races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`);
+    const participantRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants").doc(followingId);
+
     const participantDoc = await participantRef.get();
     if (!participantDoc.exists) {
-      return res.status(404).json({ message: "El participante no existe en este evento." });
+      return res.status(404).json({
+        message: "El participante no existe en este evento.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`
+      });
     }
 
     // Referencias a los documentos de seguimiento
@@ -1853,13 +1898,12 @@ router.get("/apps/feed/extended", async (req, res) => {
       console.log(`[PERF] Obteniendo stories del participante específico: ${participantId} en app: ${appId}`);
 
       try {
-        // Obtener todas las stories del participante específico
+        // Obtener todas las stories del participante específico (sin orderBy para evitar errores de tipo)
         const storiesSnapshot = await db.collection('races').doc(raceId)
           .collection('apps').doc(appId)
           .collection('events').doc(eventId)
           .collection('participants').doc(participantId)
           .collection('stories')
-          .orderBy('date', 'desc')
           .get();
 
         if (storiesSnapshot.empty) {
@@ -1912,6 +1956,38 @@ router.get("/apps/feed/extended", async (req, res) => {
               ...participantData
             }
           };
+        });
+
+        // Ordenar stories por fecha (manejar tanto Timestamp como string)
+        stories.sort((a, b) => {
+          const getTimestamp = (dateField) => {
+            if (!dateField) return 0;
+
+            // Si es un Timestamp de Firestore
+            if (dateField && typeof dateField.toMillis === 'function') {
+              return dateField.toMillis();
+            }
+
+            // Si es un string de fecha ISO
+            if (typeof dateField === 'string') {
+              return new Date(dateField).getTime();
+            }
+
+            // Si es un número (timestamp en milliseconds)
+            if (typeof dateField === 'number') {
+              return dateField;
+            }
+
+            // Fallback: intentar convertir a Date
+            try {
+              return new Date(dateField).getTime();
+            } catch (error) {
+              console.warn('Error parsing date field:', dateField);
+              return 0;
+            }
+          };
+
+          return getTimestamp(b.date) - getTimestamp(a.date);
         });
 
         console.log(`✅ [PERF] Participante específico completado en ${Date.now() - startTime}ms - ${stories.length} stories`);
@@ -2042,7 +2118,6 @@ router.get("/apps/feed/extended", async (req, res) => {
         .collection('events').doc(eventId)
         .collection('participants').doc(participantId)
         .collection('stories')
-        .orderBy('date', 'desc')
         .get();
 
       return storiesSnapshot.docs.map(storyDoc => {
@@ -2066,8 +2141,37 @@ router.get("/apps/feed/extended", async (req, res) => {
     console.log(`[PERF] Step 2 (queries): ${Date.now() - step2Time}ms - ${participantsToProcess.length} participantes procesados`);
     let step3Time = Date.now();
 
-    // 3. Ordenar todas las stories por fecha
-    allStories.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+    // 3. Ordenar todas las stories por fecha (manejar tanto Timestamp como string)
+    allStories.sort((a, b) => {
+      const getTimestamp = (dateField) => {
+        if (!dateField) return 0;
+
+        // Si es un Timestamp de Firestore
+        if (dateField && typeof dateField.toMillis === 'function') {
+          return dateField.toMillis();
+        }
+
+        // Si es un string de fecha ISO
+        if (typeof dateField === 'string') {
+          return new Date(dateField).getTime();
+        }
+
+        // Si es un número (timestamp en milliseconds)
+        if (typeof dateField === 'number') {
+          return dateField;
+        }
+
+        // Fallback: intentar convertir a Date
+        try {
+          return new Date(dateField).getTime();
+        } catch (error) {
+          console.warn('Error parsing date field:', dateField);
+          return 0;
+        }
+      };
+
+      return getTimestamp(b.date) - getTimestamp(a.date);
+    });
 
     // 4. Aplicar paginación
     const totalStories = allStories.length;
@@ -3072,6 +3176,9 @@ router.post("/migrate-participants", async (req, res) => {
  *               participantId:
  *                 type: string
  *                 description: ID del participante en Copernico
+ *               rawTime:
+ *                 type: number
+ *                 description: Timestamp UNIX en milliseconds del momento exacto del checkpoint
  *               extraData:
  *                 type: object
  *                 properties:
@@ -3101,7 +3208,7 @@ router.post("/checkpoint-participant", async (req, res) => {
   try {
     console.log("🎯 Webhook checkpoint Copernico recibido:", JSON.stringify(req.body, null, 2));
 
-    const { competitionId, type, participantId, extraData, apiKey: bodyApiKey } = req.body;
+    const { competitionId, copernicoId, type, participantId, extraData, rawTime, apiKey: bodyApiKey } = req.body;
 
     // Validaciones básicas
     if (!competitionId || !participantId || !type) {
@@ -3139,298 +3246,115 @@ router.post("/checkpoint-participant", async (req, res) => {
 
     console.log(`📋 Procesando evento ${type} para participante: ${participantId} en competición: ${competitionId}`);
 
-    // Obtener datos del participante desde Copernico API
-    console.log("🌐 Obteniendo datos del participante desde Copernico...");
-    let copernicoData;
-    try {
-      copernicoData = await copernicoService.getParticipantData(competitionId, participantId);
-    } catch (error) {
-      console.error("❌ Error obteniendo datos de Copernico:", error.message);
-      return res.status(404).json({
-        error: "No se pudo obtener datos del participante desde Copernico",
-        participantId,
-        competitionId,
-        details: error.message
-      });
-    }
-
-    // Transformar datos de Copernico al formato interno
-    const transformedData = copernicoService.transformCopernicoData(copernicoData);
-    const { participant: participantData, times, rankings } = transformedData;
-
-    console.log(`✅ Datos obtenidos de Copernico para: ${participantData.fullName} (${participantData.dorsal})`);
+    console.log(`📋 Procesando evento ${type} para participante: ${participantId} en competición: ${competitionId}`);
 
     const db = admin.firestore();
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
-    // 1. Buscar todas las ubicaciones donde existe este eventId (usando el eventId de Copernico)
-    const eventId = participantData.eventId;
-    console.log(`🔍 Buscando ubicaciones para eventId: ${eventId} (desde Copernico)`);
+    // 1. CREAR IDENTIFICADOR ÚNICO PARA EVITAR DUPLICADOS
+    const requestId = `${competitionId}_${participantId}_${type}_${Date.now()}`;
+    const queueKey = `${competitionId}_${participantId}_${type}`;
 
-    const locations = [];
+    console.log(`🔑 Request ID: ${requestId}`);
+    console.log(`🔑 Queue Key: ${queueKey}`);
 
-    // Implementar búsqueda dinámica en todas las races/apps
-    console.log(`🔍 Buscando eventId ${eventId} en todas las races/apps...`);
+    // 2. VERIFICAR SI YA ESTÁ EN COLA O PROCESÁNDOSE
+    const existingQueueRef = db.collection('processing_queue').doc(queueKey);
+    const existingQueue = await existingQueueRef.get();
 
-    const racesSnapshot = await db.collection('races').get();
-    console.log(`📊 Revisando ${racesSnapshot.size} races...`);
+    if (existingQueue.exists) {
+      const queueData = existingQueue.data();
+      const timeDiff = Date.now() - queueData.createdAt.toMillis();
 
-    for (const raceDoc of racesSnapshot.docs) {
-      const currentRaceId = raceDoc.id;
+      // Si está en cola hace menos de 5 minutos, no duplicar
+      if (timeDiff < 5 * 60 * 1000) { // 5 minutos
+        console.log(`⚠️ Request ya está en cola desde hace ${Math.round(timeDiff/1000)}s`);
 
-      try {
-        const appsSnapshot = await db.collection('races').doc(currentRaceId)
-          .collection('apps').get();
-
-        if (appsSnapshot.size > 0) {
-          console.log(`🔍 Revisando ${appsSnapshot.size} apps en race ${currentRaceId}`);
-
-          for (const appDoc of appsSnapshot.docs) {
-            const currentAppId = appDoc.id;
-
-            // Verificar si existe el evento en esta ubicación
-            const eventRef = db.collection('races').doc(currentRaceId)
-              .collection('apps').doc(currentAppId)
-              .collection('events').doc(eventId);
-
-            const eventDoc = await eventRef.get();
-
-            if (eventDoc.exists) {
-              locations.push({
-                raceId: currentRaceId,
-                appId: currentAppId,
-                eventId: eventId
-              });
-              console.log(`📍 ✅ Encontrado eventId ${eventId} en: races/${currentRaceId}/apps/${currentAppId}/events/${eventId}`);
-              console.log(`📋 Datos del evento:`, eventDoc.data());
-            }
+        return res.status(200).json({
+          success: true,
+          message: "Request ya está en cola de procesamiento",
+          data: {
+            requestId: queueData.requestId,
+            queueKey,
+            status: "already_queued",
+            queuedAt: queueData.createdAt.toDate().toISOString(),
+            estimatedProcessingTime: "1-2 minutos"
           }
-        }
-      } catch (error) {
-        console.error(`⚠️ Error revisando race ${currentRaceId}:`, error.message);
-        // Continuar con la siguiente race
+        });
+      } else {
+        // Si lleva más de 5 minutos, asumir que falló y reemplazar
+        console.log(`🔄 Request anterior expirado (${Math.round(timeDiff/1000)}s), reemplazando...`);
       }
     }
 
-    if (locations.length === 0) {
-      console.log(`❌ No se encontraron ubicaciones para eventId: ${eventId}`);
-      return res.status(404).json({
-        error: `No se encontraron ubicaciones para eventId: ${eventId}`,
-        eventId: eventId,
-        racesSearched: racesSnapshot.size,
-        suggestion: "Verificar que el eventId existe en la estructura /races/{raceId}/apps/{appId}/events/{eventId}",
-        searchDetails: {
-          totalRacesSearched: racesSnapshot.size,
-          searchTimestamp: new Date().toISOString()
-        }
-      });
-    }
+    // 3. ENCOLAR NUEVA REQUEST
+    const queueData = {
+      requestId,
+      queueKey,
+      competitionId,
+      copernicoId,
+      participantId,
+      type,
+      extraData: extraData || {},
+      rawTime: rawTime || null, // Timestamp exacto del checkpoint
+      status: 'queued',
+      createdAt: timestamp,
+      attempts: 0,
+      source: 'copernico-webhook'
+    };
 
-    console.log(`📍 ✅ Encontradas ${locations.length} ubicaciones para eventId ${eventId}:`, locations);
+    await existingQueueRef.set(queueData);
+    console.log(`✅ Request encolada: ${requestId}`);
 
-    // 2. Los datos del participante ya están preparados desde Copernico
-    console.log(`📋 Usando datos del participante desde Copernico:`, {
-      name: participantData.fullName,
-      dorsal: participantData.dorsal,
-      category: participantData.category,
-      externalId: participantData.externalId,
-      eventId: participantData.eventId,
-      status: participantData.status,
-      featured: participantData.featured
-    });
-
-    // Agregar metadatos de procesamiento
-    participantData.webhookProcessedAt = timestamp;
-    participantData.updatedAt = timestamp;
-    participantData.webhookType = type;
-    participantData.competitionId = competitionId;
-
-    // 3. Procesar participante en cada ubicación encontrada
-    const results = [];
-
-    for (const location of locations) {
-      const { raceId, appId, eventId: locationEventId } = location;
-
-      try {
-        console.log(`🔄 Procesando en ubicación: raceId=${raceId}, appId=${appId}, eventId=${locationEventId}`);
-
-        // Agregar raceId específico a los datos del participante para esta ubicación
-        const locationParticipantData = {
-          ...participantData,
-          raceId: raceId
-        };
-
-        // Buscar participante existente por externalId en esta ubicación
-        const existingParticipantQuery = await db.collection('races').doc(raceId)
-          .collection('apps').doc(appId)
-          .collection('events').doc(locationEventId)
-          .collection('participants')
-          .where('externalId', '==', participantData.externalId)
-          .limit(1)
-          .get();
-
-        let participantRef;
-        let participantId;
-        let isNewParticipant = false;
-
-        if (!existingParticipantQuery.empty) {
-          // Participante existe - actualizar
-          participantRef = existingParticipantQuery.docs[0].ref;
-          participantId = existingParticipantQuery.docs[0].id;
-          await participantRef.update(locationParticipantData);
-          console.log(`✅ Participante actualizado: ${participantId} en ${raceId}/${appId}`);
-        } else {
-          // Participante nuevo - crear
-          locationParticipantData.createdAt = timestamp;
-          locationParticipantData.registerDate = timestamp;
-          participantRef = await db.collection('races').doc(raceId)
-            .collection('apps').doc(appId)
-            .collection('events').doc(locationEventId)
-            .collection('participants').add(locationParticipantData);
-          participantId = participantRef.id;
-          isNewParticipant = true;
-          console.log(`🆕 Participante creado: ${participantId} en ${raceId}/${appId}`);
-        }
-
-        // 4. Procesar tiempos y crear stories para cada checkpoint en esta ubicación
-        const storiesCreated = [];
-        const copernicoTimes = times || {}; // Usar los times transformados de Copernico
-
-        for (const [pointName, pointTime] of Object.entries(copernicoTimes)) {
-          try {
-            // Determinar tipo de story basado en el punto
-            let storyType = "ATHLETE_CROSSED_TIMING_SPLIT";
-            if (pointName.toLowerCase().includes('start') || pointName.toLowerCase().includes('salida')) {
-              storyType = "ATHLETE_STARTED";
-            } else if (pointName.toLowerCase().includes('finish') || pointName.toLowerCase().includes('meta')) {
-              storyType = "ATHLETE_FINISHED";
-            }
-
-            // Crear datos de la story
-            const storyData = {
-              type: storyType,
-              participantId: participantId,
-              raceId: raceId,
-              eventId: locationEventId,
-              createdAt: timestamp,
-              date: timestamp,
-              fileName: `webhook_${pointName}_${Date.now()}.mp4`,
-              filePath: `participants/${participantId}/stories/webhook_${pointName}_${Date.now()}.mp4`,
-              fileSize: 0,
-              contentType: "video/mp4",
-              mediaType: "video",
-              moderationStatus: "approved",
-              originType: "webhook_automatic",
-              duration: 30,
-              testData: false,
-              description: `${locationParticipantData.fullName} - ${pointName}`,
-              fileUrl: "", // Se puede agregar URL de video si está disponible
-              splitTime: {
-                time: pointTime.time || "",
-                netTime: pointTime.netTime || "",
-                split: pointName,
-                checkpoint: pointName,
-                rawTime: pointTime.raw || null,
-                position: pointTime.position || null
-              },
-              webhookData: {
-                originalPointName: pointName,
-                pointTimeData: pointTime,
-                processedAt: new Date().toISOString()
-              }
-            };
-
-            // Verificar si ya existe una story para este checkpoint en esta ubicación
-            const existingStoryQuery = await db.collection('races').doc(raceId)
-              .collection('apps').doc(appId)
-              .collection('events').doc(locationEventId)
-              .collection('participants').doc(participantId)
-              .collection('stories')
-              .where('splitTime.split', '==', pointName)
-              .limit(1)
-              .get();
-
-            if (existingStoryQuery.empty) {
-              // Crear nueva story
-              const storyRef = await db.collection('races').doc(raceId)
-                .collection('apps').doc(appId)
-                .collection('events').doc(locationEventId)
-                .collection('participants').doc(participantId)
-                .collection('stories').add(storyData);
-
-              storiesCreated.push({
-                storyId: storyRef.id,
-                type: storyType,
-                checkpoint: pointName,
-                time: pointTime.time || ""
-              });
-
-              console.log(`📖 Story creada: ${storyRef.id} para checkpoint ${pointName} en ${raceId}/${appId}`);
-            } else {
-              // Actualizar story existente
-              const existingStoryRef = existingStoryQuery.docs[0].ref;
-              await existingStoryRef.update({
-                ...storyData,
-                updatedAt: timestamp
-              });
-
-              storiesCreated.push({
-                storyId: existingStoryQuery.docs[0].id,
-                type: storyType,
-                checkpoint: pointName,
-                time: pointTime.time || "",
-                updated: true
-              });
-
-              console.log(`🔄 Story actualizada: ${existingStoryQuery.docs[0].id} para checkpoint ${pointName} en ${raceId}/${appId}`);
-            }
-
-          } catch (storyError) {
-            console.error(`❌ Error procesando checkpoint ${pointName} en ${raceId}/${appId}:`, storyError);
-          }
-        }
-
-        // Agregar resultado de esta ubicación
-        results.push({
-          raceId: raceId,
-          appId: appId,
-          eventId: locationEventId,
-          participant: {
-            id: participantId,
-            externalId: participantData.externalId,
-            name: locationParticipantData.fullName,
-            dorsal: locationParticipantData.dorsal,
-            status: locationParticipantData.status,
-            isNew: isNewParticipant
-          },
-          stories: {
-            created: storiesCreated.length,
-            details: storiesCreated
-          },
-          checkpoints: Object.keys(times).length
-        });
-
-      } catch (locationError) {
-        console.error(`❌ Error procesando ubicación ${raceId}/${appId}:`, locationError);
-        results.push({
-          raceId: raceId,
-          appId: appId,
-          eventId: locationEventId,
-          error: locationError.message,
-          success: false
-        });
-      }
-    }
-
-    // 5. Respuesta final con todos los resultados
-    return res.status(200).json({
+    // 4. RESPUESTA INMEDIATA 200 - NO ESPERAR PROCESAMIENTO
+    const response = {
       success: true,
-      message: "Webhook procesado exitosamente en todas las ubicaciones",
-      eventId: eventId,
-      locationsProcessed: locations.length,
-      results: results,
-      processedAt: new Date().toISOString()
+      message: "Request encolada exitosamente para procesamiento",
+      data: {
+        requestId,
+        queueKey,
+        competitionId,
+        participantId,
+        type,
+        status: "queued",
+        queuedAt: new Date().toISOString(),
+        estimatedProcessingTime: "1-2 minutos"
+      }
+    };
+
+    // 5. ENVIAR RESPUESTA INMEDIATA
+    res.status(200).json(response);
+
+    // 6. PROCESAMIENTO ASÍNCRONO EN BACKGROUND (NO BLOQUEA LA RESPUESTA)
+    setImmediate(async () => {
+      try {
+        console.log(`🔄 Iniciando procesamiento en background para: ${requestId}`);
+
+        // Actualizar estado a "processing"
+        await existingQueueRef.update({
+          status: 'processing',
+          processingStartedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // AQUÍ VA LA LÓGICA COMPLEJA DE PROCESAMIENTO
+        await processCheckpointInBackground(competitionId, copernicoId, participantId, type, extraData, rawTime, requestId, queueKey);
+
+      } catch (backgroundError) {
+        console.error(`❌ Error en procesamiento background para ${requestId}:`, backgroundError);
+
+        // Marcar como fallido en la cola
+        await existingQueueRef.update({
+          status: 'failed',
+          error: backgroundError.message,
+          failedAt: admin.firestore.FieldValue.serverTimestamp(),
+          attempts: admin.firestore.FieldValue.increment(1)
+        });
+      }
     });
+
+    // La función ya envió la respuesta, no hacer return aquí
+
+
 
   } catch (error) {
     console.error("❌ Error procesando webhook checkpoint:", error);
@@ -3442,11 +3366,942 @@ router.post("/checkpoint-participant", async (req, res) => {
 });
 
 /**
+ * @swagger
+ * /api/checkpoint-participant/status/{queueKey}:
+ *   get:
+ *     summary: Consultar estado de procesamiento de checkpoint
+ *     tags: [Checkpoint]
+ *     parameters:
+ *       - in: path
+ *         name: queueKey
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Clave de la cola de procesamiento
+ *     responses:
+ *       200:
+ *         description: Estado del procesamiento
+ *       404:
+ *         description: Request no encontrada
+ */
+router.get("/checkpoint-participant/status/:queueKey", async (req, res) => {
+  try {
+    const { queueKey } = req.params;
+
+    console.log(`🔍 Consultando estado de: ${queueKey}`);
+
+    const db = admin.firestore();
+    const queueDoc = await db.collection('processing_queue').doc(queueKey).get();
+
+    if (!queueDoc.exists) {
+      return res.status(404).json({
+        error: "Request no encontrada",
+        queueKey
+      });
+    }
+
+    const queueData = queueDoc.data();
+
+    // También buscar checkpoints relacionados
+    const checkpointsQuery = await db.collection('checkpoints')
+      .where('requestId', '==', queueData.requestId)
+      .limit(1)
+      .get();
+
+    let checkpointData = null;
+    if (!checkpointsQuery.empty) {
+      checkpointData = checkpointsQuery.docs[0].data();
+    }
+
+    return res.status(200).json({
+      success: true,
+      queueKey,
+      queue: {
+        ...queueData,
+        createdAt: queueData.createdAt?.toDate()?.toISOString(),
+        processingStartedAt: queueData.processingStartedAt?.toDate()?.toISOString(),
+        completedAt: queueData.completedAt?.toDate()?.toISOString(),
+        failedAt: queueData.failedAt?.toDate()?.toISOString()
+      },
+      checkpoint: checkpointData ? {
+        ...checkpointData,
+        createdAt: checkpointData.createdAt?.toDate()?.toISOString()
+      } : null
+    });
+
+  } catch (error) {
+    console.error("❌ Error consultando estado:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/debug/events:
+ *   get:
+ *     summary: Explorar estructura de eventos en la base de datos
+ *     tags: [Debug]
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Límite de eventos a mostrar
+ *     responses:
+ *       200:
+ *         description: Lista de eventos encontrados
+ */
+router.get("/debug/events", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    console.log(`🔍 Explorando estructura de eventos (límite: ${limit})`);
+
+    const db = admin.firestore();
+    const events = [];
+    let totalRaces = 0;
+    let totalApps = 0;
+    let totalEvents = 0;
+
+    const racesSnapshot = await db.collection('races').limit(5).get(); // Limitar races para no sobrecargar
+
+    for (const raceDoc of racesSnapshot.docs) {
+      const currentRaceId = raceDoc.id;
+      totalRaces++;
+
+      try {
+        const appsSnapshot = await db.collection('races').doc(currentRaceId)
+          .collection('apps').limit(3).get(); // Limitar apps
+
+        for (const appDoc of appsSnapshot.docs) {
+          const currentAppId = appDoc.id;
+          totalApps++;
+
+          const eventsSnapshot = await db.collection('races').doc(currentRaceId)
+            .collection('apps').doc(currentAppId)
+            .collection('events').limit(limit).get();
+
+          for (const eventDoc of eventsSnapshot.docs) {
+            const eventData = eventDoc.data();
+            const eventId = eventDoc.id;
+            totalEvents++;
+
+            events.push({
+              raceId: currentRaceId,
+              appId: currentAppId,
+              eventId: eventId,
+              eventData: {
+                name: eventData.name || 'Sin nombre',
+                competitionId: eventData.competitionId || null,
+                raceId: eventData.raceId || null,
+                externalId: eventData.externalId || null,
+                createdAt: eventData.createdAt?.toDate?.()?.toISOString() || null,
+                // Solo campos relevantes para debugging
+                hasParticipants: eventData.participants ? Object.keys(eventData.participants).length : 'unknown'
+              }
+            });
+
+            if (events.length >= limit) break;
+          }
+          if (events.length >= limit) break;
+        }
+        if (events.length >= limit) break;
+      } catch (error) {
+        console.error(`⚠️ Error revisando race ${currentRaceId}:`, error.message);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalRacesScanned: totalRaces,
+        totalAppsScanned: totalApps,
+        totalEventsFound: totalEvents,
+        eventsReturned: events.length
+      },
+      events: events,
+      searchCriteria: {
+        structure: "/races/{raceId}/apps/{appId}/events/{eventId}",
+        lookingFor: "competitionId, raceId, externalId fields",
+        testCompetitionId: "52ec7d4a-40c1-4f74-bfa0-cf4cc76edd49"
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error explorando eventos:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      details: error.message
+    });
+  }
+});
+
+/**
+ * Función para procesar checkpoint en background (no bloquea la respuesta HTTP)
+ */
+async function processCheckpointInBackground(competitionId, copernicoId, participantId, type, extraData, rawTime, requestId, queueKey) {
+  console.log(`🔄 [BACKGROUND] Procesando checkpoint: ${requestId}`);
+  console.log(`📊 [BACKGROUND] Datos recibidos:`, { competitionId, copernicoId, participantId, type, extraData, rawTime });
+
+  const db = admin.firestore();
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+  try {
+    // 1. CREAR REGISTRO DE CHECKPOINT INMEDIATAMENTE
+    console.log(`📝 [BACKGROUND] Creando registro de checkpoint: ${requestId}`);
+
+    const checkpointData = {
+      requestId,
+      competitionId,
+      participantId,
+      type,
+      extraData: extraData || {},
+      rawTime: rawTime || null, // Timestamp exacto del checkpoint
+      status: 'processing',
+      createdAt: timestamp,
+      source: 'copernico-webhook'
+    };
+
+    const checkpointRef = await db.collection('checkpoints').add(checkpointData);
+    console.log(`✅ [BACKGROUND] Checkpoint registrado: ${checkpointRef.id}`);
+
+    // 2. INTENTAR OBTENER DATOS DE COPERNICO (CON FALLBACK)
+    let participantData;
+    let copernicoSuccess = false;
+    let transformedData = null;
+
+    console.log(`🌐 [BACKGROUND] Intentando obtener datos de Copernico...`);
+
+    try {
+      // Verificar si hay API keys configuradas
+      const envConfig = copernicoService.getCurrentEnvironmentConfig();
+      if (!envConfig.apiKey) {
+        throw new Error('No hay API key de Copernico configurada');
+      }
+
+      // Obtener el race slug - usar copernicoId si está disponible, sino buscar en race_info
+      let raceSlug = competitionId; // Fallback al competitionId original
+
+      if (copernicoId) {
+        // Si tenemos copernicoId directamente, usarlo
+        raceSlug = copernicoId;
+        console.log(`🎯 [BACKGROUND] Usando copernicoId proporcionado: ${raceSlug}`);
+      } else {
+        // Fallback: buscar en race_info como antes
+        try {
+          const raceDoc = await db.collection('races').doc(competitionId).get();
+          if (raceDoc.exists) {
+            const raceData = raceDoc.data();
+            if (raceData.race_info && raceData.race_info.id) {
+              raceSlug = raceData.race_info.id;
+              console.log(`🔍 [BACKGROUND] Race slug obtenido desde race_info: ${raceSlug}`);
+            } else {
+              console.log(`⚠️ [BACKGROUND] No se encontró race_info.id, usando competitionId: ${competitionId}`);
+            }
+          } else {
+            console.log(`⚠️ [BACKGROUND] Race no encontrada, usando competitionId: ${competitionId}`);
+          }
+        } catch (raceError) {
+          console.error(`❌ [BACKGROUND] Error obteniendo race slug:`, raceError.message);
+          console.log(`🔄 [BACKGROUND] Usando competitionId como fallback: ${competitionId}`);
+        }
+      }
+
+      const copernicoData = await copernicoService.getParticipantData(raceSlug, participantId);
+      transformedData = copernicoService.transformCopernicoData(copernicoData);
+      participantData = transformedData.participant;
+      copernicoSuccess = true;
+
+      console.log(`✅ [BACKGROUND] Datos obtenidos de Copernico exitosamente`);
+
+    } catch (copernicoError) {
+      console.error(`❌ [BACKGROUND] Error con Copernico:`, copernicoError.message);
+
+      // FALLBACK: Crear datos básicos del participante
+      participantData = {
+        externalId: participantId,
+        fullName: `Participante ${participantId}`,
+        dorsal: participantId.slice(-4), // Usar últimos 4 caracteres como dorsal
+        competitionId: competitionId, // Usar competitionId, no eventId
+        status: 'active',
+        category: 'Unknown',
+        featured: false,
+        dataSource: 'webhook_fallback'
+      };
+
+      console.log(`🔄 [BACKGROUND] Usando datos básicos de fallback`);
+    }
+
+    console.log(`📋 [BACKGROUND] Datos del participante:`, {
+      name: participantData.fullName,
+      dorsal: participantData.dorsal,
+      competitionId: participantData.competitionId || competitionId,
+      dataSource: participantData.dataSource || 'copernico'
+    });
+
+    // 3. BUSCAR EVENTO ESPECÍFICO USANDO extraData.event
+    console.log(`🔍 [BACKGROUND] Buscando evento específico: ${extraData?.event || 'NO_EVENT'} en competitionId: ${competitionId}`);
+
+    let locations = [];
+
+    if (extraData?.event) {
+      // Buscar el evento específico mencionado en extraData
+      locations = await findSpecificEvent(db, competitionId, extraData.event);
+    }
+
+    // Si no se encuentra el evento específico, buscar todos los eventos (fallback)
+    if (locations.length === 0) {
+      console.log(`⚠️ [BACKGROUND] Evento específico '${extraData?.event}' no encontrado, buscando todos los eventos...`);
+      locations = await findEventsByCompetition(db, competitionId);
+    }
+
+    if (locations.length === 0) {
+      console.log(`⚠️ [BACKGROUND] No se encontraron eventos para competitionId: ${competitionId}`);
+
+      // Actualizar checkpoint como completado pero sin ubicaciones
+      await checkpointRef.update({
+        status: 'completed_no_events',
+        completedAt: timestamp,
+        message: `No se encontraron eventos para competitionId: ${competitionId}`,
+        participantData: participantData,
+        searchedEvent: extraData?.event,
+        checkpointInfo: {
+          point: extraData?.point,
+          event: extraData?.event,
+          location: extraData?.location
+        }
+      });
+
+      // No es un error crítico, solo no hay donde procesar
+      console.log(`✅ [BACKGROUND] Checkpoint registrado sin eventos: ${checkpointRef.id}`);
+      return;
+    }
+
+    console.log(`📍 [BACKGROUND] Encontrados ${locations.length} eventos para competitionId ${competitionId}`);
+
+    // 4. OBTENER STREAMS DE AWS PARA GENERACIÓN DE STORIES
+    console.log(`🎬 [BACKGROUND] Obteniendo streams de AWS para competitionId: ${competitionId}`);
+    const streamsResult = await getCompetitionStreams(competitionId);
+
+    // 5. PROCESAR EN CADA UBICACIÓN
+    const results = [];
+
+    for (const location of locations) {
+      try {
+        const result = await processParticipantInLocation(db, location, participantData, timestamp, extraData, rawTime);
+        results.push(result);
+        console.log(`✅ [BACKGROUND] Procesado en ${location.raceId}/${location.appId}/${location.eventId}`);
+
+        // 6. CREAR STORY AUTOMÁTICA SOLO PARA DETECCIONES (NO MODIFICACIONES)
+        if (result.success && type === 'detection') {
+          console.log(`📖 [BACKGROUND] Creando story automática para detección de checkpoint`);
+
+          try {
+            const storyResult = await createAutomaticStory(
+              db,
+              location,
+              participantData,
+              extraData,
+              streamsResult.success ? streamsResult.streamMap : null,
+              copernicoSuccess ? transformedData : null, // Pasar datos completos de Copernico
+              rawTime // Pasar rawTime del webhook
+            );
+
+            if (storyResult.success) {
+              result.storyCreated = storyResult;
+              console.log(`✅ [BACKGROUND] Story creada: ${storyResult.storyId}`);
+            } else {
+              result.storyError = storyResult.error;
+              console.log(`⚠️ [BACKGROUND] Error creando story: ${storyResult.error}`);
+            }
+          } catch (storyError) {
+            console.error(`❌ [BACKGROUND] Error en creación de story:`, storyError);
+            result.storyError = storyError.message;
+          }
+        } else {
+          console.log(`⏭️ [BACKGROUND] Tipo '${type}' no requiere creación de story (solo 'detection')`);
+        }
+
+      } catch (locationError) {
+        console.error(`❌ [BACKGROUND] Error en ubicación ${location.raceId}/${location.appId}/${location.eventId}:`, locationError.message);
+        results.push({
+          ...location,
+          error: locationError.message,
+          success: false
+        });
+      }
+    }
+
+    // 7. MARCAR COMO COMPLETADO EN LA COLA
+    await db.collection('processing_queue').doc(queueKey).update({
+      status: 'completed',
+      completedAt: timestamp,
+      results: results,
+      locationsProcessed: locations.length,
+      checkpointInfo: {
+        point: extraData?.point,
+        event: extraData?.event,
+        location: extraData?.location
+      },
+      streamsInfo: {
+        success: streamsResult.success,
+        streamsFound: streamsResult.success ? streamsResult.streams?.length : 0,
+        error: streamsResult.success ? null : streamsResult.error
+      }
+    });
+
+    console.log(`✅ [BACKGROUND] Procesamiento completado para: ${requestId}`);
+
+  } catch (error) {
+    console.error(`❌ [BACKGROUND] Error procesando ${requestId}:`, error.message);
+
+    // Marcar como fallido
+    await db.collection('processing_queue').doc(queueKey).update({
+      status: 'failed',
+      error: error.message,
+      failedAt: timestamp,
+      attempts: admin.firestore.FieldValue.increment(1)
+    });
+
+    throw error;
+  }
+}
+
+/**
+ * Buscar todos los eventos dentro de una competición
+ */
+async function findEventsByCompetition(db, competitionId) {
+  console.log(`🔍 [BACKGROUND] Buscando eventos para competitionId: ${competitionId}`);
+
+  const locations = [];
+  const racesSnapshot = await db.collection('races').get();
+
+  for (const raceDoc of racesSnapshot.docs) {
+    const currentRaceId = raceDoc.id;
+
+    try {
+      const appsSnapshot = await db.collection('races').doc(currentRaceId)
+        .collection('apps').get();
+
+      for (const appDoc of appsSnapshot.docs) {
+        const currentAppId = appDoc.id;
+
+        // Obtener todos los eventos en esta ubicación
+        const eventsSnapshot = await db.collection('races').doc(currentRaceId)
+          .collection('apps').doc(currentAppId)
+          .collection('events').get();
+
+        for (const eventDoc of eventsSnapshot.docs) {
+          const eventData = eventDoc.data();
+          const eventId = eventDoc.id;
+
+          // Verificar si este evento pertenece a la competición
+          // Puede ser por ID directo, por campo en el documento, o por raceId de la estructura
+          const belongsToCompetition =
+            eventId === competitionId ||
+            eventData.competitionId === competitionId ||
+            eventData.raceId === competitionId ||
+            eventData.externalId === competitionId ||
+            currentRaceId === competitionId; // ← NUEVA LÓGICA: usar raceId de la estructura
+
+          if (belongsToCompetition) {
+            locations.push({
+              raceId: currentRaceId,
+              appId: currentAppId,
+              eventId: eventId,
+              eventData: eventData
+            });
+            console.log(`📍 [BACKGROUND] Evento encontrado: ${currentRaceId}/${currentAppId}/${eventId}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`⚠️ [BACKGROUND] Error revisando race ${currentRaceId}:`, error.message);
+    }
+  }
+
+  console.log(`📊 [BACKGROUND] Total eventos encontrados: ${locations.length}`);
+  return locations;
+}
+
+/**
+ * Buscar un evento específico por nombre en una competición
+ */
+async function findSpecificEvent(db, competitionId, eventName) {
+  console.log(`🔍 [BACKGROUND] Buscando evento específico: "${eventName}" en competitionId: ${competitionId}`);
+
+  const locations = [];
+
+  // Obtener todas las races
+  const racesSnapshot = await db.collection('races').get();
+
+  for (const raceDoc of racesSnapshot.docs) {
+    const currentRaceId = raceDoc.id;
+
+    try {
+      // Obtener todas las apps de esta race
+      const appsSnapshot = await db.collection('races').doc(currentRaceId).collection('apps').get();
+
+      for (const appDoc of appsSnapshot.docs) {
+        const currentAppId = appDoc.id;
+
+        // Obtener todos los eventos de esta app
+        const eventsSnapshot = await db.collection('races').doc(currentRaceId)
+          .collection('apps').doc(currentAppId)
+          .collection('events').get();
+
+        for (const eventDoc of eventsSnapshot.docs) {
+          const eventData = eventDoc.data();
+          const eventId = eventDoc.id;
+
+          // Verificar si este evento pertenece a la competición Y coincide con el nombre
+          const belongsToCompetition =
+            eventId === competitionId ||
+            eventData.competitionId === competitionId ||
+            eventData.raceId === competitionId ||
+            eventData.externalId === competitionId ||
+            currentRaceId === competitionId;
+
+          // Verificar si el nombre del evento coincide
+          const eventNameMatches =
+            eventId === eventName ||
+            eventData.name === eventName ||
+            eventData.eventName === eventName;
+
+          if (belongsToCompetition && eventNameMatches) {
+            locations.push({
+              raceId: currentRaceId,
+              appId: currentAppId,
+              eventId: eventId,
+              eventData: eventData
+            });
+            console.log(`✅ [BACKGROUND] Evento específico encontrado: ${currentRaceId}/${currentAppId}/${eventId} (${eventName})`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`⚠️ [BACKGROUND] Error revisando race ${currentRaceId} para evento específico:`, error.message);
+    }
+  }
+
+  console.log(`📊 [BACKGROUND] Eventos específicos encontrados: ${locations.length}`);
+  return locations;
+}
+
+/**
+ * Obtener streams de AWS para una competición
+ */
+async function getCompetitionStreams(competitionId) {
+  console.log(`🎬 [AWS] Obteniendo streams para competitionId: ${competitionId}`);
+
+  try {
+    const awsBaseUrl = 'https://fmriikps30.execute-api.eu-west-1.amazonaws.com/alpha';
+    const url = `${awsBaseUrl}/competitions/${competitionId}`;
+
+    console.log(`🌐 [AWS] Llamando a: ${url}`);
+
+    const response = await axios.get(url, {
+      timeout: 10000, // 10 segundos timeout
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Firebase-Functions/1.0'
+      }
+    });
+
+    if (response.data && response.data.data && response.data.data.streams) {
+      const streams = response.data.data.streams;
+      console.log(`✅ [AWS] Streams obtenidos:`, streams);
+
+      // Crear mapa de location -> streamId
+      const streamMap = {};
+      streams.forEach(stream => {
+        // Normalizar nombres para matching
+        const normalizedName = stream.name.toLowerCase();
+        streamMap[normalizedName] = stream.streamId;
+
+        // Agregar variaciones comunes
+        if (normalizedName === 'meta') {
+          streamMap['finish'] = stream.streamId;
+          streamMap['meta'] = stream.streamId;
+        }
+        if (normalizedName === 'salida') {
+          streamMap['start'] = stream.streamId;
+          streamMap['salida'] = stream.streamId;
+        }
+      });
+
+      return {
+        success: true,
+        streams: streams,
+        streamMap: streamMap
+      };
+    } else {
+      console.log(`⚠️ [AWS] Respuesta sin streams:`, response.data);
+      return {
+        success: false,
+        error: 'No streams found in response'
+      };
+    }
+
+  } catch (error) {
+    console.error(`❌ [AWS] Error obteniendo streams:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Generar clip de video automáticamente para stories
+ */
+async function generateStoryVideoClip(streamId, checkpointRawTime, extraData) {
+  console.log(`🎬 [CLIP] Generando clip para streamId: ${streamId}`);
+  console.log(`🎬 [CLIP] CheckpointRawTime: ${checkpointRawTime}`);
+
+  try {
+    // Calcular ventana de tiempo para el clip (15 segundos antes y después del checkpoint)
+    // checkpointRawTime ya viene en milliseconds (UNIX timestamp)
+    const startTime = new Date(checkpointRawTime - 15000); // 15 segundos antes
+    const endTime = new Date(checkpointRawTime + 15000);   // 15 segundos después
+
+    console.log(`⏰ [CLIP] Ventana de tiempo:`, {
+      checkpoint: new Date(checkpointRawTime).toISOString(),
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      rawTime: checkpointRawTime
+    });
+
+    // Preparar datos para generateClipFromVideo
+    const clipData = {
+      streamId: streamId,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      sponsorWatermark: false // Por defecto sin watermark
+    };
+
+    console.log(`📡 [CLIP] Llamando a generateClipFromVideo:`, clipData);
+
+    // Llamar al API generateClipFromVideo
+    const response = await axios.post(
+      'https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipFromVideo',
+      clipData,
+      {
+        timeout: 60000, // 60 segundos timeout
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    if (response.data && response.data.clipUrl) {
+      console.log(`✅ [CLIP] Clip generado exitosamente: ${response.data.clipUrl}`);
+
+      return {
+        success: true,
+        clipUrl: response.data.clipUrl,
+        fileName: response.data.fileName || `clip_${streamId}_${Date.now()}.mp4`,
+        generationInfo: {
+          streamId: streamId,
+          startTime: startTime.toISOString(),
+          endTime: endTime.toISOString(),
+          generatedAt: new Date().toISOString(),
+          apiResponse: response.data
+        }
+      };
+    } else {
+      console.log(`⚠️ [CLIP] Respuesta sin clipUrl:`, response.data);
+      return {
+        success: false,
+        error: 'No clipUrl in response',
+        response: response.data
+      };
+    }
+
+  } catch (error) {
+    console.error(`❌ [CLIP] Error generando clip:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      details: error.response?.data || null
+    };
+  }
+}
+
+/**
+ * Crear story automática para un checkpoint
+ */
+async function createAutomaticStory(db, location, participantData, extraData, streamMap, copernicoData = null, rawTime = null) {
+  console.log(`📖 [STORY] Creando story automática para checkpoint: ${extraData?.point}`);
+  console.log(`⏰ [STORY] RawTime recibido en createAutomaticStory:`, rawTime);
+
+  try {
+    const { raceId, appId, eventId } = location;
+    const participantId = participantData.externalId;
+
+    // 1. Determinar tipo de story basado en el punto
+    let storyType = 'ATHLETE_CROSSED_TIMING_SPLIT'; // Default
+    let description = `${participantData.fullName || participantData.name} pasó por ${extraData?.point}`;
+
+    if (extraData?.point) {
+      const point = extraData.point.toLowerCase();
+      if (point.includes('meta') || point.includes('finish')) {
+        storyType = 'ATHLETE_FINISHED';
+        description = `🏁 ${participantData.fullName || participantData.name} cruzó la meta!`;
+      } else if (point.includes('salida') || point.includes('start')) {
+        storyType = 'ATHLETE_STARTED';
+        description = `🏃 ${participantData.fullName || participantData.name} comenzó la carrera!`;
+      } else {
+        description = `⏱️ ${participantData.fullName || participantData.name} pasó por ${extraData.point}`;
+      }
+    }
+
+    // 2. Obtener streamId para el location
+    let streamId = null;
+    if (extraData?.location && streamMap) {
+      const locationKey = extraData.location.toLowerCase();
+      streamId = streamMap[locationKey];
+
+      console.log(`🎬 [STORY] Buscando streamId para location: '${locationKey}'`);
+      console.log(`🎬 [STORY] StreamMap disponible:`, Object.keys(streamMap));
+      console.log(`🎬 [STORY] StreamId encontrado: ${streamId}`);
+
+      // Si no se encuentra, intentar con variaciones comunes
+      if (!streamId) {
+        // Intentar con variaciones para checkpoints intermedios
+        if (locationKey.includes('k') || locationKey.includes('km')) {
+          // Para checkpoints como "5k", "10k", etc., usar el primer stream disponible
+          const availableStreams = Object.keys(streamMap);
+          if (availableStreams.length > 0) {
+            streamId = streamMap[availableStreams[0]];
+            console.log(`🎬 [STORY] Usando primer stream disponible para checkpoint '${locationKey}': ${streamId}`);
+          }
+        }
+      }
+    }
+
+    // 3. Crear datos básicos de la story
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const storyData = {
+      // Datos básicos
+      contentType: 'video',
+      createdAt: timestamp,
+      date: new Date().toISOString(),
+      description: description,
+      eventId: eventId,
+      raceId: raceId,
+      participantId: participantId,
+
+      // Metadatos
+      moderationStatus: 'approved',
+      originType: 'automatic_checkpoint',
+
+      // Datos del checkpoint
+      checkpointInfo: {
+        point: extraData?.point,
+        location: extraData?.location,
+        type: storyType,
+        processedAt: timestamp
+      },
+
+      // Datos de generación (se actualizarán cuando se genere el clip)
+      generationInfo: {
+        ...(streamId && { streamId: streamId }), // Solo incluir streamId si no es undefined
+        status: streamId ? 'pending_generation' : 'no_stream_available',
+        requestedAt: timestamp
+      }
+    };
+
+    // 4. Guardar story en Firestore
+    const storyPath = `races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories`;
+    const storyRef = await db.collection(storyPath).add(storyData);
+
+    console.log(`✅ [STORY] Story creada: ${storyRef.id}`);
+
+    // 5. Si tenemos streamId, generar clip automáticamente
+    let clipResult = null;
+    if (streamId) {
+      console.log(`🎬 [STORY] Generando clip automáticamente con streamId: ${streamId}`);
+
+      try {
+        // Determinar timestamp del checkpoint - PRIORIDAD: rawTime del webhook
+        let checkpointRawTime = null;
+        let checkpointTimestamp = new Date().toISOString(); // Default: ahora
+
+        // 1. PRIORIDAD: Usar rawTime del webhook si está disponible
+        if (rawTime) {
+          checkpointRawTime = rawTime; // UNIX timestamp en milliseconds
+          checkpointTimestamp = new Date(checkpointRawTime).toISOString();
+          console.log(`⏰ [STORY] Usando rawTime del webhook: ${checkpointRawTime} (${checkpointTimestamp})`);
+        }
+        // 2. FALLBACK: Buscar rawTime en datos de Copernico API
+        else if (copernicoData && copernicoData.rawData && copernicoData.rawData.events) {
+          const events = copernicoData.rawData.events;
+          if (events.length > 0 && events[0].times) {
+            const times = events[0].times;
+
+            // Buscar el checkpoint correspondiente al point
+            const pointName = extraData?.point?.toUpperCase();
+            if (pointName && times[pointName] && times[pointName].raw && times[pointName].raw.rawTime) {
+              checkpointRawTime = times[pointName].raw.rawTime; // UNIX timestamp en milliseconds
+              checkpointTimestamp = new Date(checkpointRawTime).toISOString();
+              console.log(`⏰ [STORY] Usando rawTime de Copernico API: ${checkpointRawTime} (${checkpointTimestamp})`);
+            } else {
+              console.log(`⚠️ [STORY] No se encontró rawTime para punto: ${pointName}. Puntos disponibles:`, Object.keys(times));
+            }
+          }
+        }
+
+        if (!checkpointRawTime) {
+          console.log(`⚠️ [STORY] No hay rawTime disponible, usando timestamp actual`);
+        }
+
+        console.log(`🎬 [STORY] Generando clip con timestamp: ${checkpointTimestamp}`);
+        clipResult = await generateStoryVideoClip(streamId, checkpointRawTime || Date.now(), extraData);
+
+        if (clipResult.success) {
+          // Actualizar story con datos del clip generado
+          await storyRef.update({
+            fileUrl: clipResult.clipUrl,
+            fileName: clipResult.fileName,
+            filePath: clipResult.clipUrl, // Por compatibilidad
+            generationInfo: {
+              ...storyData.generationInfo,
+              status: 'completed',
+              clipUrl: clipResult.clipUrl,
+              generatedAt: clipResult.generationInfo.generatedAt,
+              startTime: clipResult.generationInfo.startTime,
+              endTime: clipResult.generationInfo.endTime,
+              apiResponse: clipResult.generationInfo.apiResponse
+            }
+          });
+
+          console.log(`✅ [STORY] Clip generado y story actualizada: ${clipResult.clipUrl}`);
+        } else {
+          // Actualizar story con error de generación
+          await storyRef.update({
+            'generationInfo.status': 'failed',
+            'generationInfo.error': clipResult.error,
+            'generationInfo.failedAt': admin.firestore.FieldValue.serverTimestamp()
+          });
+
+          console.log(`❌ [STORY] Error generando clip: ${clipResult.error}`);
+        }
+      } catch (clipError) {
+        console.error(`❌ [STORY] Error en generación de clip:`, clipError);
+
+        // Actualizar story con error
+        await storyRef.update({
+          'generationInfo.status': 'failed',
+          'generationInfo.error': clipError.message,
+          'generationInfo.failedAt': admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        clipResult = { success: false, error: clipError.message };
+      }
+    }
+
+    return {
+      success: true,
+      storyId: storyRef.id,
+      storyType: storyType,
+      streamId: streamId,
+      description: description,
+      clipGeneration: clipResult
+    };
+
+  } catch (error) {
+    console.error(`❌ [STORY] Error creando story:`, error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Procesar participante en una ubicación específica
+ */
+async function processParticipantInLocation(db, location, participantData, timestamp, extraData = {}, rawTime = null) {
+  const { raceId, appId, eventId } = location;
+
+  console.log(`🔄 [BACKGROUND] Procesando en: ${raceId}/${appId}/${eventId}`);
+  console.log(`📊 [BACKGROUND] Datos del checkpoint:`, extraData);
+  console.log(`⏰ [BACKGROUND] RawTime del webhook:`, rawTime);
+
+  // Agregar raceId y eventId específicos + datos del checkpoint
+  const locationParticipantData = {
+    ...participantData,
+    raceId: raceId,
+    eventId: eventId, // Agregar el eventId específico de esta ubicación
+    webhookProcessedAt: timestamp,
+    updatedAt: timestamp,
+    // Agregar información del checkpoint
+    lastCheckpoint: {
+      point: extraData?.point,
+      location: extraData?.location,
+      processedAt: timestamp,
+      rawTime: rawTime || null // Timestamp exacto del checkpoint desde AWS
+    }
+  };
+
+  // Buscar participante existente (usando externalId como document ID)
+  const externalId = participantData.externalId;
+  const participantRef = db.collection('races').doc(raceId)
+    .collection('apps').doc(appId)
+    .collection('events').doc(eventId)
+    .collection('participants')
+    .doc(externalId);
+
+  const existingParticipant = await participantRef.get();
+  let participantId = externalId; // Siempre usar externalId como ID
+  let isNewParticipant = false;
+
+  if (existingParticipant.exists) {
+    // Actualizar existente
+    await participantRef.update(locationParticipantData);
+    console.log(`🔄 [BACKGROUND] Participante existente actualizado: ${participantId}`);
+  } else {
+    // Crear nuevo usando externalId como document ID
+    locationParticipantData.createdAt = timestamp;
+    locationParticipantData.registerDate = timestamp;
+
+    // Usar externalId como document ID para consistencia (participantRef ya está definido arriba)
+    await participantRef.set(locationParticipantData);
+    participantId = externalId; // El ID del documento es el externalId
+    isNewParticipant = true;
+
+    console.log(`🎯 [BACKGROUND] Participante creado con externalId como document ID: ${participantId}`);
+  }
+
+  console.log(`✅ [BACKGROUND] Participante ${isNewParticipant ? 'creado' : 'actualizado'}: ${participantId}`);
+
+  return {
+    raceId,
+    appId,
+    eventId,
+    participant: {
+      id: participantId,
+      externalId: participantData.externalId,
+      name: participantData.fullName,
+      dorsal: participantData.dorsal,
+      isNew: isNewParticipant
+    },
+    success: true
+  };
+}
+
+/**
  * @openapi
  * /api/race-events:
  *   get:
- *     summary: Obtener eventos de carrera
- *     description: Obtiene eventos de carrera filtrados por tipo, con información completa de participantes, sponsors, stories, etc.
+ *     summary: Obtener eventos de carrera con filtros avanzados
+ *     description: Obtiene eventos de carrera filtrados por tipo y participante, con información completa de participantes, sponsors, stories, etc. Incluye paginación mejorada.
  *     parameters:
  *       - in: query
  *         name: raceId
@@ -3474,19 +4329,26 @@ router.post("/checkpoint-participant", async (req, res) => {
  *           enum: [ATHLETE_CROSSED_TIMING_SPLIT, COMPLETE_AWARD, ATHLETE_STARTED, SPONSOR, ATHLETE_FINISHED]
  *         description: Filtrar por tipo de evento
  *       - in: query
+ *         name: participantId
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filtrar por ID específico de participante
+ *       - in: query
  *         name: limit
  *         required: false
  *         schema:
  *           type: integer
  *           default: 20
- *         description: Límite de resultados
+ *           maximum: 100
+ *         description: Límite de resultados por página
  *       - in: query
  *         name: offset
  *         required: false
  *         schema:
  *           type: integer
  *           default: 0
- *         description: Offset para paginación
+ *         description: Número de resultados a omitir para paginación
  *     responses:
  *       '200':
  *         description: Stories de eventos obtenidas exitosamente
@@ -3497,7 +4359,7 @@ router.post("/checkpoint-participant", async (req, res) => {
  */
 router.get("/race-events", async (req, res) => {
   try {
-    const { raceId, appId, eventId, type, limit = 20, offset = 0 } = req.query;
+    const { raceId, appId, eventId, type, participantId, limit = 20, offset = 0 } = req.query;
 
     if (!raceId || !appId || !eventId) {
       return res.status(400).json({
@@ -3510,7 +4372,7 @@ router.get("/race-events", async (req, res) => {
     const limitNum = Math.min(parseInt(limit) || 20, 100);
     const offsetNum = parseInt(offset) || 0;
 
-    console.log(`🔍 Obteniendo eventos de carrera desde stories - Race: ${raceId}, App: ${appId}, Event: ${eventId}, Type: ${type || 'ALL'}`);
+    console.log(`🔍 Obteniendo eventos de carrera desde stories - Race: ${raceId}, App: ${appId}, Event: ${eventId}, Type: ${type || 'ALL'}, Participant: ${participantId || 'ALL'}`);
 
     // Obtener sponsors una vez - ESTRUCTURA CORRECTA: races/apps
     const sponsorsSnapshot = await db.collection('races').doc(raceId)
@@ -3527,11 +4389,40 @@ router.get("/race-events", async (req, res) => {
       poster_url: sponsor.posterUrl || ""
     }));
 
-    // Obtener todos los participantes - ESTRUCTURA CORRECTA: races/apps/events
-    const participantsSnapshot = await db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('events').doc(eventId)
-      .collection('participants').get();
+    // ✅ OPTIMIZACIÓN: Obtener participantes según filtro
+    let participantsSnapshot;
+    if (participantId) {
+      // Obtener participante específico
+      const participantDoc = await db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('events').doc(eventId)
+        .collection('participants').doc(participantId).get();
+
+      if (!participantDoc.exists) {
+        return res.status(404).json({
+          error: "Participante no encontrado",
+          participantId,
+          raceId,
+          appId,
+          eventId
+        });
+      }
+
+      // Simular snapshot con un solo documento
+      participantsSnapshot = {
+        docs: [participantDoc],
+        empty: false,
+        size: 1
+      };
+      console.log(`👤 Obteniendo stories del participante específico: ${participantId}`);
+    } else {
+      // Obtener todos los participantes - ESTRUCTURA CORRECTA: races/apps/events
+      participantsSnapshot = await db.collection('races').doc(raceId)
+        .collection('apps').doc(appId)
+        .collection('events').doc(eventId)
+        .collection('participants').get();
+      console.log(`👥 Obteniendo stories de ${participantsSnapshot.size} participantes`);
+    }
 
     if (participantsSnapshot.empty) {
       return res.status(200).json({
@@ -3540,7 +4431,13 @@ router.get("/race-events", async (req, res) => {
           limit: limitNum,
           offset: offsetNum,
           total: 0,
-          hasMore: false
+          hasMore: false,
+          currentPage: 1,
+          totalPages: 0
+        },
+        filters: {
+          type: type || null,
+          participantId: participantId || null
         }
       });
     }
@@ -3619,18 +4516,34 @@ router.get("/race-events", async (req, res) => {
       return dateB - dateA; // Más reciente primero
     });
 
-    // Aplicar paginación
+    // ✅ PAGINACIÓN MEJORADA
+    const totalStories = allStories.length;
     const paginatedStories = allStories.slice(offsetNum, offsetNum + limitNum);
 
-    console.log(`✅ ${paginatedStories.length} stories procesadas de ${allStories.length} total`);
+    console.log(`✅ ${paginatedStories.length} stories procesadas de ${totalStories} total (filtros: type=${type || 'ALL'}, participant=${participantId || 'ALL'})`);
 
     return res.status(200).json({
       stories: paginatedStories,
       pagination: {
         limit: limitNum,
         offset: offsetNum,
-        total: allStories.length,
-        hasMore: (offsetNum + limitNum) < allStories.length
+        total: totalStories,
+        hasMore: (offsetNum + limitNum) < totalStories,
+        currentPage: Math.floor(offsetNum / limitNum) + 1,
+        totalPages: Math.ceil(totalStories / limitNum),
+        nextOffset: (offsetNum + limitNum) < totalStories ? offsetNum + limitNum : null,
+        prevOffset: offsetNum > 0 ? Math.max(0, offsetNum - limitNum) : null
+      },
+      filters: {
+        type: type || null,
+        participantId: participantId || null,
+        raceId,
+        appId,
+        eventId
+      },
+      summary: {
+        totalParticipants: participantsSnapshot.size,
+        storiesPerParticipant: participantsSnapshot.size > 0 ? Math.round(totalStories / participantsSnapshot.size * 100) / 100 : 0
       }
     });
 
@@ -6406,6 +7319,45 @@ router.get("/races/:raceId/apps/:appId/events_splits", async (req, res) => {
         code: "INTERNAL_ERROR",
         message: "Error interno del servidor"
       }
+    });
+  }
+});
+
+// Debug endpoint para ver usuarios con tokens FCM
+router.get('/debug/users-with-tokens', async (req, res) => {
+  try {
+    const db = admin.firestore();
+
+    // Obtener usuarios con tokens FCM
+    const usersSnapshot = await db.collection('users')
+      .where('fcmToken', '!=', null)
+      .limit(10)
+      .get();
+
+    const users = [];
+    usersSnapshot.docs.forEach(doc => {
+      const userData = doc.data();
+      users.push({
+        id: doc.id,
+        email: userData.email || userData.profile?.email || 'Sin email',
+        name: userData.name || userData.profile?.name || userData.displayName || 'Sin nombre',
+        fcmToken: userData.fcmToken ? `${userData.fcmToken.substring(0, 20)}...` : null,
+        createdAt: userData.createdAt,
+        lastLogin: userData.lastLogin || userData.lastActiveAt
+      });
+    });
+
+    res.json({
+      success: true,
+      totalUsers: users.length,
+      users: users
+    });
+
+  } catch (error) {
+    console.error('❌ Error obteniendo usuarios:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

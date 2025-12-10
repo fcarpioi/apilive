@@ -28,29 +28,62 @@ export const onStoryCreated = onDocumentCreated(
       console.log(`📄 Datos de la historia:`, storyData);
 
       // Obtener información del participante
+      // NOTA: participantId en la ruta es el externalId, no el ID del documento
       const db = admin.firestore();
-      const participantRef = db.collection('races').doc(raceId)
-        .collection('apps').doc(appId)
-        .collection('events').doc(eventId)
-        .collection('participants').doc(participantId);
-      
-      const participantDoc = await participantRef.get();
-      
-      if (!participantDoc.exists) {
-        console.log("⚠️ Participante no encontrado, saltando notificación");
+
+      console.log(`🔍 [TRIGGER] Buscando participante con ID: ${participantId}`);
+      console.log(`🔍 [TRIGGER] Ruta: races/${raceId}/apps/${appId}/events/${eventId}/participants`);
+
+      let participantDoc;
+      try {
+        // Buscar participante directamente por document ID (ahora participantId = externalId = document ID)
+        const participantRef = db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(eventId)
+          .collection('participants')
+          .doc(participantId);
+
+        participantDoc = await participantRef.get();
+
+        console.log(`🔍 [TRIGGER] Búsqueda directa por ID: ${participantId}, existe: ${participantDoc.exists}`);
+      } catch (error) {
+        console.error(`❌ [TRIGGER] Error en consulta de participante:`, error);
         return;
       }
+
+      if (!participantDoc.exists) {
+        console.log(`⚠️ Participante no encontrado con ID: ${participantId}, saltando notificación`);
+
+        // Debug: Listar algunos participantes para verificar la estructura
+        const allParticipants = await db.collection('races').doc(raceId)
+          .collection('apps').doc(appId)
+          .collection('events').doc(eventId)
+          .collection('participants')
+          .limit(3)
+          .get();
+
+        console.log(`🔍 [DEBUG] Total participantes en evento: ${allParticipants.size}`);
+        allParticipants.docs.forEach((doc, index) => {
+          const data = doc.data();
+          console.log(`🔍 [DEBUG] Participante ${index + 1}: ID=${doc.id}, externalId=${data.externalId}, name=${data.name || data.fullName}`);
+        });
+
+        return;
+      }
+
+      console.log(`✅ [TRIGGER] Participante encontrado: ${participantDoc.id}`);
+      console.log(`✅ [TRIGGER] Datos del participante:`, participantDoc.data());
 
       const participantData = participantDoc.data();
       console.log(`👤 Participante: ${participantData.fullName || participantData.name || 'Sin nombre'}`);
 
-      // 1. ENVIAR A TODOS LOS USUARIOS (por ahora)
-      await sendNotificationToAllUsers(storyData, participantData, {
+      // 1. ENVIAR SOLO A SEGUIDORES (implementación activa)
+      await sendNotificationToFollowers(participantId, storyData, participantData, {
         raceId, appId, eventId, participantId, storyId
       });
 
-      // 2. TODO: ENVIAR SOLO A SEGUIDORES (implementar después)
-      // await sendNotificationToFollowers(participantId, storyData, participantData, {
+      // 2. ENVIAR A TODOS LOS USUARIOS (deshabilitado para testing de seguidores)
+      // await sendNotificationToAllUsers(storyData, participantData, {
       //   raceId, appId, eventId, participantId, storyId
       // });
 
@@ -71,7 +104,7 @@ async function sendNotificationToAllUsers(storyData, participantData, storyInfo)
     
     const db = admin.firestore();
     
-    // Obtener todos los tokens FCM de usuarios
+    // ✅ OPTIMIZADO: Obtener todos los tokens FCM de usuarios (fuente única de verdad)
     const usersSnapshot = await db.collection('users')
       .where('fcmToken', '!=', null)
       .limit(1000) // Limitar para evitar problemas de rendimiento
@@ -138,54 +171,76 @@ function createNotificationPayload(storyData, participantData, storyInfo) {
   const dorsal = participantData.dorsal || 'Sin dorsal';
   
   // Determinar el tipo de evento basado en el tipo de historia
-  let eventType = 'pasó por un checkpoint';
+  // Buscar el tipo en diferentes ubicaciones posibles
+  const storyType = storyData.type || storyData.checkpointInfo?.type || 'unknown';
+
+  let eventType = 'passed through a checkpoint';
   let emoji = '🏃';
-  
-  if (storyData.type === 'ATHLETE_STARTED') {
-    eventType = 'inició la carrera';
+
+  console.log(`🎯 [NOTIFICATION] Detectando tipo de evento: storyType="${storyType}"`);
+  console.log(`🎯 [NOTIFICATION] CheckpointInfo disponible:`, storyData.checkpointInfo);
+
+  if (storyType === 'ATHLETE_STARTED') {
+    eventType = 'started the race';
     emoji = '🚀';
-  } else if (storyData.type === 'ATHLETE_FINISHED') {
-    eventType = 'terminó la carrera';
+  } else if (storyType === 'ATHLETE_FINISHED') {
+    eventType = 'finished the race';
     emoji = '🏁';
-  } else if (storyData.type === 'ATHLETE_CROSSED_TIMING_SPLIT') {
-    const checkpoint = storyData.split_time?.checkpoint || 'checkpoint';
-    eventType = `pasó por ${checkpoint}`;
+  } else if (storyType === 'ATHLETE_CROSSED_TIMING_SPLIT') {
+    const checkpoint = storyData.split_time?.checkpoint || storyData.checkpointInfo?.point || 'checkpoint';
+    eventType = `passed through ${checkpoint}`;
     emoji = '⏱️';
+  } else {
+    // Para checkpoints genéricos, usar el point específico
+    const checkpointPoint = storyData.checkpointInfo?.point || storyData.split_time?.checkpoint || 'checkpoint';
+    eventType = `passed through ${checkpointPoint}`;
+    emoji = '🏃';
   }
+
+  console.log(`🎯 [NOTIFICATION] Tipo detectado: "${storyType}" → eventType="${eventType}", emoji="${emoji}"`);
 
   const title = `${emoji} ${participantName} (#${dorsal})`;
   const body = `${eventType}${storyData.split_time?.time ? ` - Tiempo: ${storyData.split_time.time}` : ''}`;
+
+  // Validar URL de imagen
+  let imageUrl = null;
+  const potentialImageUrl = storyData.image_url || storyData.video_url || storyData.fileUrl;
+  if (potentialImageUrl && typeof potentialImageUrl === 'string' && potentialImageUrl.startsWith('http')) {
+    imageUrl = potentialImageUrl;
+  }
 
   return {
     notification: {
       title: title,
       body: body,
-      imageUrl: storyData.image_url || storyData.video_url || null
+      ...(imageUrl && { imageUrl: imageUrl })
     },
     data: {
-      // Información de la historia (como string para compatibilidad)
+      // ✅ ESTRUCTURA SOLICITADA POR EL DESARROLLADOR BACKEND
+      notificationType: "NEW_STORY",
       storyId: storyInfo.storyId,
       participantId: storyInfo.participantId,
+      timestamp: new Date().toISOString(),
+
+      // ✅ INFORMACIÓN ADICIONAL PARA COMPATIBILIDAD Y FUNCIONALIDAD
       raceId: storyInfo.raceId,
       appId: storyInfo.appId,
       eventId: storyInfo.eventId,
-      storyType: storyData.type || 'unknown',
+      storyType: storyType,
       participantName: participantName,
       participantDorsal: dorsal,
       checkpointTime: storyData.split_time?.time || '',
       checkpointName: storyData.split_time?.checkpoint || '',
-      mediaUrl: storyData.video_url || storyData.image_url || '',
-      mediaType: storyData.video_url ? 'video' : (storyData.image_url ? 'image' : 'none'),
+      mediaUrl: storyData.video_url || storyData.image_url || storyData.fileUrl || '',
+      mediaType: storyData.video_url || storyData.fileUrl ? 'video' : (storyData.image_url ? 'image' : 'none'),
       description: storyData.description || '',
-      // Payload completo de la historia como JSON string
+
+      // ✅ PAYLOAD COMPLETO COMO JSON STRING PARA CASOS AVANZADOS
       storyPayload: JSON.stringify({
         story: storyData,
         participant: participantData,
         meta: storyInfo
-      }),
-      // Tipo de notificación
-      notificationType: 'story_created',
-      timestamp: new Date().toISOString()
+      })
     },
     android: {
       priority: 'high',
@@ -213,9 +268,11 @@ function createNotificationPayload(storyData, participantData, storyInfo) {
           'mutable-content': 1
         }
       },
-      fcm_options: {
-        image: storyData.image_url || storyData.video_url || null
-      }
+      ...(imageUrl && {
+        fcm_options: {
+          image: imageUrl
+        }
+      })
     }
   };
 }
@@ -285,35 +342,73 @@ async function saveNotificationStats(storyInfo, stats) {
 async function sendNotificationToFollowers(participantId, storyData, participantData, storyInfo) {
   try {
     console.log("👥 Enviando notificación solo a seguidores...");
-    
+    console.log(`🔍 [FOLLOWERS] Buscando seguidores para participantId: ${participantId}`);
+
     const db = admin.firestore();
-    
+
     // Buscar usuarios que siguen a este participante
+    console.log(`🔍 [FOLLOWERS] Ejecutando query: collectionGroup('followings').where('profileId', '==', '${participantId}').where('profileType', '==', 'participant')`);
+
     const followersSnapshot = await db.collectionGroup('followings')
       .where('profileId', '==', participantId)
       .where('profileType', '==', 'participant')
       .get();
 
+    console.log(`🔍 [FOLLOWERS] Query ejecutada. Documentos encontrados: ${followersSnapshot.size}`);
+
     if (followersSnapshot.empty) {
       console.log("⚠️ No se encontraron seguidores para este participante");
+
+      // Debug: Mostrar algunos documentos de followings para verificar estructura
+      console.log("🔍 [DEBUG] Verificando estructura de followings...");
+      const allFollowings = await db.collectionGroup('followings').limit(5).get();
+      console.log(`🔍 [DEBUG] Total documentos en followings: ${allFollowings.size}`);
+      allFollowings.docs.forEach((doc, index) => {
+        const data = doc.data();
+        console.log(`🔍 [DEBUG] Following ${index + 1}: path=${doc.ref.path}, profileId=${data.profileId}, profileType=${data.profileType}`);
+      });
+
       return;
     }
 
     const followerUserIds = followersSnapshot.docs.map(doc => {
       const path = doc.ref.path;
-      return path.split('/')[1]; // Extraer userId de users/{userId}/followings/{followingId}
+      const userId = path.split('/')[1]; // Extraer userId de users/{userId}/followings/{followingId}
+      console.log(`🔍 [FOLLOWERS] Seguidor encontrado: path=${path}, userId=${userId}`);
+      return userId;
     });
 
-    console.log(`👥 Encontrados ${followerUserIds.length} seguidores`);
+    console.log(`👥 Encontrados ${followerUserIds.length} seguidores: [${followerUserIds.join(', ')}]`);
 
-    // Obtener tokens FCM de los seguidores
+    // ✅ OPTIMIZADO: Obtener tokens FCM de los seguidores (fuente única de verdad)
     const tokens = [];
+    const userTokenDetails = [];
+
     for (const userId of followerUserIds) {
+      console.log(`🔍 [TOKENS] Buscando token para usuario: ${userId}`);
       const userDoc = await db.collection('users').doc(userId).get();
-      if (userDoc.exists && userDoc.data().fcmToken) {
-        tokens.push(userDoc.data().fcmToken);
+
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        console.log(`🔍 [TOKENS] Usuario ${userId} existe. FCM Token: ${userData.fcmToken ? userData.fcmToken.substring(0, 30) + '...' : 'NO TIENE TOKEN'}`);
+
+        if (userData.fcmToken) {
+          tokens.push(userData.fcmToken);
+          userTokenDetails.push({
+            userId: userId,
+            token: userData.fcmToken.substring(0, 30) + '...',
+            fullToken: userData.fcmToken
+          });
+        }
+      } else {
+        console.log(`❌ [TOKENS] Usuario ${userId} NO EXISTE en colección users`);
       }
     }
+
+    console.log(`📱 [TOKENS] Tokens válidos encontrados: ${tokens.length}`);
+    userTokenDetails.forEach((detail, index) => {
+      console.log(`📱 [TOKENS] ${index + 1}. Usuario: ${detail.userId}, Token: ${detail.token}`);
+    });
 
     if (tokens.length === 0) {
       console.log("⚠️ Ningún seguidor tiene token FCM válido");
@@ -323,9 +418,19 @@ async function sendNotificationToFollowers(participantId, storyData, participant
     // Crear payload personalizado para seguidores
     const notificationPayload = createNotificationPayload(storyData, participantData, storyInfo);
     notificationPayload.notification.title = `🔔 ${notificationPayload.notification.title}`;
-    notificationPayload.notification.body = `Tu atleta seguido ${notificationPayload.notification.body}`;
+    notificationPayload.notification.body = `Your followed athlete ${notificationPayload.notification.body}`;
+
+    console.log(`📤 [FCM] Preparando envío a ${tokens.length} tokens`);
+    console.log(`📤 [FCM] Título: ${notificationPayload.notification.title}`);
+    console.log(`📤 [FCM] Cuerpo: ${notificationPayload.notification.body}`);
+    console.log(`📤 [FCM] Tokens a enviar: [${tokens.map(t => t.substring(0, 30) + '...').join(', ')}]`);
+    console.log(`📤 [FCM] PAYLOAD COMPLETO:`, JSON.stringify(notificationPayload, null, 2));
+
+    // Log específico del payload de datos
+    console.log(`📊 [FCM] PAYLOAD DATA (lo que recibe la app):`, JSON.stringify(notificationPayload.data, null, 2));
 
     // Enviar notificación
+    console.log(`🚀 [FCM] Ejecutando sendEachForMulticast...`);
     const response = await admin.messaging().sendEachForMulticast({
       tokens: tokens,
       notification: notificationPayload.notification,
@@ -334,7 +439,24 @@ async function sendNotificationToFollowers(participantId, storyData, participant
       apns: notificationPayload.apns
     });
 
-    console.log(`✅ Notificaciones a seguidores: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
+    console.log(`✅ [FCM] Respuesta recibida: ${response.successCount} exitosas, ${response.failureCount} fallidas`);
+
+    // Log detallado de errores si los hay
+    if (response.failureCount > 0) {
+      console.log(`❌ [FCM] Errores detallados:`);
+      response.responses.forEach((resp, index) => {
+        if (!resp.success) {
+          console.log(`❌ [FCM] Token ${index + 1} (${tokens[index].substring(0, 30)}...): ${resp.error?.code} - ${resp.error?.message}`);
+        } else {
+          console.log(`✅ [FCM] Token ${index + 1} (${tokens[index].substring(0, 30)}...): ENVIADO EXITOSAMENTE`);
+        }
+      });
+    } else {
+      // Log de éxito para todos los tokens
+      tokens.forEach((token, index) => {
+        console.log(`✅ [FCM] Token ${index + 1} (${token.substring(0, 30)}...): ENVIADO EXITOSAMENTE`);
+      });
+    }
 
     // Guardar estadísticas
     await saveNotificationStats(storyInfo, {
