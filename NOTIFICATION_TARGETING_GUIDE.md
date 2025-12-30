@@ -84,7 +84,7 @@ switch (storyData.type) {
       raceId, appId, eventId, participantId, storyId
     });
     break;
-    
+
   case 'ATHLETE_CROSSED_TIMING_SPLIT':
     console.log("⏱️ Checkpoint - enviando solo a seguidores");
     await sendNotificationToFollowers(participantId, storyData, participantData, {

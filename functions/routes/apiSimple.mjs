@@ -45,7 +45,7 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
     console.log(`📤 Enviando request para generar clip:`, clipPayload);
     
     // Llamar al API de generación de clips
-    const response = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipUrlFromAsset', {
+    const response = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipFromVideo', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -64,6 +64,8 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
     
     // Guardar información del clip en Firestore para referencia
     const db = admin.firestore();
+    const finalClipUrl = result.clipUrl || result.url || result;
+
     await db.collection("video-clips").add({
       raceId,
       eventId,
@@ -72,12 +74,127 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
       streamId,
       startTime,
       endTime,
-      clipUrl: result.clipUrl || result.url || result,
+      clipUrl: finalClipUrl,
       generatedAt: admin.firestore.FieldValue.serverTimestamp(),
       originalTimestamp: timestamp
     });
-    
-    return result.clipUrl || result.url || result;
+
+    // 🆕 GUARDAR CLIPURL EN EL CHECKPOINT DONDE SE GENERÓ
+    try {
+      console.log(`📍 [apiSimple] Actualizando checkpoint con clipUrl: ${checkpointId}`);
+
+      const checkpointRef = db.collection("races").doc(raceId)
+        .collection("events").doc(eventId)
+        .collection("participants").doc(participantId)
+        .collection("checkpoints").doc(checkpointId);
+
+      await checkpointRef.update({
+        clipUrl: finalClipUrl,
+        clipGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+        hasVideoClip: true
+      });
+
+      console.log(`✅ [apiSimple] Checkpoint actualizado con clipUrl: ${checkpointId}`);
+    } catch (checkpointError) {
+      console.error(`⚠️ [apiSimple] Error actualizando checkpoint con clipUrl:`, checkpointError);
+    }
+
+    // 🆕 GUARDAR CLIPURL EN EL SPLIT/LOCATION CORRESPONDIENTE
+    try {
+      console.log(`🏁 [apiSimple] Buscando split/location para checkpoint: ${checkpointId}`);
+
+      // Buscar el evento en la estructura nueva
+      let eventDoc = null;
+      let eventRef = null;
+
+      // Buscar en todas las apps para encontrar el evento
+      const appsSnapshot = await db.collection("races").doc(raceId).collection("apps").get();
+
+      for (const appDoc of appsSnapshot.docs) {
+        const appId = appDoc.id;
+        const newEventRef = db.collection("races").doc(raceId)
+          .collection("apps").doc(appId)
+          .collection("events").doc(eventId);
+
+        const newEventDoc = await newEventRef.get();
+        if (newEventDoc.exists) {
+          eventDoc = newEventDoc;
+          eventRef = newEventRef;
+          console.log(`✅ [apiSimple] Evento encontrado: /races/${raceId}/apps/${appId}/events/${eventId}`);
+          break;
+        }
+      }
+
+      if (eventDoc && eventDoc.exists) {
+        const eventData = eventDoc.data();
+
+        // Buscar en splits si existe
+        if (eventData.splits && Array.isArray(eventData.splits)) {
+          const splitIndex = eventData.splits.findIndex(split =>
+            split === checkpointId ||
+            split.name === checkpointId ||
+            split.id === checkpointId
+          );
+
+          if (splitIndex !== -1) {
+            console.log(`📍 [apiSimple] Split encontrado en índice ${splitIndex}: ${checkpointId}`);
+
+            // Guardar en la misma estructura donde se encontró el evento
+            const splitClipsRef = eventRef.collection("split-clips").doc(checkpointId);
+
+            await splitClipsRef.set({
+              splitName: checkpointId,
+              splitIndex: splitIndex,
+              clipUrl: finalClipUrl,
+              participantId: participantId,
+              raceId: raceId,
+              eventId: eventId,
+              streamId: streamId,
+              timestamp: timestamp,
+              generatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            console.log(`✅ [apiSimple] ClipUrl guardado en split: ${checkpointId}`);
+          }
+        }
+
+        // Buscar en timingPoints si existe
+        if (eventData.timingPoints && Array.isArray(eventData.timingPoints)) {
+          const timingIndex = eventData.timingPoints.findIndex(point =>
+            point === checkpointId ||
+            point.name === checkpointId ||
+            point.id === checkpointId
+          );
+
+          if (timingIndex !== -1) {
+            console.log(`⏱️ [apiSimple] Timing point encontrado en índice ${timingIndex}: ${checkpointId}`);
+
+            // Guardar en la misma estructura donde se encontró el evento
+            const timingClipsRef = eventRef.collection("timing-clips").doc(checkpointId);
+
+            await timingClipsRef.set({
+              timingPointName: checkpointId,
+              timingIndex: timingIndex,
+              clipUrl: finalClipUrl,
+              participantId: participantId,
+              raceId: raceId,
+              eventId: eventId,
+              streamId: streamId,
+              timestamp: timestamp,
+              generatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            console.log(`✅ [apiSimple] ClipUrl guardado en timing point: ${checkpointId}`);
+          }
+        }
+      } else {
+        console.log(`⚠️ [apiSimple] No se encontró el evento ${eventId} en ninguna estructura`);
+      }
+    } catch (splitError) {
+      console.error(`⚠️ [apiSimple] Error guardando clipUrl en split/location:`, splitError);
+    }
+
+    return finalClipUrl;
     
   } catch (error) {
     console.error(`❌ Error generando clip de video:`, error);

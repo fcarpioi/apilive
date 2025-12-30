@@ -1,26 +1,29 @@
-// firebase-messaging-sw.js - Service Worker para Firebase Cloud Messaging
-import { initializeApp } from 'firebase/app';
-import { getMessaging, onBackgroundMessage } from 'firebase/messaging/sw';
+// 🔥 Firebase Cloud Messaging Service Worker
+// Archivo requerido para recibir notificaciones en segundo plano
 
-// Tu configuración de Firebase
+// 📦 Importar Firebase scripts (usando compat para Service Worker)
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
+
+// 🔧 Configuración Firebase para live-copernico
 const firebaseConfig = {
-  apiKey: "tu-api-key",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto-id",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "tu-app-id"
+  apiKey: "AIzaSyAeh1ZcY0i05YH9nQQgYmbABcNAmwWx0eA",
+  authDomain: "live-copernico.firebaseapp.com",
+  projectId: "live-copernico",
+  storageBucket: "live-copernico.firebasestorage.app",
+  messagingSenderId: "62103923048",
+  appId: "1:62103923048:android:3416344fab2afc15720edd"
 };
 
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
+// 🚀 Inicializar Firebase en Service Worker
+firebase.initializeApp(firebaseConfig);
 
-// Inicializar Firebase Cloud Messaging
-const messaging = getMessaging(app);
+// 📱 Inicializar Firebase Messaging
+const messaging = firebase.messaging();
 
-// Manejar mensajes en segundo plano
-onBackgroundMessage(messaging, (payload) => {
-  console.log('[firebase-messaging-sw.js] Mensaje recibido en segundo plano:', payload);
+// 🔔 Manejar mensajes en segundo plano
+messaging.onBackgroundMessage((payload) => {
+  console.log('🔔 [firebase-messaging-sw.js] Mensaje recibido en segundo plano:', payload);
   
   const notificationTitle = payload.notification?.title || 'Nueva notificación';
   const notificationOptions = {
@@ -50,9 +53,12 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
   if (event.action === 'open') {
-    // Abrir la aplicación
+    // 🌐 Abrir la aplicación web
     event.waitUntil(
-      clients.openWindow('/')
+      clients.openWindow('http://localhost:8080/get-fcm-token.html')
     );
   }
 });
+
+// 📝 Log para confirmar que el service worker está funcionando
+console.log('🔥 [firebase-messaging-sw.js] Service Worker cargado correctamente para live-copernico');

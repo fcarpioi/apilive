@@ -5,6 +5,53 @@ import admin from "firebase-admin";
 import fetch from "node-fetch";
 import { v4 as uuidv4 } from "uuid";
 import axios from 'axios';
+
+/**
+ * Función para normalizar encoding UTF-8 en objetos
+ */
+function normalizeUTF8InObject(obj) {
+  if (typeof obj === 'string') {
+    // Detectar y corregir doble encoding UTF-8
+    try {
+      let normalized = obj;
+
+      // Corregir secuencias comunes de doble encoding
+      const replacements = {
+        'Ã³': 'ó',
+        'Ã¡': 'á',
+        'Ã©': 'é',
+        'Ã­': 'í',
+        'Ãº': 'ú',
+        'Ã±': 'ñ',
+        'Ã': 'Á',
+        'Ã‰': 'É',
+        'Ã': 'Í',
+        'Ã"': 'Ó',
+        'Ãš': 'Ú',
+        'Ã\u0091': 'Ñ'
+      };
+
+      for (const [corrupted, correct] of Object.entries(replacements)) {
+        normalized = normalized.replace(new RegExp(corrupted, 'g'), correct);
+      }
+
+      console.log(`🔤 UTF-8 normalizado: "${obj}" → "${normalized}"`);
+      return normalized;
+    } catch (error) {
+      console.warn('Error normalizando UTF-8:', error);
+      return obj;
+    }
+  } else if (Array.isArray(obj)) {
+    return obj.map(item => normalizeUTF8InObject(item));
+  } else if (obj && typeof obj === 'object') {
+    const normalized = {};
+    for (const [key, value] of Object.entries(obj)) {
+      normalized[normalizeUTF8InObject(key)] = normalizeUTF8InObject(value);
+    }
+    return normalized;
+  }
+  return obj;
+}
 // import monitor from "../monitoring/websocketMonitor.mjs"; // COMENTADO TEMPORALMENTE
 //import dotenv from "dotenv";
 //dotenv.config();
@@ -302,12 +349,15 @@ router.get("/events", async (req, res) => {
  */
 router.post("/follow", async (req, res) => {
   try {
-    const { followerId, followingId, raceId, appId, eventId } = req.body;
+    let { followerId, followingId, raceId, appId, eventId } = req.body;
     if (!followerId || !followingId || !raceId || !appId || !eventId) {
       return res.status(400).json({
         message: "followerId, followingId, raceId, appId y eventId son obligatorios.",
       });
     }
+
+    // Normalizar eventId para evitar problemas de encoding
+    eventId = normalizeUTF8InObject(eventId);
 
     const db = admin.firestore();
 
@@ -416,12 +466,15 @@ router.post("/follow", async (req, res) => {
  */
 router.post("/unfollow", async (req, res) => {
   try {
-    const { followerId, followingId, raceId, appId, eventId } = req.body;
+    let { followerId, followingId, raceId, appId, eventId } = req.body;
     if (!followerId || !followingId || !raceId || !appId || !eventId) {
       return res.status(400).json({
         message: "followerId, followingId, raceId, appId y eventId son obligatorios.",
       });
     }
+
+    // Normalizar eventId para evitar problemas de encoding
+    eventId = normalizeUTF8InObject(eventId);
 
     const db = admin.firestore();
 
@@ -567,6 +620,217 @@ router.post("/like", async (req, res) => {
   } catch (error) {
     console.error("Error al agregar like:", error);
     return res.status(500).json({ message: "Error interno del servidor", error: error.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/shares/count:
+ *   get:
+ *     summary: Obtener contador de comparticiones de un participante
+ *     description: Obtiene el número total de veces que se han compartido todas las historias de un participante.
+ *     parameters:
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la carrera
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la aplicación
+ *       - in: query
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del evento
+ *       - in: query
+ *         name: participantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del participante
+ *       - in: query
+ *         name: storyId
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: ID de una historia específica (opcional). Si se proporciona, devuelve solo las comparticiones de esa historia.
+ *     responses:
+ *       '200':
+ *         description: Contador obtenido correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 raceId:
+ *                   type: string
+ *                 appId:
+ *                   type: string
+ *                 eventId:
+ *                   type: string
+ *                 participantId:
+ *                   type: string
+ *                 storyId:
+ *                   type: string
+ *                   nullable: true
+ *                 totalShares:
+ *                   type: integer
+ *                   description: Número total de comparticiones
+ *                 sharesByType:
+ *                   type: object
+ *                   description: Desglose por tipo de compartición
+ *                   properties:
+ *                     social_media:
+ *                       type: integer
+ *                     direct_message:
+ *                       type: integer
+ *                     copy_link:
+ *                       type: integer
+ *                     other:
+ *                       type: integer
+ *                 sharesByPlatform:
+ *                   type: object
+ *                   description: Desglose por plataforma (si se especificó)
+ *       '400':
+ *         description: Parámetros faltantes
+ *       '404':
+ *         description: Participante no encontrado
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.get("/shares/count", async (req, res) => {
+  try {
+    const { raceId, appId, eventId, participantId, storyId } = req.query;
+
+    if (!raceId || !appId || !eventId || !participantId) {
+      return res.status(400).json({
+        message: "raceId, appId, eventId y participantId son obligatorios.",
+      });
+    }
+
+    const db = admin.firestore();
+
+    // Usar la estructura correcta: races/apps/events/participants
+    const participantRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants").doc(participantId);
+
+    const participantDoc = await participantRef.get();
+    if (!participantDoc.exists) {
+      return res.status(404).json({
+        message: "El participante no existe en este evento.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
+      });
+    }
+
+    let totalShares = 0;
+    let sharesByType = { social_media: 0, direct_message: 0, copy_link: 0, other: 0 };
+    let sharesByPlatform = {};
+
+    if (storyId) {
+      // Contar comparticiones de una historia específica
+      const storyRef = participantRef.collection("stories").doc(storyId);
+      const storyDoc = await storyRef.get();
+
+      if (!storyDoc.exists) {
+        return res.status(404).json({
+          message: "La historia no existe.",
+          path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+        });
+      }
+
+      const sharesSnapshot = await storyRef.collection("shares").get();
+      totalShares = sharesSnapshot.size;
+
+      // Analizar tipos y plataformas
+      sharesSnapshot.docs.forEach(shareDoc => {
+        const shareData = shareDoc.data();
+        const type = shareData.shareType || 'other';
+        const platform = shareData.platform;
+
+        sharesByType[type] = (sharesByType[type] || 0) + 1;
+
+        if (platform) {
+          sharesByPlatform[platform] = (sharesByPlatform[platform] || 0) + 1;
+        }
+      });
+
+    } else {
+      // Contar comparticiones de todas las historias del participante
+      const storiesSnapshot = await participantRef.collection("stories").get();
+
+      if (storiesSnapshot.empty) {
+        return res.status(200).json({
+          raceId, appId, participantId, eventId, storyId: null,
+          totalShares: 0, sharesByType, sharesByPlatform
+        });
+      }
+
+      const shareCounts = await Promise.all(
+        storiesSnapshot.docs.map(async (storyDoc) => {
+          const sharesSnapshot = await storyDoc.ref.collection("shares").get();
+
+          // Analizar cada compartición
+          const storyShares = { total: sharesSnapshot.size, byType: {}, byPlatform: {} };
+
+          sharesSnapshot.docs.forEach(shareDoc => {
+            const shareData = shareDoc.data();
+            const type = shareData.shareType || 'other';
+            const platform = shareData.platform;
+
+            storyShares.byType[type] = (storyShares.byType[type] || 0) + 1;
+
+            if (platform) {
+              storyShares.byPlatform[platform] = (storyShares.byPlatform[platform] || 0) + 1;
+            }
+          });
+
+          return storyShares;
+        })
+      );
+
+      // Sumar todos los contadores
+      shareCounts.forEach(storyShares => {
+        totalShares += storyShares.total;
+
+        // Sumar por tipo
+        Object.keys(storyShares.byType).forEach(type => {
+          sharesByType[type] = (sharesByType[type] || 0) + storyShares.byType[type];
+        });
+
+        // Sumar por plataforma
+        Object.keys(storyShares.byPlatform).forEach(platform => {
+          sharesByPlatform[platform] = (sharesByPlatform[platform] || 0) + storyShares.byPlatform[platform];
+        });
+      });
+    }
+
+    console.log(`✅ [SHARES] Contador obtenido: ${totalShares} comparticiones para participante ${participantId}`);
+
+    return res.status(200).json({
+      raceId,
+      appId,
+      eventId,
+      participantId,
+      storyId: storyId || null,
+      totalShares,
+      sharesByType,
+      sharesByPlatform
+    });
+
+  } catch (error) {
+    console.error("❌ [SHARES] Error al obtener contador:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
   }
 });
 
@@ -774,6 +1038,157 @@ router.post("/unlike", async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar like:", error);
     return res.status(500).json({ message: "Error interno del servidor", error: error.message });
+  }
+});
+
+/**
+ * @openapi
+ * /api/share:
+ *   post:
+ *     summary: Compartir una historia (incrementar contador)
+ *     description: Incrementa el contador de veces que se ha compartido una historia. Solo permite sumar, no restar.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - raceId
+ *               - appId
+ *               - eventId
+ *               - participantId
+ *               - storyId
+ *               - userId
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *                 description: ID de la carrera
+ *               appId:
+ *                 type: string
+ *                 description: ID de la aplicación
+ *               eventId:
+ *                 type: string
+ *                 description: ID del evento
+ *               participantId:
+ *                 type: string
+ *                 description: ID del participante
+ *               storyId:
+ *                 type: string
+ *                 description: ID de la historia
+ *               userId:
+ *                 type: string
+ *                 description: ID del usuario que comparte
+ *               shareType:
+ *                 type: string
+ *                 enum: [social_media, direct_message, copy_link, other]
+ *                 description: Tipo de compartición (opcional)
+ *                 default: other
+ *               platform:
+ *                 type: string
+ *                 description: Plataforma donde se compartió (opcional, ej. "whatsapp", "instagram", "facebook")
+ *     responses:
+ *       '200':
+ *         description: Compartición registrada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 shareId:
+ *                   type: string
+ *                 userId:
+ *                   type: string
+ *                 raceId:
+ *                   type: string
+ *                 appId:
+ *                   type: string
+ *                 eventId:
+ *                   type: string
+ *                 participantId:
+ *                   type: string
+ *                 storyId:
+ *                   type: string
+ *                 shareType:
+ *                   type: string
+ *                 platform:
+ *                   type: string
+ *                 sharedAt:
+ *                   type: string
+ *                   format: date-time
+ *       '400':
+ *         description: Parámetros faltantes
+ *       '404':
+ *         description: Historia no encontrada
+ *       '500':
+ *         description: Error interno del servidor
+ */
+router.post("/share", async (req, res) => {
+  try {
+    const { raceId, appId, eventId, participantId, storyId, userId, shareType = "other", platform } = req.body;
+
+    // Validar parámetros requeridos
+    if (!raceId || !appId || !eventId || !participantId || !storyId || !userId) {
+      return res.status(400).json({
+        message: "raceId, appId, eventId, participantId, storyId y userId son obligatorios."
+      });
+    }
+
+    const db = admin.firestore();
+
+    // Verificar que la historia existe
+    const storyRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants").doc(participantId)
+      .collection("stories").doc(storyId);
+
+    const storyDoc = await storyRef.get();
+    if (!storyDoc.exists) {
+      return res.status(404).json({
+        message: "La historia no existe.",
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+      });
+    }
+
+    // Crear registro de compartición (siempre se permite, no hay restricciones como en likes)
+    const shareRef = storyRef.collection("shares").doc();
+    const shareData = {
+      userId,
+      shareType,
+      platform: platform || null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      // Metadatos adicionales para analytics
+      userAgent: req.headers['user-agent'] || null,
+      ipAddress: req.ip || null
+    };
+
+    await shareRef.set(shareData);
+
+    console.log(`✅ [SHARE] Historia compartida: ${storyId} por usuario ${userId} (tipo: ${shareType})`);
+
+    return res.status(200).json({
+      message: "Compartición registrada correctamente.",
+      shareId: shareRef.id,
+      userId,
+      raceId,
+      appId,
+      eventId,
+      participantId,
+      storyId,
+      shareType,
+      platform: platform || null,
+      sharedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error("❌ [SHARE] Error al registrar compartición:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
   }
 });
 
@@ -1031,6 +1446,366 @@ router.get("/apps/participant", async (req, res) => {
 
   } catch (error) {
     console.error("❌ Error al obtener el participante:", error);
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Selecciona el ranking más avanzado para un participante.
+ * Prioriza el split solicitado; si no se envía, usa el split con mayor order/distance.
+ */
+function pickParticipantRanking(copernicoData = {}, requestedSplit) {
+  const primaryRankings = copernicoData.rankings && Object.keys(copernicoData.rankings).length > 0
+    ? copernicoData.rankings
+    : null;
+  const primaryTimes = copernicoData.times || {};
+
+  const eventRankings = copernicoData.events?.[0]?.rankings && Object.keys(copernicoData.events[0].rankings).length > 0
+    ? copernicoData.events[0].rankings
+    : null;
+  const eventTimes = copernicoData.events?.[0]?.times || {};
+
+  const rankings = primaryRankings || eventRankings || {};
+  const times = primaryRankings ? primaryTimes : eventTimes;
+
+  const rankingKeys = Object.keys(rankings);
+  if (rankingKeys.length === 0) return null;
+
+  // Si el split solicitado existe, devolverlo directamente
+  if (requestedSplit && rankings[requestedSplit]) {
+    return {
+      key: requestedSplit,
+      data: rankings[requestedSplit],
+      order: times?.[requestedSplit]?.order ?? rankings[requestedSplit]?.order ?? 0,
+      distance: times?.[requestedSplit]?.distance ?? rankings[requestedSplit]?.distance ?? 0
+    };
+  }
+
+  // Si no, elegir el split con mayor orden/distancia (usualmente el final)
+  let selectedKey = rankingKeys[0];
+  let bestOrder = times?.[selectedKey]?.order ?? rankings[selectedKey]?.order ?? 0;
+  let bestDistance = times?.[selectedKey]?.distance ?? rankings[selectedKey]?.distance ?? 0;
+  let bestTime = rankings[selectedKey]?.net ?? rankings[selectedKey]?.time ?? Number.MAX_SAFE_INTEGER;
+
+  for (const key of rankingKeys) {
+    const ranking = rankings[key];
+    const order = times?.[key]?.order ?? ranking?.order ?? 0;
+    const distance = times?.[key]?.distance ?? ranking?.distance ?? 0;
+    const time = ranking?.net ?? ranking?.time ?? Number.MAX_SAFE_INTEGER;
+
+    if (
+      order > bestOrder ||
+      (order === bestOrder && distance > bestDistance) ||
+      (order === bestOrder && distance === bestDistance && time < bestTime)
+    ) {
+      selectedKey = key;
+      bestOrder = order;
+      bestDistance = distance;
+      bestTime = time;
+    }
+  }
+
+  return {
+    key: selectedKey,
+    data: rankings[selectedKey],
+    order: bestOrder,
+    distance: bestDistance
+  };
+}
+
+function normalizePositionsFromRanking(ranking = {}) {
+  const positions = ranking.positions || {};
+  return {
+    overall: positions.overall ?? ranking.pos ?? ranking.posGen ?? null,
+    gender: positions.gender ?? ranking.posGen ?? null,
+    category: positions.category ?? ranking.posCat ?? null,
+    overallNet: positions.overallNet ?? ranking.posNet ?? ranking.posGenNet ?? null,
+    genderNet: positions.genderNet ?? ranking.posGenNet ?? null,
+    categoryNet: positions.categoryNet ?? ranking.posCatNet ?? null,
+    raw: positions
+  };
+}
+
+function getPositionByType(ranking = {}, type = "overall") {
+  const normalizedPositions = normalizePositionsFromRanking(ranking);
+  switch (type) {
+    case "gender":
+      return normalizedPositions.gender
+        ?? normalizedPositions.genderNet
+        ?? ranking.posGen
+        ?? ranking.posGenNet
+        ?? ranking.pos
+        ?? ranking.posNet
+        ?? null;
+    case "category":
+      return normalizedPositions.category
+        ?? normalizedPositions.categoryNet
+        ?? ranking.posCat
+        ?? ranking.posCatNet
+        ?? null;
+    default:
+      return normalizedPositions.overall
+        ?? normalizedPositions.overallNet
+        ?? ranking.posGen
+        ?? ranking.pos
+        ?? ranking.posGenNet
+        ?? ranking.posNet
+        ?? null;
+  }
+}
+
+function buildParticipantName(data = {}) {
+  if (data.fullName) return data.fullName;
+  const name = data.name || "";
+  const lastName = data.lastName || "";
+  return `${name} ${lastName}`.trim();
+}
+
+function normalizeGender(value) {
+  if (!value) return null;
+  const val = value.toString().trim().toLowerCase();
+  if (["m", "male", "h", "masculino", "man"].includes(val)) return "male";
+  if (["f", "female", "fem", "femenino", "woman"].includes(val)) return "female";
+  return val; // devolver tal cual si ya viene como male/female u otra variante
+}
+
+/**
+ * @openapi
+ * /api/apps/leaderboard:
+ *   get:
+ *     summary: Obtener líderes de una carrera por tipo (general, género o categoría)
+ *     description: Devuelve el leaderboard calculado a partir de los rankings de Copernico almacenados en los participantes.
+ *     parameters:
+ *       - in: query
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador de la carrera.
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador de la aplicación.
+ *       - in: query
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador del evento.
+ *       - in: query
+ *         name: type
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [overall, gender, category]
+ *           default: overall
+ *         description: Tipo de leaderboard a retornar.
+ *       - in: query
+ *         name: gender
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Género a filtrar cuando type=gender (por ejemplo, male o female).
+ *       - in: query
+ *         name: category
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Categoría a filtrar cuando type=category (por ejemplo, Sub 23 M).
+ *       - in: query
+ *         name: split
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Split/ubicación a usar para el ranking (por defecto se usa el split más avanzado disponible).
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Número máximo de líderes a retornar.
+ *       - in: query
+ *         name: offset
+ *         required: false
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Desplazamiento para paginar resultados.
+ *     responses:
+ *       '200':
+ *         description: Leaderboard obtenido exitosamente.
+ *       '400':
+ *         description: Parámetros faltantes o inválidos.
+ *       '500':
+ *         description: Error interno del servidor.
+ */
+router.get("/apps/leaderboard", async (req, res) => {
+  try {
+    const {
+      raceId,
+      appId,
+      eventId,
+      type = "overall",
+      gender,
+      category,
+      split,
+      limit = 50,
+      offset = 0
+    } = req.query;
+
+    if (!raceId || !appId || !eventId) {
+      return res.status(400).json({
+        message: "raceId, appId y eventId son obligatorios."
+      });
+    }
+
+    const normalizedType = (type || "overall").toString().toLowerCase();
+    if (!["overall", "gender", "category"].includes(normalizedType)) {
+      return res.status(400).json({ message: "type debe ser overall, gender o category." });
+    }
+    const limitNum = Math.max(1, Math.min(parseInt(limit, 10) || 50, 200));
+    const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
+
+    const db = admin.firestore();
+    const participantsSnapshot = await db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("participants")
+      .get();
+
+    const leaders = [];
+    const groupMap = new Map(); // Para agrupar por gender/category cuando aplique
+
+    participantsSnapshot.forEach((doc) => {
+      const participantData = doc.data() || {};
+      const copernicoData = participantData.copernicoData || participantData.copernico || {};
+
+      const selectedRanking = pickParticipantRanking(copernicoData, split);
+      if (!selectedRanking || !selectedRanking.data) return;
+
+      const participantGenderRaw = participantData.gender || copernicoData.rawData?.gender || "";
+      const participantGender = normalizeGender(participantGenderRaw) || null;
+      const participantCategory = (participantData.category || copernicoData.rawData?.events?.[0]?.category || "").toString() || null;
+
+      const position = getPositionByType(selectedRanking.data, normalizedType);
+      if (position === null || position === undefined) return;
+
+      const normalizedPositions = normalizePositionsFromRanking(selectedRanking.data);
+      const timeValue = selectedRanking.data.net ?? selectedRanking.data.time ?? null;
+
+      const leaderEntry = {
+        participantId: doc.id,
+        externalId: participantData.externalId || participantData.id || doc.id,
+        fullName: buildParticipantName(participantData),
+        dorsal: participantData.dorsal || null,
+        gender: participantGender,
+        category: participantCategory,
+        status: participantData.status || participantData.realStatus || participantData.copernicoStatus || null,
+        split: selectedRanking.key,
+        splitOrder: selectedRanking.order,
+        distance: selectedRanking.distance || null,
+        time: timeValue,
+        average: selectedRanking.data.averageNet ?? selectedRanking.data.average ?? null,
+        position,
+        positions: normalizedPositions
+      };
+
+      if (normalizedType === "gender") {
+        // Si se envió gender, filtramos; de lo contrario, agrupamos todas
+        if (gender && participantGender !== normalizeGender(gender)) return;
+        const groupKey = participantGender || "unknown";
+        leaderEntry.group = groupKey;
+        if (!groupMap.has(groupKey)) groupMap.set(groupKey, []);
+        groupMap.get(groupKey).push(leaderEntry);
+      } else if (normalizedType === "category") {
+        if (category && participantCategory?.toLowerCase() !== category.toString().toLowerCase()) return;
+        const groupKey = participantCategory || "uncategorized";
+        leaderEntry.group = groupKey;
+        if (!groupMap.has(groupKey)) groupMap.set(groupKey, []);
+        groupMap.get(groupKey).push(leaderEntry);
+      } else {
+        leaders.push(leaderEntry);
+      }
+    });
+
+    // Función común de ordenamiento
+    const sortFn = (a, b) => {
+      if (a.position !== b.position) return (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER);
+      if (a.time !== b.time) return (a.time ?? Number.MAX_SAFE_INTEGER) - (b.time ?? Number.MAX_SAFE_INTEGER);
+      return (a.splitOrder ?? 0) - (b.splitOrder ?? 0);
+    };
+
+    if (normalizedType === "overall") {
+      leaders.sort(sortFn);
+
+      const paginatedLeaders = leaders.slice(offsetNum, offsetNum + limitNum);
+      const nextOffset = offsetNum + paginatedLeaders.length;
+      const hasMore = nextOffset < leaders.length;
+
+      return res.status(200).json({
+        raceId,
+        appId,
+        eventId,
+        type: normalizedType,
+        gender: null,
+        category: null,
+        split: split || (paginatedLeaders[0]?.split ?? null),
+        limit: limitNum,
+        offset: offsetNum,
+        returned: paginatedLeaders.length,
+        totalCandidates: leaders.length,
+        totalParticipants: participantsSnapshot.size,
+        hasMore,
+        nextOffset: hasMore ? nextOffset : null,
+        leaders: paginatedLeaders
+      });
+    }
+
+    // Agrupado (gender/category)
+    const groups = [];
+    for (const [groupKey, list] of groupMap.entries()) {
+      list.sort(sortFn);
+      const paginated = list.slice(offsetNum, offsetNum + limitNum);
+      const nextOffsetGroup = offsetNum + paginated.length;
+      const hasMoreGroup = nextOffsetGroup < list.length;
+      groups.push({
+        group: groupKey,
+        totalCandidates: list.length,
+        returned: paginated.length,
+        hasMore: hasMoreGroup,
+        nextOffset: hasMoreGroup ? nextOffsetGroup : null,
+        leaders: paginated
+      });
+    }
+
+    // Ordenar grupos por nombre para una salida determinística
+    groups.sort((a, b) => (a.group || "").localeCompare(b.group || ""));
+
+    const firstLeader = groups[0]?.leaders?.[0];
+    const selectedSplit = split || (firstLeader?.split ?? null);
+
+    return res.status(200).json({
+      raceId,
+      appId,
+      eventId,
+      type: normalizedType,
+      gender: normalizedType === "gender" ? (gender || null) : null,
+      category: normalizedType === "category" ? (category || null) : null,
+      split: selectedSplit,
+      limit: limitNum,
+      offset: offsetNum,
+      groupCount: groups.length,
+      totalParticipants: participantsSnapshot.size,
+      groups
+    });
+  } catch (error) {
+    console.error("❌ Error al obtener el leaderboard:", error);
     return res.status(500).json({
       message: "Error interno del servidor",
       error: error.message
@@ -3208,6 +3983,12 @@ router.post("/checkpoint-participant", async (req, res) => {
   try {
     console.log("🎯 Webhook checkpoint Copernico recibido:", JSON.stringify(req.body, null, 2));
 
+    // Normalizar encoding UTF-8 en extraData si existe
+    if (req.body.extraData && typeof req.body.extraData === 'object') {
+      req.body.extraData = normalizeUTF8InObject(req.body.extraData);
+      console.log("🔤 ExtraData normalizado:", JSON.stringify(req.body.extraData, null, 2));
+    }
+
     const { competitionId, copernicoId, type, participantId, extraData, rawTime, apiKey: bodyApiKey } = req.body;
 
     // Validaciones básicas
@@ -3251,9 +4032,20 @@ router.post("/checkpoint-participant", async (req, res) => {
     const db = admin.firestore();
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
-    // 1. CREAR IDENTIFICADOR ÚNICO PARA EVITAR DUPLICADOS
+    // Helper para normalizar componentes del queueKey
+    const sanitize = (value, fallback = "none") =>
+      String(value || fallback)
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-zA-Z0-9_-]/g, "")
+        .toUpperCase();
+
+    const point = extraData?.point || extraData?.location || "no_point";
+    const location = extraData?.location || extraData?.point || "no_location";
+
+    // 1. CREAR IDENTIFICADOR ÚNICO PARA EVITAR DUPLICADOS (incluye punto/ubicación)
     const requestId = `${competitionId}_${participantId}_${type}_${Date.now()}`;
-    const queueKey = `${competitionId}_${participantId}_${type}`;
+    const queueKey = `${sanitize(competitionId)}_${sanitize(participantId)}_${sanitize(type)}_${sanitize(point)}_${sanitize(location)}`;
 
     console.log(`🔑 Request ID: ${requestId}`);
     console.log(`🔑 Queue Key: ${queueKey}`);
@@ -3266,8 +4058,8 @@ router.post("/checkpoint-participant", async (req, res) => {
       const queueData = existingQueue.data();
       const timeDiff = Date.now() - queueData.createdAt.toMillis();
 
-      // Si está en cola hace menos de 5 minutos, no duplicar
-      if (timeDiff < 5 * 60 * 1000) { // 5 minutos
+      // Si está en cola hace menos de 1 minuto, no duplicar
+      if (timeDiff < 1 * 60 * 1000) { // 1 minuto
         console.log(`⚠️ Request ya está en cola desde hace ${Math.round(timeDiff/1000)}s`);
 
         return res.status(200).json({
@@ -3288,6 +4080,7 @@ router.post("/checkpoint-participant", async (req, res) => {
     }
 
     // 3. ENCOLAR NUEVA REQUEST
+    const expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000); // TTL de 15 minutos
     const queueData = {
       requestId,
       queueKey,
@@ -3299,6 +4092,7 @@ router.post("/checkpoint-participant", async (req, res) => {
       rawTime: rawTime || null, // Timestamp exacto del checkpoint
       status: 'queued',
       createdAt: timestamp,
+      expireAt,
       attempts: 0,
       source: 'copernico-webhook'
     };
@@ -3650,7 +4444,9 @@ async function processCheckpointInBackground(competitionId, copernicoId, partici
 
     if (extraData?.event) {
       // Buscar el evento específico mencionado en extraData
+      console.log(`🔍 [BACKGROUND] Llamando a findSpecificEvent...`);
       locations = await findSpecificEvent(db, competitionId, extraData.event);
+      console.log(`📊 [BACKGROUND] findSpecificEvent retornó ${locations.length} ubicaciones`);
     }
 
     // Si no se encuentra el evento específico, buscar todos los eventos (fallback)
@@ -3668,10 +4464,10 @@ async function processCheckpointInBackground(competitionId, copernicoId, partici
         completedAt: timestamp,
         message: `No se encontraron eventos para competitionId: ${competitionId}`,
         participantData: participantData,
-        searchedEvent: extraData?.event,
+        searchedEvent: extraData?.event || null,
         checkpointInfo: {
-          point: extraData?.point,
-          event: extraData?.event,
+          point: extraData?.point || null,
+          event: extraData?.event || null,
           location: extraData?.location
         }
       });
@@ -3683,16 +4479,25 @@ async function processCheckpointInBackground(competitionId, copernicoId, partici
 
     console.log(`📍 [BACKGROUND] Encontrados ${locations.length} eventos para competitionId ${competitionId}`);
 
+    if (locations.length > 0) {
+      console.log(`📋 [BACKGROUND] Ubicaciones encontradas:`);
+      locations.forEach((loc, index) => {
+        console.log(`   ${index + 1}. ${loc.raceId}/${loc.appId}/${loc.eventId}`);
+      });
+    }
+
     // 4. OBTENER STREAMS DE AWS PARA GENERACIÓN DE STORIES
     console.log(`🎬 [BACKGROUND] Obteniendo streams de AWS para competitionId: ${competitionId}`);
     const streamsResult = await getCompetitionStreams(competitionId);
+    console.log(`🎬 [BACKGROUND] Streams obtenidos:`, streamsResult ? 'Sí' : 'No');
 
     // 5. PROCESAR EN CADA UBICACIÓN
     const results = [];
+    console.log(`🔄 [BACKGROUND] Iniciando procesamiento en ${locations.length} ubicaciones...`);
 
     for (const location of locations) {
       try {
-        const result = await processParticipantInLocation(db, location, participantData, timestamp, extraData, rawTime);
+        const result = await processParticipantInLocation(db, location, participantData, timestamp, extraData, rawTime, transformedData);
         results.push(result);
         console.log(`✅ [BACKGROUND] Procesado en ${location.raceId}/${location.appId}/${location.eventId}`);
 
@@ -3740,6 +4545,7 @@ async function processCheckpointInBackground(competitionId, copernicoId, partici
     await db.collection('processing_queue').doc(queueKey).update({
       status: 'completed',
       completedAt: timestamp,
+      expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000), // TTL de 15 minutos post-proceso
       results: results,
       locationsProcessed: locations.length,
       checkpointInfo: {
@@ -3764,6 +4570,7 @@ async function processCheckpointInBackground(competitionId, copernicoId, partici
       status: 'failed',
       error: error.message,
       failedAt: timestamp,
+      expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000), // TTL de 15 minutos post-fallo
       attempts: admin.firestore.FieldValue.increment(1)
     });
 
@@ -3834,6 +4641,17 @@ async function findEventsByCompetition(db, competitionId) {
 async function findSpecificEvent(db, competitionId, eventName) {
   console.log(`🔍 [BACKGROUND] Buscando evento específico: "${eventName}" en competitionId: ${competitionId}`);
 
+  try {
+    // Normalizar eventName para evitar problemas de encoding
+    const originalEventName = eventName;
+    eventName = normalizeUTF8InObject(eventName);
+
+    if (originalEventName !== eventName) {
+      console.log(`🔤 [BACKGROUND] EventName normalizado: "${originalEventName}" → "${eventName}"`);
+    }
+
+    console.log(`📋 [BACKGROUND] Iniciando búsqueda de evento específico...`);
+
   const locations = [];
 
   // Obtener todas las races
@@ -3866,20 +4684,27 @@ async function findSpecificEvent(db, competitionId, eventName) {
             eventData.externalId === competitionId ||
             currentRaceId === competitionId;
 
-          // Verificar si el nombre del evento coincide
+          // Verificar si el nombre del evento coincide (incluyendo versión corrupta)
           const eventNameMatches =
             eventId === eventName ||
             eventData.name === eventName ||
-            eventData.eventName === eventName;
+            eventData.eventName === eventName ||
+            // También buscar por la versión corrupta del eventName
+            eventId === originalEventName ||
+            eventData.name === originalEventName ||
+            eventData.eventName === originalEventName;
 
           if (belongsToCompetition && eventNameMatches) {
+            // Usar el eventName normalizado en lugar del eventId corrupto
+            const finalEventId = eventName; // eventName ya está normalizado
+
             locations.push({
               raceId: currentRaceId,
               appId: currentAppId,
-              eventId: eventId,
+              eventId: finalEventId, // Usar el normalizado
               eventData: eventData
             });
-            console.log(`✅ [BACKGROUND] Evento específico encontrado: ${currentRaceId}/${currentAppId}/${eventId} (${eventName})`);
+            console.log(`✅ [BACKGROUND] Evento específico encontrado: ${currentRaceId}/${currentAppId}/${eventId} → usando eventId normalizado: "${finalEventId}"`);
           }
         }
       }
@@ -3888,21 +4713,27 @@ async function findSpecificEvent(db, competitionId, eventName) {
     }
   }
 
-  console.log(`📊 [BACKGROUND] Eventos específicos encontrados: ${locations.length}`);
-  return locations;
+    console.log(`📊 [BACKGROUND] Eventos específicos encontrados: ${locations.length}`);
+    return locations;
+
+  } catch (error) {
+    console.error(`❌ [BACKGROUND] Error en findSpecificEvent:`, error.message);
+    console.error(`❌ [BACKGROUND] Stack trace:`, error.stack);
+    return [];
+  }
 }
 
 /**
  * Obtener streams de AWS para una competición
  */
 async function getCompetitionStreams(competitionId) {
-  console.log(`🎬 [AWS] Obteniendo streams para competitionId: ${competitionId}`);
+  console.log(`🎬 [STREAMS] Obteniendo streams para competitionId: ${competitionId}`);
 
   try {
-    const awsBaseUrl = 'https://fmriikps30.execute-api.eu-west-1.amazonaws.com/alpha';
+    const awsBaseUrl = 'https://streams.timingsense.cloud';
     const url = `${awsBaseUrl}/competitions/${competitionId}`;
 
-    console.log(`🌐 [AWS] Llamando a: ${url}`);
+    console.log(`🌐 [STREAMS] Llamando a: ${url}`);
 
     const response = await axios.get(url, {
       timeout: 10000, // 10 segundos timeout
@@ -3914,7 +4745,7 @@ async function getCompetitionStreams(competitionId) {
 
     if (response.data && response.data.data && response.data.data.streams) {
       const streams = response.data.data.streams;
-      console.log(`✅ [AWS] Streams obtenidos:`, streams);
+      console.log(`✅ [STREAMS] Streams obtenidos:`, streams);
 
       // Crear mapa de location -> streamId
       const streamMap = {};
@@ -3948,7 +4779,7 @@ async function getCompetitionStreams(competitionId) {
     }
 
   } catch (error) {
-    console.error(`❌ [AWS] Error obteniendo streams:`, error.message);
+    console.error(`❌ [STREAMS] Error obteniendo streams:`, error.message);
     return {
       success: false,
       error: error.message
@@ -4034,6 +4865,148 @@ async function generateStoryVideoClip(streamId, checkpointRawTime, extraData) {
 }
 
 /**
+ * Crear split-clips cuando se genera un clip desde una story
+ */
+async function createSplitClipsFromStory({ db, raceId, appId, eventId, participantId, checkpointId, clipUrl, streamId, timestamp }) {
+  if (!checkpointId || !clipUrl) {
+    console.log(`⚠️ [SPLIT-CLIPS] No se puede crear split-clip: checkpointId=${checkpointId}, clipUrl=${!!clipUrl}`);
+    return;
+  }
+
+  console.log(`🎯 [SPLIT-CLIPS] Intentando crear split-clip para checkpoint: ${checkpointId}`);
+  console.log(`📊 [SPLIT-CLIPS] Parámetros: raceId=${raceId}, appId=${appId}, eventId=${eventId}, participantId=${participantId}`);
+
+  try {
+    // Obtener datos del evento para verificar splits
+    const eventRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId);
+
+    console.log(`🔍 [SPLIT-CLIPS] Consultando evento en: races/${raceId}/apps/${appId}/events/${eventId}`);
+
+    const eventDoc = await eventRef.get();
+    if (!eventDoc.exists) {
+      console.log(`⚠️ [SPLIT-CLIPS] Evento no encontrado: ${eventId}`);
+      return;
+    }
+
+    const eventData = eventDoc.data();
+    console.log(`✅ [SPLIT-CLIPS] Evento encontrado. Splits disponibles:`, eventData.splits?.length || 0);
+    console.log(`🔍 [SPLIT-CLIPS] Estructura del evento:`, {
+      hasEventData: !!eventData,
+      hasSplits: !!eventData.splits,
+      splitsType: typeof eventData.splits,
+      splitsLength: eventData.splits?.length,
+      eventKeys: Object.keys(eventData || {}),
+      hasCopernicoData: !!eventData.copernico_data,
+      hasEventInfo: !!eventData.event_info
+    });
+
+    // Buscar splits en diferentes ubicaciones posibles
+    let splits = null;
+    let splitsSource = '';
+
+    if (eventData.splits && Array.isArray(eventData.splits)) {
+      splits = eventData.splits;
+      splitsSource = 'eventData.splits';
+    } else if (eventData.copernico_data?.splits && Array.isArray(eventData.copernico_data.splits)) {
+      splits = eventData.copernico_data.splits;
+      splitsSource = 'eventData.copernico_data.splits';
+    } else if (eventData.event_info?.splits && Array.isArray(eventData.event_info.splits)) {
+      splits = eventData.event_info.splits;
+      splitsSource = 'eventData.event_info.splits';
+    }
+
+    console.log(`🔍 [SPLIT-CLIPS] Splits encontrados en: ${splitsSource || 'ningún lugar'}`);
+    console.log(`📊 [SPLIT-CLIPS] Total splits: ${splits?.length || 0}`);
+
+    // Buscar en splits si existe
+    if (splits && Array.isArray(splits)) {
+      console.log(`🔍 [SPLIT-CLIPS] Buscando checkpoint "${checkpointId}" en ${splits.length} splits`);
+
+      // Log de todos los splits para debug
+      splits.forEach((split, index) => {
+        const splitName = typeof split === 'string' ? split : (split?.name || split?.id || 'unknown');
+        console.log(`  ${index}: "${splitName}" (type: ${typeof split})`);
+      });
+
+      const splitIndex = splits.findIndex(split => {
+        if (typeof split === 'string') {
+          return split === checkpointId;
+        } else if (typeof split === 'object' && split !== null) {
+          return split.name === checkpointId || split.id === checkpointId;
+        }
+        return false;
+      });
+
+      if (splitIndex !== -1) {
+        console.log(`✅ [SPLIT-CLIPS] Split encontrado en índice ${splitIndex}: ${checkpointId}`);
+
+        // Guardar en la misma estructura donde se encontró el evento
+        const splitClipsRef = eventRef.collection("split-clips").doc(checkpointId);
+
+        await splitClipsRef.set({
+          splitName: checkpointId,
+          splitIndex: splitIndex,
+          clipUrl: clipUrl,
+          participantId: participantId,
+          raceId: raceId,
+          eventId: eventId,
+          streamId: streamId,
+          timestamp: new Date(timestamp).toISOString(),
+          generatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: 'checkpoint-participant-endpoint'
+        }, { merge: true });
+
+        console.log(`✅ [SPLIT-CLIPS] Split-clip creado exitosamente: ${checkpointId}`);
+      } else {
+        console.log(`ℹ️ [SPLIT-CLIPS] Checkpoint ${checkpointId} no está en la lista de splits del evento`);
+      }
+    } else {
+      console.log(`ℹ️ [SPLIT-CLIPS] Evento ${eventId} no tiene splits configurados`);
+    }
+
+    // También buscar en timingPoints si existe
+    if (eventData.timingPoints && Array.isArray(eventData.timingPoints)) {
+      const timingIndex = eventData.timingPoints.findIndex(timing => {
+        if (typeof timing === 'string') {
+          return timing === checkpointId;
+        } else if (typeof timing === 'object' && timing !== null) {
+          return timing.name === checkpointId || timing.id === checkpointId;
+        }
+        return false;
+      });
+
+      if (timingIndex !== -1) {
+        console.log(`📍 [SPLIT-CLIPS] Timing point encontrado en índice ${timingIndex}: ${checkpointId}`);
+
+        // Guardar en timing-clips también
+        const timingClipsRef = eventRef.collection("timing-clips").doc(checkpointId);
+
+        await timingClipsRef.set({
+          timingName: checkpointId,
+          timingIndex: timingIndex,
+          clipUrl: clipUrl,
+          participantId: participantId,
+          raceId: raceId,
+          eventId: eventId,
+          streamId: streamId,
+          timestamp: new Date(timestamp).toISOString(),
+          generatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          source: 'checkpoint-participant-endpoint'
+        }, { merge: true });
+
+        console.log(`✅ [SPLIT-CLIPS] Timing-clip creado exitosamente: ${checkpointId}`);
+      }
+    }
+
+  } catch (error) {
+    console.error(`❌ [SPLIT-CLIPS] Error creando split-clips:`, error);
+    throw error;
+  }
+}
+
+/**
  * Crear story automática para un checkpoint
  */
 async function createAutomaticStory(db, location, participantData, extraData, streamMap, copernicoData = null, rawTime = null) {
@@ -4041,24 +5014,49 @@ async function createAutomaticStory(db, location, participantData, extraData, st
   console.log(`⏰ [STORY] RawTime recibido en createAutomaticStory:`, rawTime);
 
   try {
-    const { raceId, appId, eventId } = location;
+    let { raceId, appId, eventId } = location;
+
+    // Normalizar eventId para evitar problemas de encoding
+    const originalEventId = eventId;
+    eventId = normalizeUTF8InObject(eventId);
+
+    if (originalEventId !== eventId) {
+      console.log(`🔤 [STORY] EventID normalizado: "${originalEventId}" → "${eventId}"`);
+    }
+
+    console.log(`📍 [STORY] Ubicación: races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantData.externalId}/stories`);
     const participantId = participantData.externalId;
 
-    // 1. Determinar tipo de story basado en el punto
-    let storyType = 'ATHLETE_CROSSED_TIMING_SPLIT'; // Default
-    let description = `${participantData.fullName || participantData.name} pasó por ${extraData?.point}`;
+    // 1. Determinar tipo de story basado en checkpointType (si viene) o heurísticas de punto/ubicación
+    const pointText = extraData?.point || '';
+    const locationText = extraData?.location || '';
+    const pointNorm = pointText.toLowerCase();
+    const locationNorm = locationText.toLowerCase();
 
-    if (extraData?.point) {
-      const point = extraData.point.toLowerCase();
-      if (point.includes('meta') || point.includes('finish')) {
+    let storyType = extraData?.checkpointType || 'ATHLETE_CROSSED_TIMING_SPLIT';
+    let description = `${participantData.fullName || participantData.name} pasó por ${pointText || locationText || 'el checkpoint'}`;
+
+    // Si no viene checkpointType, usar heurísticas; si viene, respetarlo pero ajustar descripción
+    const isFinish = pointNorm.includes('meta') || pointNorm.includes('finish') || locationNorm.includes('meta') || locationNorm.includes('finish');
+    const isStart = pointNorm.includes('salida') || pointNorm.includes('start') || locationNorm.includes('salida') || locationNorm.includes('start');
+
+    if (!extraData?.checkpointType) {
+      if (isFinish) {
         storyType = 'ATHLETE_FINISHED';
         description = `🏁 ${participantData.fullName || participantData.name} cruzó la meta!`;
-      } else if (point.includes('salida') || point.includes('start')) {
+      } else if (isStart) {
         storyType = 'ATHLETE_STARTED';
         description = `🏃 ${participantData.fullName || participantData.name} comenzó la carrera!`;
       } else {
-        description = `⏱️ ${participantData.fullName || participantData.name} pasó por ${extraData.point}`;
+        description = `⏱️ ${participantData.fullName || participantData.name} pasó por ${pointText || locationText || 'el checkpoint'}`;
       }
+    } else {
+      if (storyType === 'ATHLETE_FINISHED') {
+        description = `🏁 ${participantData.fullName || participantData.name} cruzó la meta!`;
+      } else if (storyType === 'ATHLETE_STARTED') {
+        description = `🏃 ${participantData.fullName || participantData.name} comenzó la carrera!`;
+      }
+      // Si checkpointType vino como split, dejamos la descripción por defecto
     }
 
     // 2. Obtener streamId para el location
@@ -4119,6 +5117,8 @@ async function createAutomaticStory(db, location, participantData, extraData, st
 
     // 4. Guardar story en Firestore
     const storyPath = `races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories`;
+    console.log(`📍 [STORY] Ruta final del documento: ${storyPath}`);
+    console.log(`🔤 [STORY] EventID en ruta: "${eventId}" [${Array.from(eventId).map(c => c.charCodeAt(0)).join(', ')}]`);
     const storyRef = await db.collection(storyPath).add(storyData);
 
     console.log(`✅ [STORY] Story creada: ${storyRef.id}`);
@@ -4139,18 +5139,31 @@ async function createAutomaticStory(db, location, participantData, extraData, st
           checkpointTimestamp = new Date(checkpointRawTime).toISOString();
           console.log(`⏰ [STORY] Usando rawTime del webhook: ${checkpointRawTime} (${checkpointTimestamp})`);
         }
-        // 2. FALLBACK: Buscar rawTime en datos de Copernico API
+        // 2. FALLBACK: Buscar rawTime en datos de Copernico (NUEVA ESTRUCTURA)
+        else if (copernicoData && copernicoData.copernicoData && copernicoData.copernicoData.times) {
+          const times = copernicoData.copernicoData.times;
+          // Buscar el checkpoint correspondiente al point usando el valor tal cual llega
+          const pointName = extraData?.point;
+          if (pointName && times[pointName] && times[pointName].raw && times[pointName].raw.rawTime) {
+            checkpointRawTime = times[pointName].raw.rawTime;
+            checkpointTimestamp = new Date(checkpointRawTime).toISOString();
+            console.log(`⏰ [STORY] Usando rawTime de Copernico Data: ${checkpointRawTime} (${checkpointTimestamp})`);
+          } else {
+            console.log(`⚠️ [STORY] No se encontró rawTime para punto: ${pointName}. Puntos disponibles:`, Object.keys(times));
+          }
+        }
+        // 3. FALLBACK LEGACY: Buscar rawTime en datos de Copernico API (ESTRUCTURA ANTIGUA)
         else if (copernicoData && copernicoData.rawData && copernicoData.rawData.events) {
           const events = copernicoData.rawData.events;
           if (events.length > 0 && events[0].times) {
             const times = events[0].times;
 
             // Buscar el checkpoint correspondiente al point
-            const pointName = extraData?.point?.toUpperCase();
+            const pointName = extraData?.point;
             if (pointName && times[pointName] && times[pointName].raw && times[pointName].raw.rawTime) {
               checkpointRawTime = times[pointName].raw.rawTime; // UNIX timestamp en milliseconds
               checkpointTimestamp = new Date(checkpointRawTime).toISOString();
-              console.log(`⏰ [STORY] Usando rawTime de Copernico API: ${checkpointRawTime} (${checkpointTimestamp})`);
+              console.log(`⏰ [STORY] Usando rawTime de Copernico API (legacy): ${checkpointRawTime} (${checkpointTimestamp})`);
             } else {
               console.log(`⚠️ [STORY] No se encontró rawTime para punto: ${pointName}. Puntos disponibles:`, Object.keys(times));
             }
@@ -4182,6 +5195,25 @@ async function createAutomaticStory(db, location, participantData, extraData, st
           });
 
           console.log(`✅ [STORY] Clip generado y story actualizada: ${clipResult.clipUrl}`);
+
+          // 🆕 CREAR SPLIT-CLIPS SI EL CHECKPOINT COINCIDE CON UN SPLIT
+          try {
+            await createSplitClipsFromStory({
+              db,
+              raceId,
+              appId,
+              eventId,
+              participantId: participantData.externalId,
+              checkpointId: extraData?.point,
+              clipUrl: clipResult.clipUrl,
+              streamId: streamId,
+              timestamp: checkpointRawTime || Date.now()
+            });
+          } catch (splitClipError) {
+            console.error(`⚠️ [STORY] Error creando split-clips:`, splitClipError);
+            // No fallar por esto, solo registrar el error
+          }
+
         } else {
           // Actualizar story con error de generación
           await storyRef.update({
@@ -4227,21 +5259,28 @@ async function createAutomaticStory(db, location, participantData, extraData, st
 /**
  * Procesar participante en una ubicación específica
  */
-async function processParticipantInLocation(db, location, participantData, timestamp, extraData = {}, rawTime = null) {
+async function processParticipantInLocation(db, location, participantData, timestamp, extraData = {}, rawTime = null, transformedData = null) {
   const { raceId, appId, eventId } = location;
 
   console.log(`🔄 [BACKGROUND] Procesando en: ${raceId}/${appId}/${eventId}`);
   console.log(`📊 [BACKGROUND] Datos del checkpoint:`, extraData);
   console.log(`⏰ [BACKGROUND] RawTime del webhook:`, rawTime);
+  console.log(`🗂️ [BACKGROUND] Datos de Copernico disponibles:`, !!transformedData);
 
-  // Agregar raceId y eventId específicos + datos del checkpoint
+  // Agregar raceId y eventId específicos + datos del checkpoint + DATOS COMPLETOS DE COPERNICO
   const locationParticipantData = {
     ...participantData,
     raceId: raceId,
     eventId: eventId, // Agregar el eventId específico de esta ubicación
     webhookProcessedAt: timestamp,
     updatedAt: timestamp,
-    // Agregar información del checkpoint
+    // ✅ NUEVO: Agregar datos completos de Copernico (FILTRADOS)
+    copernicoData: transformedData ? {
+      times: transformedData.times || {},      // ← Times completos con raw
+      rankings: transformedData.rankings || {}, // ← Rankings completos
+      rawData: transformedData.rawData || {}   // ← Respuesta original completa
+    } : null,
+    // Información del checkpoint actual
     lastCheckpoint: {
       point: extraData?.point,
       location: extraData?.location,
@@ -4456,21 +5495,33 @@ router.get("/race-events", async (req, res) => {
         .collection('participants').doc(participantId)
         .collection('stories');
 
-      // Filtrar por tipo si se especifica (usando índice de Firestore)
-      if (type) {
-        storiesQuery = storiesQuery.where('type', '==', type);
-        console.log(`🔍 Aplicando filtro Firestore: type == '${type}'`);
-      }
+      // NO aplicar filtro en Firestore para evitar problemas de índice
+      // En su lugar, filtraremos en memoria después de obtener los datos
 
       // Agregar ordenamiento
       storiesQuery = storiesQuery.orderBy('date', 'desc');
 
       const storiesSnapshot = await storiesQuery.get();
-      console.log(`📊 Participante ${participantId}: ${storiesSnapshot.size} stories encontradas`);
+      console.log(`📊 Participante ${participantId}: ${storiesSnapshot.size} stories encontradas (antes de filtro)`);
 
       // Procesar cada story como un evento
       storiesSnapshot.docs.forEach(storyDoc => {
         const storyData = storyDoc.data();
+
+        // DEBUG: Log detallado de cada story
+        const storyType = storyData.type || storyData.checkpointInfo?.type;
+        console.log(`📊 [DEBUG] Story ${storyDoc.id}: type='${storyType}', filtro='${type || 'SIN_FILTRO'}'`);
+
+        // Aplicar filtro por tipo en memoria si se especifica
+        if (type) {
+          if (storyType !== type) {
+            console.log(`🔍 [FILTRADO] Story ${storyDoc.id}: tipo '${storyType}' no coincide con '${type}'`);
+            return; // Skip esta story
+          }
+          console.log(`✅ [INCLUIDO] Story ${storyDoc.id}: tipo '${storyType}' coincide con filtro '${type}'`);
+        } else {
+          console.log(`✅ [SIN_FILTRO] Story ${storyDoc.id}: tipo '${storyType}' incluido (sin filtro)`);
+        }
 
         // Crear story con formato de evento
         // Determinar si fileUrl es imagen o video basado en mediaType
@@ -4479,11 +5530,11 @@ router.get("/race-events", async (req, res) => {
 
         const story = {
           storyId: storyDoc.id,
-          type: storyData.type || "ATHLETE_STARTED",
+          type: storyData.type || storyData.checkpointInfo?.type || "ATHLETE_STARTED",
           participant: participantData,
           split_time: storyData.splitTime || {},
-          image_url: isImage ? (storyData.fileUrl || "") : "",
-          video_url: isVideo ? (storyData.fileUrl || "") : "",
+          fileUrl: storyData.fileUrl || "",
+          clipUrl: storyData.generationInfo?.clipUrl || "",
           sponsors: sponsorsFormatted,
           // Datos adicionales de la story
           description: storyData.description || "",
@@ -4509,12 +5560,53 @@ router.get("/race-events", async (req, res) => {
       });
     }
 
-    // Ordenar todas las stories por fecha
+    // Ordenar todas las stories por fecha (manejar múltiples formatos)
     allStories.sort((a, b) => {
-      const dateA = a.date?._seconds || a.date?.seconds || 0;
-      const dateB = b.date?._seconds || b.date?.seconds || 0;
-      return dateB - dateA; // Más reciente primero
+      const getTimestamp = (dateField) => {
+        if (!dateField) return 0;
+
+        // Si es un Timestamp de Firestore
+        if (dateField && typeof dateField.toMillis === 'function') {
+          return dateField.toMillis();
+        }
+
+        // Si es un objeto con _seconds o seconds
+        if (dateField._seconds) {
+          return dateField._seconds * 1000;
+        }
+        if (dateField.seconds) {
+          return dateField.seconds * 1000;
+        }
+
+        // Si es un string de fecha ISO
+        if (typeof dateField === 'string') {
+          return new Date(dateField).getTime();
+        }
+
+        // Si es un número (timestamp en milliseconds)
+        if (typeof dateField === 'number') {
+          return dateField;
+        }
+
+        // Fallback: intentar convertir a Date
+        try {
+          return new Date(dateField).getTime();
+        } catch (error) {
+          console.warn('Error parsing date field:', dateField);
+          return 0;
+        }
+      };
+
+      return getTimestamp(b.date) - getTimestamp(a.date); // Más reciente primero
     });
+
+    // DEBUG: Resumen de tipos encontrados
+    const typeCounts = {};
+    allStories.forEach(story => {
+      const storyType = story.type || 'SIN_TIPO';
+      typeCounts[storyType] = (typeCounts[storyType] || 0) + 1;
+    });
+    console.log(`📊 [RESUMEN] Total stories: ${allStories.length}, Tipos encontrados:`, typeCounts);
 
     // ✅ PAGINACIÓN MEJORADA
     const totalStories = allStories.length;
@@ -4570,6 +5662,12 @@ router.get("/race-events", async (req, res) => {
  *           type: string
  *         description: Identificador de la carrera (NUEVO - requerido).
  *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Identificador de la aplicación (NUEVO - requerido).
+ *       - in: query
  *         name: eventId
  *         required: true
  *         schema:
@@ -4602,20 +5700,25 @@ router.get("/race-events", async (req, res) => {
  */
 router.get("/participants/followers/count", async (req, res) => {
   try {
-    const { raceId, eventId, participantId } = req.query;
-    if (!raceId || !eventId || !participantId) {
+    let { raceId, appId, eventId, participantId } = req.query;
+    if (!raceId || !appId || !eventId || !participantId) {
       return res.status(400).json({
-        error: "Los parámetros raceId, eventId y participantId son obligatorios.",
+        error: "Los parámetros raceId, appId, eventId y participantId son obligatorios.",
       });
     }
+
+    // Normalizar eventId para evitar problemas de encoding
+    eventId = normalizeUTF8InObject(eventId);
+
     const db = admin.firestore();
     const followersRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
       .collection("events").doc(eventId)
       .collection("participants").doc(participantId)
       .collection("followers");
     const followersSnapshot = await followersRef.get();
     const followersCount = followersSnapshot.size;
-    return res.status(200).json({ raceId, eventId, participantId, followersCount });
+    return res.status(200).json({ raceId, appId, eventId, participantId, followersCount });
   } catch (error) {
     console.error("Error al contar seguidores:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
@@ -4751,12 +5854,25 @@ router.get("/users/following", async (req, res) => {
       followingsSnapshot.docs.map(async (followingDoc) => {
         try {
           const followingData = followingDoc.data();
-          const { profileId: participantId, raceId, eventId, timestamp } = followingData;
+          const { profileId: participantId, raceId, appId, eventId, timestamp } = followingData;
 
-          // Obtener datos del participante desde el evento
-          const participantRef = db.collection("races").doc(raceId)
-            .collection("events").doc(eventId)
-            .collection("participants").doc(participantId);
+          // Normalizar eventId para evitar problemas de encoding
+          const normalizedEventId = normalizeUTF8InObject(eventId);
+
+          // Obtener datos del participante desde el evento (nueva estructura con appId)
+          let participantRef;
+          if (appId) {
+            // Nueva estructura con appId
+            participantRef = db.collection("races").doc(raceId)
+              .collection("apps").doc(appId)
+              .collection("events").doc(normalizedEventId)
+              .collection("participants").doc(participantId);
+          } else {
+            // Estructura antigua (fallback)
+            participantRef = db.collection("races").doc(raceId)
+              .collection("events").doc(normalizedEventId)
+              .collection("participants").doc(participantId);
+          }
           const participantDoc = await participantRef.get();
 
           const participantData = participantDoc.exists ? {
@@ -4873,9 +5989,12 @@ router.get("/search/participants", async (req, res) => {
     let allParticipants = [];
 
     if (!query || query.trim() === "") {
-      // Si no hay query, devolver todos los participantes
-      console.log("📋 Obteniendo todos los participantes (sin filtro)");
-      const snapshot = await participantsRef.limit(limitNum).get();
+      // Si no hay query, devolver participantes destacados (featured: true)
+      console.log("📋 Obteniendo participantes destacados (featured: true)");
+      const snapshot = await participantsRef
+        .where("featured", "==", true)
+        .limit(limitNum)
+        .get();
       allParticipants = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -5047,6 +6166,7 @@ router.get("/search/participants", async (req, res) => {
         id: participant.id,
         objectID: participant.id, // Para compatibilidad con frontend que espera objectID
         name: participant.name || participant.fullName || "",
+        lastName: participant.lastName || null, // ✅ Campo lastName agregado
         fullName: participant.fullName || `${participant.name || ""} ${participant.lastName || ""}`.trim(),
         bib: participant.dorsal || null,
         dorsal: participant.dorsal || null,
@@ -6068,7 +7188,7 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
     console.log(`📤 Enviando request para generar clip:`, clipPayload);
 
     // Llamar al API de generación de clips
-    const response = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipUrlFromAsset', {
+    const response = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipFromVideo', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -6082,8 +7202,9 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
       throw new Error(`API de clips respondió con ${response.status}: ${errorText}`);
     }
 
-    // ✅ CORREGIDO: La respuesta es directamente la URL del clip
-    const clipUrl = await response.text(); // La respuesta es directamente la URL
+    // ✅ CORREGIDO: La respuesta es JSON con clipUrl
+    const result = await response.json();
+    const clipUrl = result.clipUrl || result.url || result;
     console.log(`✅ Clip generado exitosamente: ${clipUrl}`);
 
     // Guardar información del clip en Firestore para referencia
@@ -6100,6 +7221,121 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
       generatedAt: admin.firestore.FieldValue.serverTimestamp(),
       originalTimestamp: timestamp
     });
+
+    // 🆕 GUARDAR CLIPURL EN EL CHECKPOINT DONDE SE GENERÓ
+    try {
+      console.log(`📍 Actualizando checkpoint con clipUrl: ${checkpointId}`);
+
+      const checkpointRef = db.collection("races").doc(raceId)
+        .collection("events").doc(eventId)
+        .collection("participants").doc(participantId)
+        .collection("checkpoints").doc(checkpointId);
+
+      await checkpointRef.update({
+        clipUrl: clipUrl,
+        clipGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+        hasVideoClip: true
+      });
+
+      console.log(`✅ Checkpoint actualizado con clipUrl: ${checkpointId}`);
+    } catch (checkpointError) {
+      console.error(`⚠️ Error actualizando checkpoint con clipUrl:`, checkpointError);
+    }
+
+    // 🆕 GUARDAR CLIPURL EN EL SPLIT/LOCATION CORRESPONDIENTE
+    try {
+      console.log(`🏁 Buscando split/location para checkpoint: ${checkpointId}`);
+
+      // Buscar el evento en la estructura nueva
+      let eventDoc = null;
+      let eventRef = null;
+
+      // Buscar en todas las apps para encontrar el evento
+      const appsSnapshot = await db.collection("races").doc(raceId).collection("apps").get();
+
+      for (const appDoc of appsSnapshot.docs) {
+        const appId = appDoc.id;
+        const newEventRef = db.collection("races").doc(raceId)
+          .collection("apps").doc(appId)
+          .collection("events").doc(eventId);
+
+        const newEventDoc = await newEventRef.get();
+        if (newEventDoc.exists) {
+          eventDoc = newEventDoc;
+          eventRef = newEventRef;
+          console.log(`✅ Evento encontrado: /races/${raceId}/apps/${appId}/events/${eventId}`);
+          break;
+        }
+      }
+
+      if (eventDoc && eventDoc.exists) {
+        const eventData = eventDoc.data();
+
+        // Buscar en splits si existe
+        if (eventData.splits && Array.isArray(eventData.splits)) {
+          const splitIndex = eventData.splits.findIndex(split =>
+            split === checkpointId ||
+            split.name === checkpointId ||
+            split.id === checkpointId
+          );
+
+          if (splitIndex !== -1) {
+            console.log(`📍 Split encontrado en índice ${splitIndex}: ${checkpointId}`);
+
+            // Guardar en la misma estructura donde se encontró el evento
+            const splitClipsRef = eventRef.collection("split-clips").doc(checkpointId);
+
+            await splitClipsRef.set({
+              splitName: checkpointId,
+              splitIndex: splitIndex,
+              clipUrl: clipUrl,
+              participantId: participantId,
+              raceId: raceId,
+              eventId: eventId,
+              streamId: streamId,
+              timestamp: timestamp,
+              generatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            console.log(`✅ ClipUrl guardado en split: ${checkpointId}`);
+          }
+        }
+
+        // Buscar en timingPoints si existe
+        if (eventData.timingPoints && Array.isArray(eventData.timingPoints)) {
+          const timingIndex = eventData.timingPoints.findIndex(point =>
+            point === checkpointId ||
+            point.name === checkpointId ||
+            point.id === checkpointId
+          );
+
+          if (timingIndex !== -1) {
+            console.log(`⏱️ Timing point encontrado en índice ${timingIndex}: ${checkpointId}`);
+
+            // Guardar en la misma estructura donde se encontró el evento
+            const timingClipsRef = eventRef.collection("timing-clips").doc(checkpointId);
+
+            await timingClipsRef.set({
+              timingPointName: checkpointId,
+              timingIndex: timingIndex,
+              clipUrl: clipUrl,
+              participantId: participantId,
+              raceId: raceId,
+              eventId: eventId,
+              streamId: streamId,
+              timestamp: timestamp,
+              generatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            console.log(`✅ ClipUrl guardado en timing point: ${checkpointId}`);
+          }
+        }
+      } else {
+        console.log(`⚠️ No se encontró el evento ${eventId} en ninguna estructura`);
+      }
+    } catch (splitError) {
+      console.error(`⚠️ Error guardando clipUrl en split/location:`, splitError);
+    }
 
     return clipUrl;
 
@@ -7358,6 +8594,284 @@ router.get('/debug/users-with-tokens', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+/**
+ * 🎯 ENDPOINTS PARA CONSULTAR SPLITS CON CLIPS DE PARTICIPANTES
+ */
+
+/**
+ * @swagger
+ * /api/races/{raceId}/events/{eventId}/participants/{participantId}/splits-with-clips:
+ *   get:
+ *     summary: Obtener splits donde el participante tiene clips
+ *     tags: [Clips]
+ *     parameters:
+ *       - in: path
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: participantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la app (requerido)
+ *       - in: query
+ *         name: detailed
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Incluir detalles de clips
+ *     responses:
+ *       200:
+ *         description: Splits con clips obtenidos correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 participantId:
+ *                   type: string
+ *                 totalSplits:
+ *                   type: number
+ *                 totalClips:
+ *                   type: number
+ *                 splitsWithClips:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 detailedSplits:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ */
+router.get('/races/:raceId/events/:eventId/participants/:participantId/splits-with-clips', async (req, res) => {
+  const { raceId, eventId, participantId } = req.params;
+  const { appId, detailed = 'false' } = req.query;
+
+  try {
+    console.log(`🎯 [API] Consultando splits con clips para participante: ${participantId}`);
+
+    // Obtener referencia a Firestore
+    const db = admin.firestore();
+
+    // Validar que appId sea requerido
+    if (!appId) {
+      return res.status(400).json({
+        success: false,
+        error: "appId es requerido",
+        message: "El parámetro appId es obligatorio para esta consulta"
+      });
+    }
+
+    // Estructura nueva: /races/{raceId}/apps/{appId}/events/{eventId}/split-clips
+    const splitClipsRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("split-clips");
+
+    // Consultar clips del participante
+    const snapshot = await splitClipsRef
+      .where("participantId", "==", participantId)
+      .orderBy("splitIndex", "asc")
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({
+        success: true,
+        participantId: participantId,
+        totalSplits: 0,
+        totalClips: 0,
+        splitsWithClips: [],
+        message: "No se encontraron clips para este participante"
+      });
+    }
+
+    // Procesar resultados
+    const splitsMap = new Map();
+    let totalClips = 0;
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const splitName = data.splitName;
+      totalClips++;
+
+      if (!splitsMap.has(splitName)) {
+        splitsMap.set(splitName, {
+          splitName: splitName,
+          splitIndex: data.splitIndex,
+          clipCount: 1,
+          clips: [{
+            id: doc.id,
+            clipUrl: data.clipUrl,
+            timestamp: data.timestamp,
+            generatedAt: data.generatedAt?.toDate()
+          }]
+        });
+      } else {
+        const existingSplit = splitsMap.get(splitName);
+        existingSplit.clipCount++;
+        existingSplit.clips.push({
+          id: doc.id,
+          clipUrl: data.clipUrl,
+          timestamp: data.timestamp,
+          generatedAt: data.generatedAt?.toDate()
+        });
+      }
+    });
+
+    // Convertir a array y ordenar
+    const splits = Array.from(splitsMap.values())
+      .sort((a, b) => a.splitIndex - b.splitIndex);
+
+    // Respuesta según el nivel de detalle solicitado
+    if (detailed === 'true') {
+      // Respuesta detallada con todos los clips
+      res.json({
+        success: true,
+        participantId: participantId,
+        totalSplits: splits.length,
+        totalClips: totalClips,
+        splitsWithClips: splits.map(split => split.splitName),
+        detailedSplits: splits
+      });
+    } else {
+      // Respuesta simple solo con nombres de splits
+      res.json({
+        success: true,
+        participantId: participantId,
+        totalSplits: splits.length,
+        totalClips: totalClips,
+        splitsWithClips: splits.map(split => split.splitName)
+      });
+    }
+
+    console.log(`✅ [API] Encontrados ${splits.length} splits con clips para ${participantId}`);
+
+  } catch (error) {
+    console.error("💥 [API] Error consultando splits del participante:", error);
+    res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+      message: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/races/{raceId}/events/{eventId}/participants/{participantId}/splits-with-clips/summary:
+ *   get:
+ *     summary: Obtener lista simple de splits donde el participante tiene clips
+ *     tags: [Clips]
+ *     parameters:
+ *       - in: path
+ *         name: raceId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: participantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: appId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la app (requerido)
+ *     responses:
+ *       200:
+ *         description: Lista de splits obtenida correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 participantId:
+ *                   type: string
+ *                 totalSplits:
+ *                   type: number
+ *                 splitsWithClips:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ */
+router.get('/races/:raceId/events/:eventId/participants/:participantId/splits-with-clips/summary', async (req, res) => {
+  const { raceId, eventId, participantId } = req.params;
+  const { appId } = req.query;
+
+  try {
+    console.log(`📋 [API] Obteniendo resumen de splits para participante: ${participantId}`);
+
+    // Obtener referencia a Firestore
+    const db = admin.firestore();
+
+    // Validar que appId sea requerido
+    if (!appId) {
+      return res.status(400).json({
+        success: false,
+        error: "appId es requerido",
+        message: "El parámetro appId es obligatorio para esta consulta"
+      });
+    }
+
+    // Estructura nueva: /races/{raceId}/apps/{appId}/events/{eventId}/split-clips
+    const splitClipsRef = db.collection("races").doc(raceId)
+      .collection("apps").doc(appId)
+      .collection("events").doc(eventId)
+      .collection("split-clips");
+
+    const snapshot = await splitClipsRef
+      .where("participantId", "==", participantId)
+      .get();
+
+    const splitNames = new Set();
+    snapshot.forEach(doc => {
+      splitNames.add(doc.data().splitName);
+    });
+
+    const splitsArray = Array.from(splitNames).sort();
+
+    res.json({
+      success: true,
+      participantId: participantId,
+      totalSplits: splitsArray.length,
+      splitsWithClips: splitsArray
+    });
+
+    console.log(`✅ [API] Resumen: ${splitsArray.length} splits con clips para ${participantId}`);
+
+  } catch (error) {
+    console.error("💥 [API] Error obteniendo resumen de splits:", error);
+    res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+      message: error.message
     });
   }
 });

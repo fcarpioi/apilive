@@ -11,17 +11,69 @@ class CopernicoConfig {
    * Cargar configuración desde variables de entorno y Firebase Config
    */
   loadConfig() {
+    // Configuración real de Copernico con tokens válidos
+    const copernicoEnvironments = {
+      "dev": {
+        socket: "http://socketadmin-copernico.local.sportmaniacs.com/",
+        api: "http://copernico.local.sportmaniacs.com/api/races",
+        admin: "http://copernico.local.sportmaniacs.com/api/races",
+        token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
+      },
+      "pro": {
+        socket: "https://socket-ss.sportmaniacs.com:4319/",
+        api: "https://api.copernico.cloud/api/races",
+        admin: "https://api.copernico.cloud/api/races",
+        token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
+      },
+      "alpha": {
+        socket: "https://socket-ss.sportmaniacs.com:4319/",
+        api: "https://psexjdg973.execute-api.eu-west-1.amazonaws.com/alpha/api/races",
+        admin: "https://psexjdg973.execute-api.eu-west-1.amazonaws.com/alpha/api/races",
+        token: "mKINguaR0D6Qm3T5KPTUiaETudOt1teR5I8T4JjN"
+      },
+      "demo": {
+        socket: "https://socket-ss.sportmaniacs.com:4319/",
+        api: "https://demo-api.copernico.cloud/api/races",
+        admin: "https://demo-api.copernico.cloud/api/races",
+        token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
+      }
+    };
+
+    // Determinar entorno actual (usar 'pro' para producción)
+    const currentEnv = process.env.COPERNICO_ENV || 'pro';
+    const selectedConfig = copernicoEnvironments[currentEnv];
+
     this.config = {
-      // URLs base para diferentes entornos
+      // Configuración de entornos
+      environments: copernicoEnvironments,
+      currentEnvironment: currentEnv,
+
+      // URLs base para diferentes entornos (formato legacy para compatibilidad)
       api: {
         dev: {
-          baseUrl: process.env.COPERNICO_DEV_BASE_URL || "https://demo-api.copernico.cloud",
-          apiKey: process.env.COPERNICO_DEV_API_KEY || this.getFirebaseConfig('copernico.dev.api_key')
+          baseUrl: copernicoEnvironments.dev.api,
+          apiKey: copernicoEnvironments.dev.token
         },
         prod: {
-          baseUrl: process.env.COPERNICO_PROD_BASE_URL || "https://vendor-api.copernico.cloud", 
-          apiKey: process.env.COPERNICO_PROD_API_KEY || this.getFirebaseConfig('copernico.prod.api_key')
+          baseUrl: copernicoEnvironments.pro.api,
+          apiKey: copernicoEnvironments.pro.token
+        },
+        demo: {
+          baseUrl: copernicoEnvironments.demo.api,
+          apiKey: copernicoEnvironments.demo.token
+        },
+        alpha: {
+          baseUrl: copernicoEnvironments.alpha.api,
+          apiKey: copernicoEnvironments.alpha.token
         }
+      },
+
+      // Configuración activa
+      active: {
+        baseUrl: selectedConfig.api,
+        apiKey: selectedConfig.token,
+        socketUrl: selectedConfig.socket,
+        adminUrl: selectedConfig.admin
       },
 
       // Configuración de entorno actual
@@ -43,18 +95,18 @@ class CopernicoConfig {
       // Configuración de logging
       logging: {
         enableDebugLogs: process.env.NODE_ENV !== 'production',
-        logRequests: process.env.COPERNICO_LOG_REQUESTS === 'true',
-        logResponses: process.env.COPERNICO_LOG_RESPONSES === 'true'
+        logRequests: true, // Habilitar temporalmente para debug
+        logResponses: true // Habilitar temporalmente para debug
       }
     };
 
     console.log("⚙️ Configuración Copernico cargada:", {
-      environment: this.config.environment,
-      devBaseUrl: this.config.api.dev.baseUrl,
-      prodBaseUrl: this.config.api.prod.baseUrl,
-      hasDevApiKey: !!this.config.api.dev.apiKey,
-      hasProdApiKey: !!this.config.api.prod.apiKey,
-      cacheEnabled: this.config.cache.enableCache
+      currentEnvironment: this.config.currentEnvironment,
+      activeBaseUrl: this.config.active.baseUrl,
+      hasActiveApiKey: !!this.config.active.apiKey,
+      socketUrl: this.config.active.socketUrl,
+      cacheEnabled: this.config.cache.enableCache,
+      availableEnvironments: Object.keys(this.config.environments)
     });
   }
 
@@ -74,16 +126,16 @@ class CopernicoConfig {
    * Obtener configuración del entorno actual
    */
   getCurrentEnvironmentConfig() {
-    const isProduction = this.config.environment === 'production';
-    return isProduction ? this.config.api.prod : this.config.api.dev;
+    return this.config.active;
   }
 
   /**
-   * Obtener URL completa para un endpoint
+   * Obtener URL completa para un endpoint de participante
    */
   getApiUrl(raceId, participantId) {
     const envConfig = this.getCurrentEnvironmentConfig();
-    return `${envConfig.baseUrl}/api/races/${raceId}/athlete/${participantId}`;
+    // La URL base ya incluye /api/races, solo agregar el participante
+    return `${envConfig.baseUrl}/${raceId}/athlete/${participantId}`;
   }
 
   /**
@@ -93,9 +145,28 @@ class CopernicoConfig {
     const envConfig = this.getCurrentEnvironmentConfig();
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${envConfig.apiKey}`,
-      'User-Agent': 'LiveCopernico-API/1.0'
+      'x-api-key': envConfig.apiKey,
+      'User-Agent': 'LiveCopernico-API/1.0',
+      'Accept': 'application/json'
     };
+  }
+
+  /**
+   * Cambiar entorno de Copernico
+   */
+  setEnvironment(env) {
+    if (this.config.environments[env]) {
+      this.config.currentEnvironment = env;
+      this.config.active = {
+        baseUrl: this.config.environments[env].api,
+        apiKey: this.config.environments[env].token,
+        socketUrl: this.config.environments[env].socket,
+        adminUrl: this.config.environments[env].admin
+      };
+      console.log(`🔄 Copernico environment cambiado a: ${env}`);
+      return true;
+    }
+    return false;
   }
 
   /**

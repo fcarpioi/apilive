@@ -1,0 +1,20 @@
+{
+    "raceId": "52ec7d4a-40c1-4f74-bfa0-cf4cc76edd49",
+    "eventId": "52ec7d4a-40c1-4f74-bfa0-cf4cc76edd49",
+    "participantId": "203b60b4-1821-5968-aaa0-461bcd0c3382",
+    "contentType": "video",
+    "mediaType": "video",
+    "fileUrl": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
+    "fileName": "test_story_video.mp4",
+    "description": "Historia de prueba generada para testing de push notifications",
+    "duration": 30,
+    "moderationStatus": "approved",
+    "originType": "automatic_global",
+    "generationInfo": {
+        "streamId": "test-stream-123456789",
+        "startTime": "2025-12-10T14:55:00Z",
+        "endTime": "2025-12-10T14:55:30Z",
+        "generatedAt": "2025-12-10T15:00:00Z",
+        "clipUrl": "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+    }
+}

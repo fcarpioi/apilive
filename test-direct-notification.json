@@ -1,0 +1,11 @@
+{
+    "userId": "ca03a740-3bd3-4ade-ac77-161486d2a91c",
+    "raceId": "52ec7d4a-40c1-4f74-bfa0-cf4cc76edd49",
+    "title": "🧪 Prueba Directa FCM",
+    "body": "Notificación de prueba para verificar que el token funciona correctamente",
+    "data": {
+        "notificationType": "TEST",
+        "participantId": "001beb82-f56c-5c2b-b218-a035edb6ae96",
+        "timestamp": "2025-12-10T19:40:00Z"
+    }
+}

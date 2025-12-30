@@ -1,0 +1,774 @@
+{
+  "timestamp": "2025-12-20T23:03:52.294Z",
+  "participants": [
+    "6F6Y42FF",
+    "3A38D64A",
+    "3YZA549C",
+    "1AB77Y18",
+    "AAF93Y67",
+    "Z4777894",
+    "DA66CBB9",
+    "Z3BB248B",
+    "FDC64C8B",
+    "21B63186",
+    "D3ZY54YA",
+    "5YZBF965",
+    "28CCF14F",
+    "54FY9924",
+    "CY74D84Z",
+    "F9F9ACCF",
+    "6AC3C3B3",
+    "15FA2B76",
+    "A9B2321C",
+    "9Y8573A1",
+    "121D1BBD",
+    "131Y57B4",
+    "FY8Z7772",
+    "4688BCFZ",
+    "1ZZCB42Y"
+  ],
+  "checkpoints": [
+    {
+      "name": "Salida",
+      "delay": 0,
+      "type": "ATHLETE_STARTED",
+      "point": "Salida",
+      "location": "Meta"
+    },
+    {
+      "name": "10K",
+      "delay": 10,
+      "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+      "point": "10K",
+      "location": "10K"
+    },
+    {
+      "name": "15K",
+      "delay": 5,
+      "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+      "point": "15K",
+      "location": "15K"
+    },
+    {
+      "name": "Media",
+      "delay": 5,
+      "type": "ATHLETE_FINISHED",
+      "point": "Media",
+      "location": "Meta 21K"
+    }
+  ],
+  "results": {
+    "success": [
+      {
+        "participantId": "6F6Y42FF",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6F6Y42FF_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6F6Y42FF_detection_1766271771458"
+      },
+      {
+        "participantId": "3A38D64A",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3A38D64A_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3A38D64A_detection_1766271772960"
+      },
+      {
+        "participantId": "3YZA549C",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3YZA549C_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3YZA549C_detection_1766271773370"
+      },
+      {
+        "participantId": "1AB77Y18",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1AB77Y18_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1AB77Y18_detection_1766271773738"
+      },
+      {
+        "participantId": "AAF93Y67",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_AAF93Y67_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_AAF93Y67_detection_1766271774186"
+      },
+      {
+        "participantId": "Z4777894",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z4777894_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z4777894_detection_1766271774684"
+      },
+      {
+        "participantId": "DA66CBB9",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_DA66CBB9_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_DA66CBB9_detection_1766271775195"
+      },
+      {
+        "participantId": "Z3BB248B",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z3BB248B_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z3BB248B_detection_1766271775593"
+      },
+      {
+        "participantId": "FDC64C8B",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FDC64C8B_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FDC64C8B_detection_1766271775968"
+      },
+      {
+        "participantId": "21B63186",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_21B63186_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_21B63186_detection_1766271776458"
+      },
+      {
+        "participantId": "D3ZY54YA",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_D3ZY54YA_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_D3ZY54YA_detection_1766271776795"
+      },
+      {
+        "participantId": "5YZBF965",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_5YZBF965_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_5YZBF965_detection_1766271777263"
+      },
+      {
+        "participantId": "28CCF14F",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_28CCF14F_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_28CCF14F_detection_1766271777654"
+      },
+      {
+        "participantId": "54FY9924",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_54FY9924_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_54FY9924_detection_1766271777985"
+      },
+      {
+        "participantId": "CY74D84Z",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_CY74D84Z_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_CY74D84Z_detection_1766271778326"
+      },
+      {
+        "participantId": "F9F9ACCF",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_F9F9ACCF_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_F9F9ACCF_detection_1766271778692"
+      },
+      {
+        "participantId": "6AC3C3B3",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6AC3C3B3_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6AC3C3B3_detection_1766271779051"
+      },
+      {
+        "participantId": "15FA2B76",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_15FA2B76_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_15FA2B76_detection_1766271779460"
+      },
+      {
+        "participantId": "A9B2321C",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_A9B2321C_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_A9B2321C_detection_1766271779787"
+      },
+      {
+        "participantId": "9Y8573A1",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_9Y8573A1_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_9Y8573A1_detection_1766271780223"
+      },
+      {
+        "participantId": "121D1BBD",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_121D1BBD_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_121D1BBD_detection_1766271780527"
+      },
+      {
+        "participantId": "131Y57B4",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_131Y57B4_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_131Y57B4_detection_1766271780823"
+      },
+      {
+        "participantId": "FY8Z7772",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FY8Z7772_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FY8Z7772_detection_1766271781099"
+      },
+      {
+        "participantId": "4688BCFZ",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_4688BCFZ_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_4688BCFZ_detection_1766271781766"
+      },
+      {
+        "participantId": "1ZZCB42Y",
+        "checkpoint": "Salida",
+        "type": "ATHLETE_STARTED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1ZZCB42Y_DETECTION_SALIDA_META",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1ZZCB42Y_detection_1766271782164"
+      },
+      {
+        "participantId": "6F6Y42FF",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6F6Y42FF_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6F6Y42FF_detection_1766271792562"
+      },
+      {
+        "participantId": "3A38D64A",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3A38D64A_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3A38D64A_detection_1766271792963"
+      },
+      {
+        "participantId": "3YZA549C",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3YZA549C_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3YZA549C_detection_1766271793329"
+      },
+      {
+        "participantId": "1AB77Y18",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1AB77Y18_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1AB77Y18_detection_1766271793749"
+      },
+      {
+        "participantId": "AAF93Y67",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_AAF93Y67_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_AAF93Y67_detection_1766271794248"
+      },
+      {
+        "participantId": "Z4777894",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z4777894_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z4777894_detection_1766271794667"
+      },
+      {
+        "participantId": "DA66CBB9",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_DA66CBB9_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_DA66CBB9_detection_1766271795020"
+      },
+      {
+        "participantId": "Z3BB248B",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z3BB248B_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z3BB248B_detection_1766271795382"
+      },
+      {
+        "participantId": "FDC64C8B",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FDC64C8B_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FDC64C8B_detection_1766271795686"
+      },
+      {
+        "participantId": "21B63186",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_21B63186_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_21B63186_detection_1766271796025"
+      },
+      {
+        "participantId": "D3ZY54YA",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_D3ZY54YA_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_D3ZY54YA_detection_1766271796612"
+      },
+      {
+        "participantId": "5YZBF965",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_5YZBF965_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_5YZBF965_detection_1766271796954"
+      },
+      {
+        "participantId": "28CCF14F",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_28CCF14F_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_28CCF14F_detection_1766271797333"
+      },
+      {
+        "participantId": "54FY9924",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_54FY9924_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_54FY9924_detection_1766271797655"
+      },
+      {
+        "participantId": "CY74D84Z",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_CY74D84Z_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_CY74D84Z_detection_1766271797958"
+      },
+      {
+        "participantId": "F9F9ACCF",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_F9F9ACCF_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_F9F9ACCF_detection_1766271798250"
+      },
+      {
+        "participantId": "6AC3C3B3",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6AC3C3B3_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6AC3C3B3_detection_1766271798658"
+      },
+      {
+        "participantId": "15FA2B76",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_15FA2B76_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_15FA2B76_detection_1766271798987"
+      },
+      {
+        "participantId": "A9B2321C",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_A9B2321C_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_A9B2321C_detection_1766271799394"
+      },
+      {
+        "participantId": "9Y8573A1",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_9Y8573A1_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_9Y8573A1_detection_1766271799712"
+      },
+      {
+        "participantId": "121D1BBD",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_121D1BBD_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_121D1BBD_detection_1766271800092"
+      },
+      {
+        "participantId": "131Y57B4",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_131Y57B4_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_131Y57B4_detection_1766271800561"
+      },
+      {
+        "participantId": "FY8Z7772",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FY8Z7772_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FY8Z7772_detection_1766271800947"
+      },
+      {
+        "participantId": "4688BCFZ",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_4688BCFZ_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_4688BCFZ_detection_1766271801319"
+      },
+      {
+        "participantId": "1ZZCB42Y",
+        "checkpoint": "10K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1ZZCB42Y_DETECTION_10K_10K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1ZZCB42Y_detection_1766271801596"
+      },
+      {
+        "participantId": "6F6Y42FF",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6F6Y42FF_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6F6Y42FF_detection_1766271806990"
+      },
+      {
+        "participantId": "3A38D64A",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3A38D64A_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3A38D64A_detection_1766271807364"
+      },
+      {
+        "participantId": "3YZA549C",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3YZA549C_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3YZA549C_detection_1766271807752"
+      },
+      {
+        "participantId": "1AB77Y18",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1AB77Y18_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1AB77Y18_detection_1766271808081"
+      },
+      {
+        "participantId": "AAF93Y67",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_AAF93Y67_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_AAF93Y67_detection_1766271808395"
+      },
+      {
+        "participantId": "Z4777894",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z4777894_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z4777894_detection_1766271808682"
+      },
+      {
+        "participantId": "DA66CBB9",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_DA66CBB9_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_DA66CBB9_detection_1766271808992"
+      },
+      {
+        "participantId": "Z3BB248B",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z3BB248B_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z3BB248B_detection_1766271809270"
+      },
+      {
+        "participantId": "FDC64C8B",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FDC64C8B_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FDC64C8B_detection_1766271809626"
+      },
+      {
+        "participantId": "21B63186",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_21B63186_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_21B63186_detection_1766271809965"
+      },
+      {
+        "participantId": "D3ZY54YA",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_D3ZY54YA_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_D3ZY54YA_detection_1766271810356"
+      },
+      {
+        "participantId": "5YZBF965",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_5YZBF965_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_5YZBF965_detection_1766271810746"
+      },
+      {
+        "participantId": "28CCF14F",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_28CCF14F_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_28CCF14F_detection_1766271811047"
+      },
+      {
+        "participantId": "54FY9924",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_54FY9924_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_54FY9924_detection_1766271811455"
+      },
+      {
+        "participantId": "CY74D84Z",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_CY74D84Z_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_CY74D84Z_detection_1766271811724"
+      },
+      {
+        "participantId": "F9F9ACCF",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_F9F9ACCF_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_F9F9ACCF_detection_1766271812014"
+      },
+      {
+        "participantId": "6AC3C3B3",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6AC3C3B3_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6AC3C3B3_detection_1766271812335"
+      },
+      {
+        "participantId": "15FA2B76",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_15FA2B76_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_15FA2B76_detection_1766271812664"
+      },
+      {
+        "participantId": "A9B2321C",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_A9B2321C_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_A9B2321C_detection_1766271812957"
+      },
+      {
+        "participantId": "9Y8573A1",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_9Y8573A1_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_9Y8573A1_detection_1766271813282"
+      },
+      {
+        "participantId": "121D1BBD",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_121D1BBD_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_121D1BBD_detection_1766271813603"
+      },
+      {
+        "participantId": "131Y57B4",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_131Y57B4_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_131Y57B4_detection_1766271813957"
+      },
+      {
+        "participantId": "FY8Z7772",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FY8Z7772_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FY8Z7772_detection_1766271814456"
+      },
+      {
+        "participantId": "4688BCFZ",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_4688BCFZ_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_4688BCFZ_detection_1766271814734"
+      },
+      {
+        "participantId": "1ZZCB42Y",
+        "checkpoint": "15K",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1ZZCB42Y_DETECTION_15K_15K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1ZZCB42Y_detection_1766271818322"
+      },
+      {
+        "participantId": "6F6Y42FF",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6F6Y42FF_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6F6Y42FF_detection_1766271824289"
+      },
+      {
+        "participantId": "3A38D64A",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3A38D64A_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3A38D64A_detection_1766271824586"
+      },
+      {
+        "participantId": "3YZA549C",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_3YZA549C_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_3YZA549C_detection_1766271824877"
+      },
+      {
+        "participantId": "1AB77Y18",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1AB77Y18_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1AB77Y18_detection_1766271825178"
+      },
+      {
+        "participantId": "AAF93Y67",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_AAF93Y67_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_AAF93Y67_detection_1766271825695"
+      },
+      {
+        "participantId": "Z4777894",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z4777894_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z4777894_detection_1766271826025"
+      },
+      {
+        "participantId": "DA66CBB9",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_DA66CBB9_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_DA66CBB9_detection_1766271826303"
+      },
+      {
+        "participantId": "Z3BB248B",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_Z3BB248B_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_Z3BB248B_detection_1766271826584"
+      },
+      {
+        "participantId": "FDC64C8B",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FDC64C8B_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FDC64C8B_detection_1766271826895"
+      },
+      {
+        "participantId": "21B63186",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_21B63186_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_21B63186_detection_1766271827177"
+      },
+      {
+        "participantId": "D3ZY54YA",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_D3ZY54YA_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_D3ZY54YA_detection_1766271827612"
+      },
+      {
+        "participantId": "5YZBF965",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_5YZBF965_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_5YZBF965_detection_1766271827889"
+      },
+      {
+        "participantId": "28CCF14F",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_28CCF14F_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_28CCF14F_detection_1766271828156"
+      },
+      {
+        "participantId": "54FY9924",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_54FY9924_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_54FY9924_detection_1766271828551"
+      },
+      {
+        "participantId": "CY74D84Z",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_CY74D84Z_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_CY74D84Z_detection_1766271828819"
+      },
+      {
+        "participantId": "F9F9ACCF",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_F9F9ACCF_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_F9F9ACCF_detection_1766271829175"
+      },
+      {
+        "participantId": "6AC3C3B3",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_6AC3C3B3_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_6AC3C3B3_detection_1766271829479"
+      },
+      {
+        "participantId": "15FA2B76",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_15FA2B76_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_15FA2B76_detection_1766271829785"
+      },
+      {
+        "participantId": "A9B2321C",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_A9B2321C_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_A9B2321C_detection_1766271830093"
+      },
+      {
+        "participantId": "9Y8573A1",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_9Y8573A1_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_9Y8573A1_detection_1766271830495"
+      },
+      {
+        "participantId": "121D1BBD",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_121D1BBD_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_121D1BBD_detection_1766271830768"
+      },
+      {
+        "participantId": "131Y57B4",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_131Y57B4_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_131Y57B4_detection_1766271831115"
+      },
+      {
+        "participantId": "FY8Z7772",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_FY8Z7772_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_FY8Z7772_detection_1766271831559"
+      },
+      {
+        "participantId": "4688BCFZ",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_4688BCFZ_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_4688BCFZ_detection_1766271831885"
+      },
+      {
+        "participantId": "1ZZCB42Y",
+        "checkpoint": "Media",
+        "type": "ATHLETE_FINISHED",
+        "queueKey": "69200553-464C-4BFD-9B35-4CA6AC1F17F5_1ZZCB42Y_DETECTION_MEDIA_META-21K",
+        "requestId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5_1ZZCB42Y_detection_1766271832155"
+      }
+    ],
+    "failed": [],
+    "total": 100
+  },
+  "summary": {
+    "totalParticipants": 25,
+    "totalCheckpoints": 4,
+    "totalExpectedStories": 100,
+    "successfulRequests": 100,
+    "failedRequests": 0,
+    "successRate": "100.0%"
+  }
+}

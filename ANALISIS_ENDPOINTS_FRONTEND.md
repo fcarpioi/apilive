@@ -136,7 +136,7 @@ router.get("/apps/participant", async (req, res) => {
   
   // Obtener splits/checkpoints del participante
   const storiesSnapshot = await participantRef.collection("stories")
-    .where("type", "in", ["ATHLETE_STARTED", "ATHLETE_FINISHED", "ATHLETE_CROSSED_TIMING_SPLIT"])
+    .where("type", "in", ["ATHLETE_STARTED", "ATHLETE_FINISHED", "ATHLETE_ONGOING"])
     .orderBy("date", "asc")
     .get();
     

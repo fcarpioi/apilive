@@ -1,0 +1,44 @@
+{
+  "timestamp": "2025-12-20T23:18:37.667Z",
+  "participants": [
+    "6F6Y42FF",
+    "3A38D64A",
+    "3YZA549C",
+    "1AB77Y18",
+    "AAF93Y67",
+    "Z4777894",
+    "DA66CBB9",
+    "Z3BB248B",
+    "FDC64C8B",
+    "21B63186",
+    "D3ZY54YA",
+    "5YZBF965",
+    "28CCF14F",
+    "54FY9924",
+    "CY74D84Z",
+    "F9F9ACCF",
+    "6AC3C3B3",
+    "15FA2B76",
+    "A9B2321C",
+    "9Y8573A1",
+    "121D1BBD",
+    "131Y57B4",
+    "FY8Z7772",
+    "4688BCFZ",
+    "1ZZCB42Y"
+  ],
+  "checkpoints": [],
+  "results": {
+    "success": [],
+    "failed": [],
+    "total": 0
+  },
+  "summary": {
+    "totalParticipants": 25,
+    "totalCheckpoints": 0,
+    "totalExpectedStories": 0,
+    "successfulRequests": 0,
+    "failedRequests": 0,
+    "successRate": "NaN%"
+  }
+}

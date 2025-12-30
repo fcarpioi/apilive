@@ -45,7 +45,7 @@ GET /api/apps/feed/extended?appId=RtME2RACih6YxgrlmuQR&raceId=race-001-madrid-ma
       },
       "fileUrl": "https://stream.mux.com/...",
       "description": "Luciana pasa por el checkpoint 5K",
-      "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+      "type": "ATHLETE_ONGOING",
       "moderationStatus": "approved"
     }
   ],
@@ -97,7 +97,7 @@ GET /api/apps/participant?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yxgrl
       "type": "ATHLETE_STARTED",
       "description": "Giselle inicia la carrera",
       "time": "00:00:00",
-      "netTime": "00:00:00", 
+      "netTime": "00:00:00",
       "split": "START",
       "checkpoint": "Línea de Salida",
       "fileUrl": "https://stream.mux.com/...",
@@ -105,11 +105,11 @@ GET /api/apps/participant?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yxgrl
     },
     {
       "storyId": "JJ6ngXxMTx5gXWEcJA7T",
-      "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+      "type": "ATHLETE_ONGOING",
       "description": "Giselle pasa por checkpoint intermedio",
       "time": "00:15:00",
       "netTime": "00:14:58",
-      "split": "INTERMEDIATE", 
+      "split": "INTERMEDIATE",
       "checkpoint": "Checkpoint Intermedio",
       "fileUrl": "https://stream.mux.com/...",
       "moderationStatus": "approved"
@@ -121,7 +121,7 @@ GET /api/apps/participant?raceId=race-001-madrid-marathon&appId=RtME2RACih6Yxgrl
       "time": "01:00:00",
       "netTime": "00:59:55",
       "split": "FINISH",
-      "checkpoint": "Meta Final", 
+      "checkpoint": "Meta Final",
       "fileUrl": "https://stream.mux.com/...",
       "moderationStatus": "approved"
     }

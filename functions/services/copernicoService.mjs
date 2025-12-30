@@ -9,6 +9,13 @@ class CopernicoService {
   }
 
   /**
+   * Obtener configuración del entorno actual
+   */
+  getCurrentEnvironmentConfig() {
+    return this.config.getCurrentEnvironmentConfig();
+  }
+
+  /**
    * Obtener datos de participante desde la API de Copernico
    */
   async getParticipantData(raceId, participantId) {
@@ -61,12 +68,18 @@ class CopernicoService {
       }
 
       // Validar estructura de respuesta
-      if (!data.result || !data.data) {
+      if (!data.result) {
         throw new Error('Estructura de respuesta inválida de Copernico API');
       }
 
-      if (data.result.code !== 0) {
-        throw new Error(`Error de Copernico API: ${data.result.message}`);
+      // Códigos de éxito: 0 (success) y 1 (success con datos)
+      if (data.result.code !== 0 && data.result.code !== 1) {
+        throw new Error(`Error de Copernico API: ${data.result.message || 'Error desconocido'}`);
+      }
+
+      // Verificar que hay datos cuando el código es 1
+      if (data.result.code === 1 && (!data.data || Object.keys(data.data).length === 0)) {
+        throw new Error('No hay datos disponibles para este participante');
       }
 
       // Guardar en cache
@@ -121,52 +134,61 @@ class CopernicoService {
    * Transformar datos de Copernico al formato interno
    */
   transformCopernicoData(copernicoData) {
+    // Obtener datos del primer evento (normalmente solo hay uno)
+    const eventData = copernicoData.events && copernicoData.events.length > 0 ? copernicoData.events[0] : {};
+
     const participant = {
       // Datos básicos del participante
       externalId: copernicoData.id,
       name: copernicoData.name,
       lastName: copernicoData.surname,
       fullName: `${copernicoData.name} ${copernicoData.surname}`,
-      birthdate: copernicoData.birthdate,
       gender: copernicoData.gender,
-      
-      // Datos del evento
-      eventId: copernicoData.event,
-      dorsal: copernicoData.dorsal,
-      category: copernicoData.category,
-      wave: copernicoData.wave,
-      team: copernicoData.team,
-      club: copernicoData.club,
+      birthdate: copernicoData.birthdate,
+
+      // Country/Nationality - usar el campo más completo disponible
+      country: copernicoData.nationality || copernicoData.PAÍS || copernicoData['PAIS NOMBRE'] || 'Unknown',
+      nationality: copernicoData.nationality,
+
+      // Datos del evento (desde events[0])
+      eventId: eventData.event,
+      dorsal: eventData.dorsal,
+      category: eventData.category,
+      team: eventData.team || '',
+      club: copernicoData.club || '',
       featured: copernicoData.featured || false,
-      
-      // Estado del participante
-      status: copernicoData.status,
-      realStatus: copernicoData.realStatus,
-      
+
+      // Estado del participante (desde events[0])
+      status: eventData.status,
+      realStatus: eventData.realStatus,
+
       // Datos adicionales
-      attributes: copernicoData.attributes || {},
-      chip: copernicoData.chip || [],
+      attributes: eventData.attributes || {},
+      chip: eventData.chip || [],
       locations: copernicoData.locations || [],
-      
-      // Tiempos y estadísticas
-      startRawTime: copernicoData.startRawTime,
-      startNetTime: copernicoData.startNetTime,
-      splitsMissing: copernicoData.splitsMissing,
-      maxConsecutiveSplitsMissing: copernicoData.maxConsecutiveSplitsMissing,
-      splitsSeen: copernicoData.splitsSeen,
-      lastSplitSeen: copernicoData.last_split_seen,
-      
+
+      // Tiempos y estadísticas (desde events[0])
+      startRawTime: eventData.startRawTime,
+      startNetTime: eventData.startNetTime,
+      splitsMissing: eventData.splitsMissing,
+      maxConsecutiveSplitsMissing: eventData.maxConsecutiveSplitsMissing,
+      splitsSeen: eventData.splitsSeen,
+      lastSplitSeen: eventData.last_split_seen,
+
       // Metadatos
       updatedAt: new Date().toISOString(),
       source: 'copernico_api'
     };
 
-    // Transformar times y rankings si existen
-    const times = this.transformTimes(copernicoData.times || {});
-    const rankings = this.transformRankings(copernicoData.rankings || {});
+    // Filtrar campos undefined para evitar errores de Firestore
+    const cleanParticipant = this.removeUndefinedFields(participant);
+
+    // Transformar times y rankings si existen (desde events[0])
+    const times = this.transformTimes(eventData.times || {});
+    const rankings = this.transformRankings(eventData.rankings || {});
 
     return {
-      participant,
+      participant: cleanParticipant,
       times,
       rankings,
       rawData: copernicoData // Mantener datos originales para referencia
@@ -174,13 +196,14 @@ class CopernicoService {
   }
 
   /**
-   * Transformar datos de times
+   * Transformar datos de times - PRESERVANDO ESTRUCTURA COMPLETA
    */
   transformTimes(copernicoTimes) {
     const times = {};
-    
+
     for (const [pointName, timeData] of Object.entries(copernicoTimes)) {
-      times[pointName] = {
+      // ✅ FILTRAR valores undefined para evitar errores de Firestore
+      const timeEntry = {
         split: timeData.split,
         order: timeData.order,
         distance: timeData.distance,
@@ -188,29 +211,57 @@ class CopernicoService {
         netTime: timeData.netTime,
         average: timeData.average,
         averageNet: timeData.averageNet,
-        raw: timeData.raw || {}
+        // ✅ MODIFICADO: Preservar estructura completa de raw
+        raw: {
+          created: timeData.raw?.created,
+          time: timeData.raw?.time,
+          chip: timeData.raw?.chip,
+          location: timeData.raw?.location,
+          device: timeData.raw?.device,           // ← CRUCIAL para streamId
+          rewind: timeData.raw?.rewind,
+          rewindId: timeData.raw?.rewindId,
+          import: timeData.raw?.import,
+          importId: timeData.raw?.importId,
+          valid: timeData.raw?.valid,
+          offset: timeData.raw?.offset,
+          originalTime: timeData.raw?.originalTime, // ← CRUCIAL para timing
+          rawTime: timeData.raw?.rawTime,          // ← CRUCIAL para timing
+          times: timeData.raw?.times || {}         // ← Tiempos calculados
+        }
       };
+
+      // Filtrar undefined values recursivamente
+      times[pointName] = this.removeUndefinedFields(timeEntry);
     }
-    
+
     return times;
   }
 
   /**
-   * Transformar datos de rankings
+   * Transformar datos de rankings - PRESERVANDO ESTRUCTURA COMPLETA
    */
   transformRankings(copernicoRankings) {
     const rankings = {};
-    
+
     for (const [splitName, rankingData] of Object.entries(copernicoRankings)) {
-      rankings[splitName] = {
+      // ✅ FILTRAR valores undefined para evitar errores de Firestore
+      const rankingEntry = {
         id: rankingData.id,
         time: rankingData.time,
         net: rankingData.net,
         average: rankingData.average,
         averageNet: rankingData.averageNet,
         location: rankingData.location,
-        rawTime: rankingData.rawTime,
+        rawTime: rankingData.rawTime,           // ← CRUCIAL para timing
         new: rankingData.new,
+        // ✅ MODIFICADO: Preservar TODAS las posiciones
+        pos: rankingData.pos,                   // ← Posición general
+        posGen: rankingData.posGen,             // ← Posición por género
+        posCat: rankingData.posCat,             // ← Posición por categoría
+        posNet: rankingData.posNet,             // ← Posición general neta
+        posGenNet: rankingData.posGenNet,       // ← Posición género neta
+        posCatNet: rankingData.posCatNet,       // ← Posición categoría neta
+        // Mantener estructura anidada para compatibilidad
         positions: {
           overall: rankingData.pos,
           gender: rankingData.posGen,
@@ -220,8 +271,11 @@ class CopernicoService {
           categoryNet: rankingData.posCatNet
         }
       };
+
+      // Filtrar undefined values recursivamente
+      rankings[splitName] = this.removeUndefinedFields(rankingEntry);
     }
-    
+
     return rankings;
   }
 
@@ -238,6 +292,38 @@ class CopernicoService {
   clearCache() {
     this.cache.clear();
     console.log('🧹 [CopernicoService] Cache limpiado');
+  }
+
+  /**
+   * Remover campos undefined para evitar errores de Firestore - RECURSIVO
+   */
+  removeUndefinedFields(obj) {
+    if (obj === null || obj === undefined) {
+      return null;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.removeUndefinedFields(item)).filter(item => item !== undefined);
+    }
+
+    if (typeof obj === 'object') {
+      const cleaned = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          if (typeof value === 'object' && value !== null) {
+            const cleanedValue = this.removeUndefinedFields(value);
+            if (cleanedValue !== null && (Array.isArray(cleanedValue) || Object.keys(cleanedValue).length > 0)) {
+              cleaned[key] = cleanedValue;
+            }
+          } else {
+            cleaned[key] = value;
+          }
+        }
+      }
+      return cleaned;
+    }
+
+    return obj;
   }
 }
 

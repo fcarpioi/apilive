@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FCM Token Generator</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+</head>
+<body>
+    <h1>🔥 Firebase FCM Token Generator</h1>
+    <h2>Proyecto: live-copernico</h2>
+    
+    <button id="getToken" onclick="getToken()">📱 Obtener Token FCM</button>
+    <button id="testNotification" onclick="testNotification()" disabled>🔔 Probar Notificación</button>
+    
+    <div id="result"></div>
+    <div id="tokenDisplay"></div>
+
+    <script>
+        // 🔧 Configuración Firebase para live-copernico
+        const firebaseConfig = {
+            apiKey: "AIzaSyAeh1ZcY0i05YH9nQQgYmbABcNAmwWx0eA",
+            authDomain: "live-copernico.firebaseapp.com",
+            projectId: "live-copernico",
+            storageBucket: "live-copernico.firebasestorage.app",
+            messagingSenderId: "62103923048",
+            appId: "1:62103923048:android:3416344fab2afc15720edd"
+        };
+
+        // 🚀 Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const messaging = firebase.messaging();
+
+        let currentToken = null;
+
+        // 📱 Función para obtener token FCM
+        async function getToken() {
+            try {
+                document.getElementById('result').innerHTML = '🔍 Obteniendo token FCM...';
+                
+                // 🔑 Solicitar permisos de notificación
+                const permission = await Notification.requestPermission();
+                
+                if (permission === 'granted') {
+                    console.log('✅ Permisos de notificación concedidos');
+                    
+                    // 🎯 Obtener token FCM (sin VAPID key por ahora)
+                    const token = await messaging.getToken();
+                    
+                    if (token) {
+                        currentToken = token;
+                        console.log('🔑 Token FCM obtenido:', token);
+                        
+                        document.getElementById('result').innerHTML = `
+                            <h3>✅ Token FCM Obtenido:</h3>
+                            <textarea style="width:100%; height:100px;">${token}</textarea>
+                            <br><br>
+                            <strong>📋 Para copiar:</strong><br>
+                            <code>${token}</code>
+                        `;
+                        
+                        document.getElementById('testNotification').disabled = false;
+                        
+                    } else {
+                        document.getElementById('result').innerHTML = '❌ No se pudo obtener el token FCM';
+                    }
+                    
+                } else {
+                    document.getElementById('result').innerHTML = '❌ Permisos de notificación denegados';
+                }
+                
+            } catch (error) {
+                console.error('❌ Error obteniendo token:', error);
+                document.getElementById('result').innerHTML = `❌ Error: ${error.message}`;
+            }
+        }
+
+        // 🔔 Función para probar notificación
+        async function testNotification() {
+            if (!currentToken) {
+                alert('❌ Primero obtén el token FCM');
+                return;
+            }
+            
+            try {
+                document.getElementById('result').innerHTML += '<br><br>🔔 Enviando notificación de prueba...';
+                
+                // 🚀 Enviar notificación usando tu API
+                const response = await fetch('https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/fcm/register-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId: 'cda49470-f919-41de-9e76-550fc1322b9f',
+                        raceId: '52ec7d4a-40c1-4f74-bfa0-cf4cc76edd49',
+                        fcmToken: currentToken,
+                        deviceInfo: {
+                            platform: 'web',
+                            deviceId: 'WEB_TEST_DEVICE',
+                            appVersion: '1.0.0'
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('📋 Registro resultado:', result);
+                
+                if (result.success) {
+                    document.getElementById('result').innerHTML += '<br>✅ Token registrado exitosamente!';
+                    
+                    // 🔔 Enviar notificación de prueba
+                    const notifResponse = await fetch('https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/fcm/push-notification', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            userId: 'cda49470-f919-41de-9e76-550fc1322b9f',
+                            raceId: '52ec7d4a-40c1-4f74-bfa0-cf4cc76edd49',
+                            title: '🎉 Token Web Válido!',
+                            body: 'Notificación enviada con token generado desde web',
+                            data: {
+                                notificationType: 'web_token_test',
+                                timestamp: new Date().toISOString()
+                            }
+                        })
+                    });
+                    
+                    const notifResult = await notifResponse.json();
+                    console.log('🔔 Notificación resultado:', notifResult);
+                    
+                    document.getElementById('result').innerHTML += `<br><br>📊 Resultado notificación: ${JSON.stringify(notifResult, null, 2)}`;
+                    
+                } else {
+                    document.getElementById('result').innerHTML += `<br>❌ Error registrando token: ${result.message}`;
+                }
+                
+            } catch (error) {
+                console.error('❌ Error:', error);
+                document.getElementById('result').innerHTML += `<br>❌ Error: ${error.message}`;
+            }
+        }
+
+        // 🔔 Escuchar mensajes en primer plano
+        messaging.onMessage((payload) => {
+            console.log('🔔 Mensaje recibido en primer plano:', payload);
+            
+            document.getElementById('result').innerHTML += `
+                <br><br>🎉 <strong>¡NOTIFICACIÓN RECIBIDA!</strong>
+                <br>📋 Título: ${payload.notification?.title}
+                <br>📝 Mensaje: ${payload.notification?.body}
+                <br>📊 Datos: ${JSON.stringify(payload.data, null, 2)}
+            `;
+        });
+    </script>
+</body>
+</html>

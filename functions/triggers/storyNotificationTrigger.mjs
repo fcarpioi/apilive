@@ -2,6 +2,36 @@
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import admin from "firebase-admin";
 
+/**
+ * Función para normalizar eventId corrupto
+ */
+function normalizeEventId(eventId) {
+  if (typeof eventId !== 'string') return eventId;
+
+  // Corregir encoding UTF-8 corrupto
+  const replacements = {
+    'Ã³': 'ó',
+    'Ã¡': 'á',
+    'Ã©': 'é',
+    'Ã­': 'í',
+    'Ãº': 'ú',
+    'Ã±': 'ñ',
+    'Ã': 'Á',
+    'Ã‰': 'É',
+    'Ã': 'Í',
+    'Ã"': 'Ó',
+    'Ãš': 'Ú',
+    'Ã\u0091': 'Ñ'
+  };
+
+  let normalized = eventId;
+  for (const [corrupted, correct] of Object.entries(replacements)) {
+    normalized = normalized.replace(new RegExp(corrupted, 'g'), correct);
+  }
+
+  return normalized;
+}
+
 // Inicializar Firebase Admin (si aún no lo está)
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -20,11 +50,21 @@ export const onStoryCreated = onDocumentCreated(
       
       // Obtener datos del documento creado
       const storyData = event.data.data();
-      const { raceId, appId, eventId, participantId, storyId } = event.params;
-      
+      let { raceId, appId, eventId, participantId, storyId } = event.params;
+
       console.log(`📖 Historia: ${storyId}`);
       console.log(`🏃 Participante: ${participantId}`);
       console.log(`🏁 Carrera: ${raceId}, App: ${appId}, Evento: ${eventId}`);
+      console.log(`🔤 [TRIGGER] EventID encoding: [${Array.from(eventId).map(c => c.charCodeAt(0)).join(', ')}]`);
+
+      // NORMALIZAR EVENTID CORRUPTO EN EL TRIGGER
+      const originalEventId = eventId;
+      eventId = normalizeEventId(eventId);
+
+      if (originalEventId !== eventId) {
+        console.log(`🔧 [TRIGGER] EventID normalizado: "${originalEventId}" → "${eventId}"`);
+      }
+
       console.log(`📄 Datos de la historia:`, storyData);
 
       // Obtener información del participante
@@ -209,6 +249,22 @@ function createNotificationPayload(storyData, participantData, storyInfo) {
     imageUrl = potentialImageUrl;
   }
 
+  // Construir un meta compacto para no exceder el límite de 4KB de FCM
+  const mediaType =
+    storyData.video_url || storyData.fileUrl
+      ? 'video'
+      : (storyData.image_url ? 'image' : 'none');
+
+  const compactMeta = {
+    storyId: storyInfo.storyId,
+    participantId: storyInfo.participantId,
+    raceId: storyInfo.raceId,
+    eventId: storyInfo.eventId,
+    storyType: storyType,
+    checkpoint: storyData.checkpointInfo?.point || storyData.split_time?.checkpoint || '',
+    mediaType: mediaType
+  };
+
   return {
     notification: {
       title: title,
@@ -232,15 +288,11 @@ function createNotificationPayload(storyData, participantData, storyInfo) {
       checkpointTime: storyData.split_time?.time || '',
       checkpointName: storyData.split_time?.checkpoint || '',
       mediaUrl: storyData.video_url || storyData.image_url || storyData.fileUrl || '',
-      mediaType: storyData.video_url || storyData.fileUrl ? 'video' : (storyData.image_url ? 'image' : 'none'),
+      mediaType: mediaType,
       description: storyData.description || '',
 
-      // ✅ PAYLOAD COMPLETO COMO JSON STRING PARA CASOS AVANZADOS
-      storyPayload: JSON.stringify({
-        story: storyData,
-        participant: participantData,
-        meta: storyInfo
-      })
+      // Meta compacto (evitar payloads grandes que rompen FCM)
+      storyMeta: JSON.stringify(compactMeta)
     },
     android: {
       priority: 'high',
@@ -248,12 +300,9 @@ function createNotificationPayload(storyData, participantData, storyInfo) {
         icon: 'ic_notification',
         color: '#FF6B35',
         sound: 'default',
-        channelId: 'story_notifications',
-        clickAction: 'FLUTTER_NOTIFICATION_CLICK'
+        channelId: 'story_notifications'
       },
-      data: {
-        click_action: 'FLUTTER_NOTIFICATION_CLICK'
-      }
+      data: {}
     },
     apns: {
       payload: {

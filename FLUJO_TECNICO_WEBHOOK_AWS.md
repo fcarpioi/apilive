@@ -519,7 +519,7 @@ router.post("/webhook/runner-checkpoint", async (req, res) => {
       };
 
       // Llamar al API de Copernico para generar clip
-      const response = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipUrlFromAsset', {
+      const response = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipFromVideo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(clipPayload),

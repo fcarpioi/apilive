@@ -247,6 +247,10 @@ router.post("/unregister-token", async (req, res) => {
  *               data:
  *                 type: object
  *                 description: Datos adicionales
+ *               silent:
+ *                 type: boolean
+ *                 description: Si es true, envía notificación silenciosa (solo datos, sin UI visible)
+ *                 default: false
  *     responses:
  *       '200':
  *         description: Notificación enviada exitosamente
@@ -257,7 +261,7 @@ router.post("/unregister-token", async (req, res) => {
  */
 router.post("/push-notification", async (req, res) => {
   try {
-    const { userId, raceId, title, body, data } = req.body;
+    const { userId, raceId, title, body, data, silent } = req.body;
 
     const db = admin.firestore();
     let tokens = [];
@@ -338,40 +342,77 @@ router.post("/push-notification", async (req, res) => {
       });
     }
 
-    const message = {
-      notification: {
-        title: title || "🔔 Notificación Push",
-        body: body || "Tienes una nueva notificación"
-      },
-      data: {
-        notificationType: 'push',
-        timestamp: new Date().toISOString(),
-        ...(data || {})
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          icon: 'ic_notification',
-          color: '#FF6B35',
-          sound: 'default',
-          channelId: 'push_notifications'
-        }
-      },
-      apns: {
-        payload: {
-          aps: {
-            alert: {
-              title: title || "🔔 Notificación Push",
-              body: body || "Tienes una nueva notificación"
-            },
-            badge: 1,
-            sound: 'default'
+    // 🔕 NOTIFICACIONES SILENCIOSAS: Solo datos, sin UI
+    const isSilent = silent === true;
+
+    let message;
+
+    if (isSilent) {
+      // 🔕 NOTIFICACIÓN SILENCIOSA (Data-only message)
+      console.log(`🔕 [FCM] Preparando notificación SILENCIOSA`);
+      message = {
+        // ❌ NO incluir 'notification' = no aparece en bandeja
+        data: {
+          notificationType: 'silent_data_sync',
+          silent: 'true',
+          timestamp: new Date().toISOString(),
+          ...(data || {}),
+          // Convertir title/body a data si se proporcionan
+          ...(title && { dataTitle: title }),
+          ...(body && { dataBody: body })
+        },
+        android: {
+          priority: 'high', // ✅ Mantener prioridad alta para despertar app
+          // ❌ NO incluir 'notification' en android
+        },
+        apns: {
+          payload: {
+            aps: {
+              'content-available': 1, // ✅ iOS: Despertar app en background
+              // ❌ NO incluir 'alert', 'badge', 'sound'
+            }
           }
         }
-      }
-    };
+      };
+    } else {
+      // 🔔 NOTIFICACIÓN NORMAL (Con UI visible)
+      console.log(`🔔 [FCM] Preparando notificación NORMAL`);
+      message = {
+        notification: {
+          title: title || "🔔 Notificación Push",
+          body: body || "Tienes una nueva notificación"
+        },
+        data: {
+          notificationType: 'push',
+          timestamp: new Date().toISOString(),
+          ...(data || {})
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            icon: 'ic_notification',
+            color: '#FF6B35',
+            sound: 'default',
+            channelId: 'push_notifications'
+          }
+        },
+        apns: {
+          payload: {
+            aps: {
+              alert: {
+                title: title || "🔔 Notificación Push",
+                body: body || "Tienes una nueva notificación"
+              },
+              badge: 1,
+              sound: 'default'
+            }
+          }
+        }
+      };
+    }
 
     console.log(`📤 [FCM] Enviando a ${tokens.length} tokens:`, tokens.map(t => t.substring(0, 20) + '...'));
+    console.log(`📋 [FCM] Tipo: ${isSilent ? '🔕 SILENCIOSA' : '🔔 NORMAL'}`);
     console.log(`📋 [FCM] Mensaje:`, JSON.stringify(message, null, 2));
 
     const response = await admin.messaging().sendEachForMulticast({

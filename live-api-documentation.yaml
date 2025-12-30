@@ -4,7 +4,7 @@ info:
   version: "2.0.0"
   description: >
     API desarrollada con Express en Firebase Functions que integra funciones de
-    verificación de email, feed de stories, eventos, seguimiento, likes y más.
+    verificación de email, feed de stories, eventos, seguimiento, likes, comparticiones y más.
 
     **VERSIÓN 2.0 - MIGRADA A NUEVA ESTRUCTURA**
     - Todas las APIs han sido migradas a la nueva estructura /races/{raceId}/events/{eventId}/
@@ -507,6 +507,253 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Error interno del servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/share:
+    post:
+      tags:
+        - Social
+      summary: Registrar compartición de historia
+      description: >
+        Registra una nueva compartición de una historia específica.
+        A diferencia de los likes, las comparticiones no tienen restricciones:
+        - El mismo usuario puede compartir múltiples veces
+        - Solo permite incrementar (no hay endpoint para eliminar)
+        - Incluye tracking de tipo de compartición y plataforma
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - raceId
+                - appId
+                - eventId
+                - participantId
+                - storyId
+                - userId
+                - shareType
+              properties:
+                raceId:
+                  type: string
+                  description: Identificador de la carrera
+                  example: "69200553-464c-4bfd-9b35-4ca6ac1f17f5"
+                appId:
+                  type: string
+                  description: Identificador de la aplicación
+                  example: "Ryx7YFWobBfGTJqkciCV"
+                eventId:
+                  type: string
+                  description: Identificador del evento
+                  example: "Maratón"
+                participantId:
+                  type: string
+                  description: Identificador del participante
+                  example: "6Z3BA2ZC"
+                storyId:
+                  type: string
+                  description: Identificador de la historia
+                  example: "E2IZrKLwEe4gDUhNYyxK"
+                userId:
+                  type: string
+                  description: Identificador del usuario que comparte
+                  example: "user123"
+                shareType:
+                  type: string
+                  enum: [social_media, direct_message, copy_link, other]
+                  description: Tipo de compartición
+                  example: "social_media"
+                platform:
+                  type: string
+                  description: Plataforma específica donde se compartió (opcional)
+                  example: "whatsapp"
+      responses:
+        '200':
+          description: Compartición registrada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  shareId:
+                    type: string
+                    description: ID único de la compartición
+                    example: "NbTNUhYYTrmCmmQriWnb"
+                  raceId:
+                    type: string
+                    example: "69200553-464c-4bfd-9b35-4ca6ac1f17f5"
+                  appId:
+                    type: string
+                    example: "Ryx7YFWobBfGTJqkciCV"
+                  eventId:
+                    type: string
+                    example: "Maratón"
+                  participantId:
+                    type: string
+                    example: "6Z3BA2ZC"
+                  storyId:
+                    type: string
+                    example: "E2IZrKLwEe4gDUhNYyxK"
+                  userId:
+                    type: string
+                    example: "user123"
+                  shareType:
+                    type: string
+                    example: "social_media"
+                  platform:
+                    type: string
+                    example: "whatsapp"
+                  sharedAt:
+                    type: string
+                    format: date-time
+                    description: Timestamp de cuando se realizó la compartición
+                    example: "2025-12-29T12:37:58.912Z"
+                  message:
+                    type: string
+                    example: "Compartición registrada exitosamente"
+        '400':
+          description: Parámetros faltantes o inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Historia no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/shares/count:
+    get:
+      tags:
+        - Social
+      summary: Obtener contador de comparticiones
+      description: >
+        Obtiene el número total de comparticiones de un participante o historia específica.
+        Incluye desglose detallado por tipo de compartición y plataforma.
+      parameters:
+        - in: query
+          name: raceId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la carrera
+          example: "69200553-464c-4bfd-9b35-4ca6ac1f17f5"
+        - in: query
+          name: appId
+          required: true
+          schema:
+            type: string
+          description: Identificador de la aplicación
+          example: "Ryx7YFWobBfGTJqkciCV"
+        - in: query
+          name: eventId
+          required: true
+          schema:
+            type: string
+          description: Identificador del evento
+          example: "Maratón"
+        - in: query
+          name: participantId
+          required: true
+          schema:
+            type: string
+          description: Identificador del participante
+          example: "6Z3BA2ZC"
+        - in: query
+          name: storyId
+          required: false
+          schema:
+            type: string
+          description: >
+            Identificador de una historia específica (opcional).
+            Si se proporciona, devuelve solo las comparticiones de esa historia.
+            Si se omite, devuelve todas las comparticiones del participante.
+          example: "E2IZrKLwEe4gDUhNYyxK"
+      responses:
+        '200':
+          description: Contador obtenido correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  raceId:
+                    type: string
+                    example: "69200553-464c-4bfd-9b35-4ca6ac1f17f5"
+                  appId:
+                    type: string
+                    example: "Ryx7YFWobBfGTJqkciCV"
+                  eventId:
+                    type: string
+                    example: "Maratón"
+                  participantId:
+                    type: string
+                    example: "6Z3BA2ZC"
+                  storyId:
+                    type: string
+                    nullable: true
+                    description: ID de la historia específica o null si es para todas
+                    example: "E2IZrKLwEe4gDUhNYyxK"
+                  totalShares:
+                    type: integer
+                    minimum: 0
+                    description: Número total de comparticiones
+                    example: 2
+                  sharesByType:
+                    type: object
+                    description: Desglose de comparticiones por tipo
+                    properties:
+                      social_media:
+                        type: integer
+                        minimum: 0
+                        example: 1
+                      direct_message:
+                        type: integer
+                        minimum: 0
+                        example: 0
+                      copy_link:
+                        type: integer
+                        minimum: 0
+                        example: 1
+                      other:
+                        type: integer
+                        minimum: 0
+                        example: 0
+                  sharesByPlatform:
+                    type: object
+                    description: Desglose de comparticiones por plataforma
+                    additionalProperties:
+                      type: integer
+                      minimum: 0
+                    example:
+                      whatsapp: 1
+                      instagram: 1
+        '400':
+          description: Parámetros faltantes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Participante o historia no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
           content:
             application/json:
               schema:
@@ -1631,6 +1878,9 @@ components:
             totalLikes:
               type: integer
               description: Total de likes de la historia
+            totalShares:
+              type: integer
+              description: Total de comparticiones de la historia
 
     UltraOptimizedStory:
       type: object
@@ -1700,6 +1950,12 @@ components:
           description: Número total de likes
           example: 15
 
+        totalShares:
+          type: integer
+          minimum: 0
+          description: Número total de comparticiones
+          example: 3
+
       required:
         - storyId
         - raceId
@@ -1709,6 +1965,7 @@ components:
         - moderationStatus
         - date
         - totalLikes
+        - totalShares
 
     OptimizedParticipant:
       type: object
@@ -1935,6 +2192,10 @@ components:
         name:
           type: string
           description: Nombre del participante
+        lastName:
+          type: string
+          nullable: true
+          description: Apellido del participante
         fullName:
           type: string
           description: Nombre completo del participante
@@ -1992,6 +2253,7 @@ components:
         id: "participant456"
         objectID: "participant456"
         name: "John"
+        lastName: "Doe"
         fullName: "John Doe"
         bib: "1234"
         dorsal: "1234"
@@ -2054,6 +2316,146 @@ components:
       description: Identificador de la carrera
       example: "race123"
 
+    ShareRequest:
+      type: object
+      required:
+        - raceId
+        - appId
+        - eventId
+        - participantId
+        - storyId
+        - userId
+        - shareType
+      properties:
+        raceId:
+          type: string
+          description: Identificador de la carrera
+          example: "69200553-464c-4bfd-9b35-4ca6ac1f17f5"
+        appId:
+          type: string
+          description: Identificador de la aplicación
+          example: "Ryx7YFWobBfGTJqkciCV"
+        eventId:
+          type: string
+          description: Identificador del evento
+          example: "Maratón"
+        participantId:
+          type: string
+          description: Identificador del participante
+          example: "6Z3BA2ZC"
+        storyId:
+          type: string
+          description: Identificador de la historia
+          example: "E2IZrKLwEe4gDUhNYyxK"
+        userId:
+          type: string
+          description: Identificador del usuario que comparte
+          example: "user123"
+        shareType:
+          type: string
+          enum: [social_media, direct_message, copy_link, other]
+          description: Tipo de compartición
+          example: "social_media"
+        platform:
+          type: string
+          description: Plataforma específica donde se compartió (opcional)
+          example: "whatsapp"
+
+    ShareResponse:
+      type: object
+      properties:
+        shareId:
+          type: string
+          description: ID único de la compartición
+          example: "NbTNUhYYTrmCmmQriWnb"
+        raceId:
+          type: string
+          example: "69200553-464c-4bfd-9b35-4ca6ac1f17f5"
+        appId:
+          type: string
+          example: "Ryx7YFWobBfGTJqkciCV"
+        eventId:
+          type: string
+          example: "Maratón"
+        participantId:
+          type: string
+          example: "6Z3BA2ZC"
+        storyId:
+          type: string
+          example: "E2IZrKLwEe4gDUhNYyxK"
+        userId:
+          type: string
+          example: "user123"
+        shareType:
+          type: string
+          example: "social_media"
+        platform:
+          type: string
+          example: "whatsapp"
+        sharedAt:
+          type: string
+          format: date-time
+          description: Timestamp de cuando se realizó la compartición
+          example: "2025-12-29T12:37:58.912Z"
+        message:
+          type: string
+          example: "Compartición registrada exitosamente"
+
+    ShareCountResponse:
+      type: object
+      properties:
+        raceId:
+          type: string
+          example: "69200553-464c-4bfd-9b35-4ca6ac1f17f5"
+        appId:
+          type: string
+          example: "Ryx7YFWobBfGTJqkciCV"
+        eventId:
+          type: string
+          example: "Maratón"
+        participantId:
+          type: string
+          example: "6Z3BA2ZC"
+        storyId:
+          type: string
+          nullable: true
+          description: ID de la historia específica o null si es para todas
+          example: "E2IZrKLwEe4gDUhNYyxK"
+        totalShares:
+          type: integer
+          minimum: 0
+          description: Número total de comparticiones
+          example: 2
+        sharesByType:
+          type: object
+          description: Desglose de comparticiones por tipo
+          properties:
+            social_media:
+              type: integer
+              minimum: 0
+              example: 1
+            direct_message:
+              type: integer
+              minimum: 0
+              example: 0
+            copy_link:
+              type: integer
+              minimum: 0
+              example: 1
+            other:
+              type: integer
+              minimum: 0
+              example: 0
+        sharesByPlatform:
+          type: object
+          description: Desglose de comparticiones por plataforma
+          additionalProperties:
+            type: integer
+            minimum: 0
+          example:
+            whatsapp: 1
+            instagram: 1
+
 tags:
   - name: General
     description: Endpoints generales de la API
@@ -2066,7 +2468,7 @@ tags:
   - name: Feed
     description: Feed de historias y contenido (MIGRADO + ULTRA-OPTIMIZADO - 99% más rápido)
   - name: Social
-    description: Funcionalidades sociales - likes, follows (MIGRADO)
+    description: Funcionalidades sociales - likes, comparticiones, follows (MIGRADO)
   - name: Participants
     description: Gestión de participantes (MIGRADO)
   - name: Users

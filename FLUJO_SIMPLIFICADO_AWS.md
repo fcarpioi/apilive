@@ -199,7 +199,7 @@ const startTime = new Date(checkpointTime.getTime() - 10 * 1000).toISOString();
 const endTime = new Date(checkpointTime.getTime() + 10 * 1000).toISOString();
 
 // Llamar API de Copernico
-const clipResponse = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipUrlFromAsset', {
+const clipResponse = await fetch('https://us-central1-copernico-jv5v73.cloudfunctions.net/generateClipFromVideo', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
