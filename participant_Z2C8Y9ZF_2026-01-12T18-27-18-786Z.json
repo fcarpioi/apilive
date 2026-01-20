@@ -1,0 +1,440 @@
+{
+  "id": "Z2C8Y9ZF",
+  "externalId": "Z2C8Y9ZF",
+  "name": "Aisling",
+  "lastName": "Haigney",
+  "fullName": "Aisling Haigney",
+  "gender": "female",
+  "birthdate": "1999-11-11",
+  "country": "Unknown",
+  "eventId": "Maratón",
+  "dorsal": "9441",
+  "category": "Senior F",
+  "team": "",
+  "club": "Independiente",
+  "featured": false,
+  "status": "running",
+  "realStatus": "running",
+  "attributes": {
+    "Españoles": "",
+    "Malagueños": ""
+  },
+  "chip": [
+    "9441"
+  ],
+  "splitsMissing": 0,
+  "maxConsecutiveSplitsMissing": 0,
+  "source": "copernico_api",
+  "competitionId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+  "dataSource": "copernico",
+  "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+  "createdAt": {
+    "_seconds": 1768233934,
+    "_nanoseconds": 370000000
+  },
+  "registerDate": {
+    "_seconds": 1768233934,
+    "_nanoseconds": 370000000
+  },
+  "startNetTime": 291825,
+  "startRawTime": 1765698009440,
+  "lastSplitSeen": "25K",
+  "locations": [
+    "Backup Meta",
+    "Meta",
+    "Premeta",
+    "10K",
+    "Backup 15k TS",
+    "Backup 15k",
+    "15K",
+    "Media",
+    "MM paso FP",
+    "25K"
+  ],
+  "splitsSeen": 5,
+  "lastCheckpoint": {
+    "point": "10K",
+    "location": "10k",
+    "rawTime": null,
+    "processedAt": {
+      "_seconds": 1768242350,
+      "_nanoseconds": 605000000
+    }
+  },
+  "webhookProcessedAt": {
+    "_seconds": 1768242350,
+    "_nanoseconds": 605000000
+  },
+  "copernicoData": {
+    "times": {
+      "Salida": {
+        "split": "Salida",
+        "time": 291825,
+        "rawTime": 1765698009440,
+        "raw": {
+          "rawTime": 1765698009440
+        }
+      },
+      "10K": {
+        "split": "10K",
+        "time": 3720000,
+        "rawTime": 1765701437615,
+        "raw": {
+          "rawTime": 1765701437615
+        }
+      },
+      "15K": {
+        "split": "15K",
+        "time": 5365677,
+        "rawTime": 1765703083292,
+        "raw": {
+          "rawTime": 1765703083292
+        }
+      },
+      "Media": {
+        "split": "Media",
+        "time": 7366541,
+        "rawTime": 1765705084156,
+        "raw": {
+          "rawTime": 1765705084156
+        }
+      },
+      "25K": {
+        "split": "25K",
+        "time": 8640365,
+        "rawTime": 1765706357980,
+        "raw": {
+          "rawTime": 1765706357980
+        }
+      }
+    },
+    "rankings": {
+      "10K": {
+        "time": 3720000,
+        "net": 3428175,
+        "average": 0.372,
+        "averageNet": 0.34282,
+        "location": "10K",
+        "rawTime": 1765701437615,
+        "pos": 6131,
+        "posGen": 1001,
+        "posCat": 428,
+        "posNet": 5959,
+        "posGenNet": 940,
+        "posCatNet": 393,
+        "positions": {
+          "overall": 6131,
+          "gender": 1001,
+          "category": 428,
+          "overallNet": 5959,
+          "genderNet": 940,
+          "categoryNet": 393
+        }
+      },
+      "15K": {
+        "time": 5365677,
+        "net": 5073852,
+        "average": 0.35771,
+        "averageNet": 0.33826,
+        "location": "15K",
+        "rawTime": 1765703083292,
+        "pos": 5896,
+        "posGen": 918,
+        "posCat": 402,
+        "posNet": 5763,
+        "posGenNet": 875,
+        "posCatNet": 376,
+        "positions": {
+          "overall": 5896,
+          "gender": 918,
+          "category": 402,
+          "overallNet": 5763,
+          "genderNet": 875,
+          "categoryNet": 376
+        }
+      },
+      "Media": {
+        "time": 7366541,
+        "net": 7074716,
+        "average": 0.34917,
+        "averageNet": 0.33534,
+        "location": "Media",
+        "rawTime": 1765705084156,
+        "pos": 5363,
+        "posGen": 799,
+        "posCat": 352,
+        "posNet": 5217,
+        "posGenNet": 760,
+        "posCatNet": 331,
+        "positions": {
+          "overall": 5363,
+          "gender": 799,
+          "category": 352,
+          "overallNet": 5217,
+          "genderNet": 760,
+          "categoryNet": 331
+        }
+      },
+      "25K": {
+        "time": 8640365,
+        "net": 8348540,
+        "average": 0.34561,
+        "averageNet": 0.33394,
+        "location": "25K",
+        "rawTime": 1765706357980,
+        "pos": 4809,
+        "posGen": 676,
+        "posCat": 291,
+        "posNet": 4773,
+        "posGenNet": 663,
+        "posCatNet": 286,
+        "positions": {
+          "overall": 4809,
+          "gender": 676,
+          "category": 291,
+          "overallNet": 4773,
+          "genderNet": 663,
+          "categoryNet": 286
+        }
+      }
+    },
+    "rawData": {
+      "id": "Z2C8Y9ZF",
+      "name": "Aisling",
+      "surname": "Haigney",
+      "club": "Independiente",
+      "birthdate": "1999-11-11",
+      "gender": "female",
+      "events": [
+        {
+          "event": "Maratón",
+          "dorsal": "9441",
+          "chip": [
+            "9441"
+          ],
+          "team": "",
+          "team_type": [],
+          "category": "Senior F",
+          "attributes": {
+            "Españoles": "",
+            "Malagueños": ""
+          },
+          "gunTime": "2025-12-14T07:35:17.615Z",
+          "gunTimeMode": "wave",
+          "gunTimeModeConfig": {
+            "wave": "S 8:35"
+          },
+          "auto_category": true,
+          "auto_chip": false,
+          "status": "running",
+          "realStatus": "running",
+          "startTime": 291825,
+          "startRawTime": 1765698009440,
+          "startNetTime": 291825,
+          "distance": 25000,
+          "leader_weight": 5.9999991359634,
+          "maxConsecutiveSplitsMissing": 0,
+          "splitsMissing": 0,
+          "issuesCount": {
+            "data": 0,
+            "times": 1
+          },
+          "splitsSeen": 5,
+          "last_split_seen": "25K",
+          "times": {
+            "Salida": {
+              "time": 291825,
+              "split": "Salida",
+              "rawTime": 1765698009440
+            },
+            "10K": {
+              "time": 3720000,
+              "split": "10K",
+              "rawTime": 1765701437615
+            },
+            "15K": {
+              "time": 5365677,
+              "split": "15K",
+              "rawTime": 1765703083292
+            },
+            "Media": {
+              "time": 7366541,
+              "split": "Media",
+              "rawTime": 1765705084156
+            },
+            "25K": {
+              "time": 8640365,
+              "split": "25K",
+              "rawTime": 1765706357980
+            }
+          },
+          "rankings": {
+            "10K": {
+              "time": 3720000,
+              "net": 3428175,
+              "average": 0.372,
+              "averageNet": 0.34282,
+              "location": "10K",
+              "rawTime": 1765701437615,
+              "pos": 6131,
+              "posGen": 1001,
+              "posCat": 428,
+              "posNet": 5959,
+              "posGenNet": 940,
+              "posCatNet": 393
+            },
+            "15K": {
+              "time": 5365677,
+              "net": 5073852,
+              "average": 0.35771,
+              "averageNet": 0.33826,
+              "location": "15K",
+              "rawTime": 1765703083292,
+              "pos": 5896,
+              "posGen": 918,
+              "posCat": 402,
+              "posNet": 5763,
+              "posGenNet": 875,
+              "posCatNet": 376
+            },
+            "Media": {
+              "time": 7366541,
+              "net": 7074716,
+              "average": 0.34917,
+              "averageNet": 0.33534,
+              "location": "Media",
+              "rawTime": 1765705084156,
+              "pos": 5363,
+              "posGen": 799,
+              "posCat": 352,
+              "posNet": 5217,
+              "posGenNet": 760,
+              "posCatNet": 331
+            },
+            "25K": {
+              "time": 8640365,
+              "net": 8348540,
+              "average": 0.34561,
+              "averageNet": 0.33394,
+              "location": "25K",
+              "rawTime": 1765706357980,
+              "pos": 4809,
+              "posGen": 676,
+              "posCat": 291,
+              "posNet": 4773,
+              "posGenNet": 663,
+              "posCatNet": 286
+            }
+          },
+          "leader": {
+            "time": 8640365,
+            "split": "25K",
+            "weight": 5.9999991359634,
+            "average": 0.34561,
+            "rawTime": 1765706357980,
+            "location": "25K",
+            "pos": 4834,
+            "posGen": 677,
+            "posCat": 292
+          },
+          "predictive": {
+            "Salida": 0.41332,
+            "10K": 0.34282,
+            "15K": 0.32914,
+            "Media": 0.32817,
+            "25K": 0.32637,
+            "35K": 0.32751,
+            "Spotter": 0
+          },
+          "backups": {
+            "Salida": {
+              "time": 289803,
+              "physicalLocation": "Backup Meta",
+              "offset": 2000
+            },
+            "15K": {
+              "time": 5354971,
+              "physicalLocation": "Backup 15k TS",
+              "offset": 8000
+            },
+            "Media": {
+              "time": 7368525,
+              "physicalLocation": "MM paso FP",
+              "offset": -3000
+            }
+          },
+          "mst": [
+            {
+              "split": "Spotter",
+              "times": [
+                306408
+              ]
+            }
+          ],
+          "custom-rankings": [],
+          "commentator": {
+            "10K_name": "10K",
+            "10K_time": 3720000,
+            "10K_pos": 6131,
+            "10K_posGen": 1001,
+            "10K_posCat": 428,
+            "15K_name": "15K",
+            "15K_time": 5365677,
+            "15K_pos": 5896,
+            "15K_posGen": 918,
+            "15K_posCat": 402,
+            "Media_name": "Media",
+            "Media_time": 7366541,
+            "Media_pos": 5363,
+            "Media_posGen": 799,
+            "Media_posCat": 352,
+            "25K_name": "25K",
+            "25K_time": 8640365,
+            "25K_pos": 4809,
+            "25K_posGen": 676,
+            "25K_posCat": 291,
+            "35K_name": null,
+            "35K_time": null,
+            "35K_pos": null,
+            "35K_posGen": null,
+            "35K_posCat": null,
+            "Premeta_name": null,
+            "Premeta_time": null,
+            "Premeta_pos": null,
+            "Premeta_posGen": null,
+            "Premeta_posCat": null,
+            "Meta_name": null,
+            "Meta_time": null,
+            "Meta_pos": null,
+            "Meta_posGen": null,
+            "Meta_posCat": null
+          },
+          "penalties": [],
+          "waveTime": 1765697717615,
+          "teamsIds": []
+        }
+      ],
+      "importId": "ddc047e0-ef7a-11f0-849c-8f8620a687f7",
+      "featured": false,
+      "user_id": 0,
+      "locations": [
+        "Backup Meta",
+        "Meta",
+        "Premeta",
+        "10K",
+        "Backup 15k TS",
+        "Backup 15k",
+        "15K",
+        "Media",
+        "MM paso FP",
+        "25K"
+      ],
+      "color": "03a678",
+      "fullName": "Aisling Haigney"
+    }
+  },
+  "updatedAt": {
+    "_seconds": 1768242350,
+    "_nanoseconds": 605000000
+  }
+}

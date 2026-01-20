@@ -15,13 +15,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/",
+              "raw": "{{baseUrl}}/api",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "api",
-                ""
+                "api"
               ]
             },
             "description": "Endpoint raíz para verificar que la API está funcionando"
@@ -439,6 +438,155 @@
       ]
     },
     {
+      "name": "🗺️ GPX Maps",
+      "item": [
+        {
+          "name": "List GPX Maps - by app",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/apps/gpx-maps?raceId={{raceId}}&appId={{appId}}&limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "apps",
+                "gpx-maps"
+              ],
+              "query": [
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Listar mapas GPX asociados a una app (opcional por eventId). Devuelve objetos con id, widgetId, title, updatedAt y gpxData.{bounds, routePoints, waypoints}."
+          },
+          "response": [
+            {
+              "name": "Example - success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/apps/gpx-maps?raceId={{raceId}}&appId={{appId}}&limit=100",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "apps",
+                    "gpx-maps"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\"total\":1,\"maps\":[{\"id\":\"1767804113908\",\"widgetId\":\"1767804113908\",\"title\":\"Race Map\",\"updatedAt\":\"2026-01-07T17:08:05.246Z\",\"gpxData\":{\"bounds\":{\"minLon\":-3.703889,\"maxLat\":40.419944,\"minLat\":40.406944,\"maxLon\":-3.670833},\"routePoints\":[{\"lat\":40.419944,\"lon\":-3.688889},{\"lat\":40.418611,\"lon\":-3.686944}],\"waypoints\":[{\"lat\":40.406944,\"lon\":-3.690278,\"name\":\"Aid Station 30K - Prado Museum\",\"desc\":\"Water, electrolytes, and bananas at 30 km mark\",\"icon\":\"water\"},{\"lat\":40.419944,\"lon\":-3.688889,\"name\":\"Start - Puerta de Alcalá\",\"desc\":\"Starting line at Puerta de Alcalá\",\"icon\":\"start\"}]}}]"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response has maps array', function () { var json = pm.response.json(); pm.expect(json).to.have.property('maps'); pm.expect(Array.isArray(json.maps)).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List GPX Maps - by event",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/apps/gpx-maps?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "apps",
+                "gpx-maps"
+              ],
+              "query": [
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Listar mapas GPX filtrados por evento (eventId opcional)."
+          },
+          "response": [
+            {
+              "name": "Example - success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/apps/gpx-maps?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=100",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "apps",
+                    "gpx-maps"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [],
+              "body": "{\"total\":1,\"maps\":[{\"id\":\"1767804113908\",\"widgetId\":\"1767804113908\",\"title\":\"Race Map\",\"updatedAt\":\"2026-01-07T17:08:05.246Z\",\"gpxData\":{\"bounds\":{\"minLon\":-3.703889,\"maxLat\":40.419944,\"minLat\":40.406944,\"maxLon\":-3.670833},\"routePoints\":[{\"lat\":40.419944,\"lon\":-3.688889},{\"lat\":40.418611,\"lon\":-3.686944}],\"waypoints\":[{\"lat\":40.406944,\"lon\":-3.690278,\"name\":\"Aid Station 30K - Prado Museum\",\"desc\":\"Water, electrolytes, and bananas at 30 km mark\",\"icon\":\"water\"},{\"lat\":40.419944,\"lon\":-3.688889,\"name\":\"Start - Puerta de Alcalá\",\"desc\":\"Starting line at Puerta de Alcalá\",\"icon\":\"start\"}]}}]"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response has maps array', function () { var json = pm.response.json(); pm.expect(json).to.have.property('maps'); pm.expect(Array.isArray(json.maps)).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "👤 Participantes",
       "item": [
         {
@@ -579,7 +727,7 @@
       ]
     },
     {
-      "name": "� Clips de Video",
+      "name": "Clips de Video",
       "item": [
         {
           "name": "🎬 Splits con Clips - Resumen",
@@ -686,7 +834,7 @@
       ]
     },
     {
-      "name": "�🏆 Sponsors",
+      "name": "🏆 Sponsors",
       "item": [
         {
           "name": "Get All Sponsors",
@@ -2071,18 +2219,22 @@
       "name": "🔔 Webhooks & Checkpoints",
       "item": [
         {
-          "name": "Checkpoint Participant (AWS Webhook)",
+          "name": "Checkpoint Participant (Copernico Webhook)",
           "request": {
             "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "apiKey",
+                "value": "{{apiKey}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"apiKey\": \"9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0\",\n  \"id\": \"{{participantId}}\",\n  \"name\": \"Test\",\n  \"surname\": \"Participant\",\n  \"fullname\": \"Test Participant\",\n  \"events\": [{\n    \"event\": \"{{eventId}}\",\n    \"dorsal\": \"1001\",\n    \"featured\": false,\n    \"times\": {\n      \"START\": {\n        \"time\": \"00:00:00\",\n        \"netTime\": \"00:00:00\"\n      }\n    }\n  }]\n}"
+              "raw": "{\n  \"competitionId\": \"{{raceId}}\",\n  \"copernicoId\": \"{{copernicoId}}\",\n  \"type\": \"detection\",\n  \"participantId\": \"{{participantId}}\",\n  \"rawTime\": {{$timestamp}},\n  \"extraData\": {\n    \"point\": \"START\"\n  }\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/checkpoint-participant",
@@ -2094,7 +2246,7 @@
                 "checkpoint-participant"
               ]
             },
-            "description": "Webhook para recibir datos de checkpoint de participantes desde AWS"
+            "description": "Webhook para recibir datos de checkpoint de participantes (Copernico). Requiere competitionId, type y participantId; copernicoId, rawTime y extraData.point son opcionales."
           }
         }
       ]
@@ -2159,7 +2311,7 @@
       ]
     },
     {
-      "name": "� Compartir (Share Counter)",
+      "name": "Compartir (Share Counter)",
       "item": [
         {
           "name": "Incrementar Contador de Compartir",
@@ -2278,7 +2430,7 @@
       ]
     },
     {
-      "name": "�🔐 Push Notifications",
+      "name": "🔐 Push Notifications",
       "item": [
         {
           "name": "Register FCM Token",
@@ -2440,6 +2592,272 @@
           }
         }
       ]
+    },
+    {
+      "name": "🗑️ Story Management",
+      "item": [
+        {
+          "name": "DELETE Story - Single (participant)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/apps/story?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&participantId={{participantId}}&storyId={{storyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "apps",
+                "story"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" },
+                { "key": "appId", "value": "{{appId}}" },
+                { "key": "eventId", "value": "{{eventId}}" },
+                { "key": "participantId", "value": "{{participantId}}" },
+                { "key": "storyId", "value": "{{storyId}}" }
+              ]
+            },
+            "description": "Elimina una historia específica y sus subcolecciones. Requiere participantId y storyId."
+          }
+        },
+        {
+          "name": "DELETE Stories - Event-wide (no participantId)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/apps/story?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "apps",
+                "story"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" },
+                { "key": "appId", "value": "{{appId}}" },
+                { "key": "eventId", "value": "{{eventId}}" }
+              ]
+            },
+            "description": "Elimina todas las historias del evento (iterando participantes). No enviar participantId para modo event-wide."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧪 V3 Endpoints",
+      "item": [
+        {
+          "name": "GET Race Events v3 - All",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/race-events-v3?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&limit=10&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "race-events-v3"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" },
+                { "key": "appId", "value": "{{appId}}" },
+                { "key": "eventId", "value": "{{eventId}}" },
+                { "key": "type", "value": "", "disabled": true },
+                { "key": "participantId", "value": "", "disabled": true },
+                { "key": "audience", "value": "all", "disabled": true },
+                { "key": "userId", "value": "{{userId}}", "disabled": true },
+                { "key": "limit", "value": "10" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Race events v3. Params: raceId/appId/eventId requeridos. Opcionales: type, participantId, audience=all|featured, userId, limit, offset."
+          }
+        },
+        {
+          "name": "GET Race Events v3 - Featured o Seguidos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/race-events-v3?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&audience=featured&userId={{userId}}&limit=10&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "race-events-v3"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" },
+                { "key": "appId", "value": "{{appId}}" },
+                { "key": "eventId", "value": "{{eventId}}" },
+                { "key": "audience", "value": "featured" },
+                { "key": "userId", "value": "{{userId}}" },
+                { "key": "limit", "value": "10" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Race events v3 filtrado. audience=featured y userId opcional para incluir seguidos."
+          }
+        },
+        {
+          "name": "GET Participant v3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/participant-v3?raceId={{raceId}}&eventId={{eventId}}&participantId={{participantId}}&appId={{appId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "participant-v3"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" },
+                { "key": "eventId", "value": "{{eventId}}" },
+                { "key": "participantId", "value": "{{participantId}}" },
+                { "key": "appId", "value": "{{appId}}" }
+              ]
+            },
+            "description": "Participante v3 desde Copernico. Params: raceId, eventId, participantId requeridos; appId opcional."
+          }
+        },
+        {
+          "name": "GET Leaderboard v3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/apps/leaderboard-v3?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&type=overall&limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "apps",
+                "leaderboard-v3"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" },
+                { "key": "appId", "value": "{{appId}}" },
+                { "key": "eventId", "value": "{{eventId}}" },
+                { "key": "type", "value": "overall" },
+                { "key": "gender", "value": "male", "disabled": true },
+                { "key": "category", "value": "M45", "disabled": true },
+                { "key": "removeEmpty", "value": "1", "disabled": true },
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Leaderboard v3 desde Copernico. type=overall|gender|category. gender/category opcionales. removeEmpty solo aplica cuando type=gender o type=category sin filtro."
+          }
+        },
+        {
+          "name": "GET Search Participants v3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/search/participants-v3?raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}&query=Mateo&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "search",
+                "participants-v3"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" },
+                { "key": "appId", "value": "{{appId}}" },
+                { "key": "eventId", "value": "{{eventId}}" },
+                { "key": "query", "value": "Mateo" },
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Busqueda v3 desde Copernico /athletes/list."
+          }
+        },
+        {
+          "name": "GET Config v3",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/config-v3?raceId={{raceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "config-v3"
+              ],
+              "query": [
+                { "key": "raceId", "value": "{{raceId}}" }
+              ]
+            },
+            "description": "Config v3 con publishedRankings (overall/category/gender/attr_*) y maps por evento."
+          }
+        },
+        {
+          "name": "POST Follow v3",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"followerId\": \"{{userId}}\",\n  \"followingId\": \"{{participantId}}\",\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/follow-v3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "follow-v3"
+              ]
+            }
+          },
+          "description": "Follow v3 con creacion basica del participante."
+        },
+        {
+          "name": "POST Checkpoint Participant v3",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "apiKey", "value": "{{webhookApiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"competitionId\": \"{{raceId}}\",\n  \"copernicoId\": \"{{copernicoId}}\",\n  \"participantId\": \"{{participantId}}\",\n  \"type\": \"detection\",\n  \"rawTime\": null,\n  \"extraData\": {\n    \"event\": \"{{eventId}}\",\n    \"point\": \"10K\",\n    \"location\": \"10K\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/checkpoint-participant-v3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "checkpoint-participant-v3"
+              ]
+            }
+          },
+          "description": "Webhook v3 para checkpoints. type=detection|modification. extraData.event/point/location. apiKey requerido. rawTime opcional (ms)."
+        }
+      ]
     }
   ],
   "variable": [
@@ -2502,6 +2920,18 @@
       "key": "raceName",
       "value": "Sin nombre",
       "type": "string"
+    },
+    {
+      "key": "copernicoId",
+      "value": "generali-maraton-malaga-2025",
+      "type": "string",
+      "description": "Copernico race slug (para endpoints v3)"
+    },
+    {
+      "key": "webhookApiKey",
+      "value": "REEMPLAZAR_CON_WEBHOOK_API_KEY",
+      "type": "string",
+      "description": "API key para webhook checkpoint-participant-v3"
     },
     {
       "key": "nextOffset",

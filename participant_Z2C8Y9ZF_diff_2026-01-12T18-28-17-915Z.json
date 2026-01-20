@@ -1,0 +1,418 @@
+{
+  "oldFile": "/Users/fernandocarpio/AndroidStudioProjects/apiLive/participant_Z2C8Y9ZF_2026-01-12T18-22-11-202Z.json",
+  "newFile": "/Users/fernandocarpio/AndroidStudioProjects/apiLive/participant_Z2C8Y9ZF_2026-01-12T18-27-18-786Z.json",
+  "changedCount": 90,
+  "changes": [
+    {
+      "key": "copernicoData.rankings.25K.average",
+      "new": 0.34561
+    },
+    {
+      "key": "copernicoData.rankings.25K.averageNet",
+      "new": 0.33394
+    },
+    {
+      "key": "copernicoData.rankings.25K.location",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.rankings.25K.net",
+      "new": 8348540
+    },
+    {
+      "key": "copernicoData.rankings.25K.pos",
+      "new": 4809
+    },
+    {
+      "key": "copernicoData.rankings.25K.posCat",
+      "new": 291
+    },
+    {
+      "key": "copernicoData.rankings.25K.posCatNet",
+      "new": 286
+    },
+    {
+      "key": "copernicoData.rankings.25K.posGen",
+      "new": 676
+    },
+    {
+      "key": "copernicoData.rankings.25K.posGenNet",
+      "new": 663
+    },
+    {
+      "key": "copernicoData.rankings.25K.posNet",
+      "new": 4773
+    },
+    {
+      "key": "copernicoData.rankings.25K.positions.category",
+      "new": 291
+    },
+    {
+      "key": "copernicoData.rankings.25K.positions.categoryNet",
+      "new": 286
+    },
+    {
+      "key": "copernicoData.rankings.25K.positions.gender",
+      "new": 676
+    },
+    {
+      "key": "copernicoData.rankings.25K.positions.genderNet",
+      "new": 663
+    },
+    {
+      "key": "copernicoData.rankings.25K.positions.overall",
+      "new": 4809
+    },
+    {
+      "key": "copernicoData.rankings.25K.positions.overallNet",
+      "new": 4773
+    },
+    {
+      "key": "copernicoData.rankings.25K.rawTime",
+      "new": 1765706357980
+    },
+    {
+      "key": "copernicoData.rankings.25K.time",
+      "new": 8640365
+    },
+    {
+      "key": "copernicoData.rankings.Media.pos",
+      "old": 5053,
+      "new": 5363
+    },
+    {
+      "key": "copernicoData.rankings.Media.posCat",
+      "old": 311,
+      "new": 352
+    },
+    {
+      "key": "copernicoData.rankings.Media.posCatNet",
+      "old": 304,
+      "new": 331
+    },
+    {
+      "key": "copernicoData.rankings.Media.posGen",
+      "old": 727,
+      "new": 799
+    },
+    {
+      "key": "copernicoData.rankings.Media.posGenNet",
+      "old": 700,
+      "new": 760
+    },
+    {
+      "key": "copernicoData.rankings.Media.posNet",
+      "old": 4962,
+      "new": 5217
+    },
+    {
+      "key": "copernicoData.rankings.Media.positions.category",
+      "old": 311,
+      "new": 352
+    },
+    {
+      "key": "copernicoData.rankings.Media.positions.categoryNet",
+      "old": 304,
+      "new": 331
+    },
+    {
+      "key": "copernicoData.rankings.Media.positions.gender",
+      "old": 727,
+      "new": 799
+    },
+    {
+      "key": "copernicoData.rankings.Media.positions.genderNet",
+      "old": 700,
+      "new": 760
+    },
+    {
+      "key": "copernicoData.rankings.Media.positions.overall",
+      "old": 5053,
+      "new": 5363
+    },
+    {
+      "key": "copernicoData.rankings.Media.positions.overallNet",
+      "old": 4962,
+      "new": 5217
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.25K_name",
+      "old": null,
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.25K_pos",
+      "old": null,
+      "new": 4809
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.25K_posCat",
+      "old": null,
+      "new": 291
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.25K_posGen",
+      "old": null,
+      "new": 676
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.25K_time",
+      "old": null,
+      "new": 8640365
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.Media_pos",
+      "old": 5053,
+      "new": 5363
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.Media_posCat",
+      "old": 311,
+      "new": 352
+    },
+    {
+      "key": "copernicoData.rawData.events[0].commentator.Media_posGen",
+      "old": 727,
+      "new": 799
+    },
+    {
+      "key": "copernicoData.rawData.events[0].distance",
+      "old": 21097,
+      "new": 25000
+    },
+    {
+      "key": "copernicoData.rawData.events[0].last_split_seen",
+      "old": "Media",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.average",
+      "old": 0.34917,
+      "new": 0.34561
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.location",
+      "old": "Media",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.pos",
+      "old": 5097,
+      "new": 4834
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.posCat",
+      "old": 313,
+      "new": 292
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.posGen",
+      "old": 730,
+      "new": 677
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.rawTime",
+      "old": 1765705084156,
+      "new": 1765706357980
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.split",
+      "old": "Media",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.time",
+      "old": 7366541,
+      "new": 8640365
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader.weight",
+      "old": 4.9999992633458,
+      "new": 5.9999991359634
+    },
+    {
+      "key": "copernicoData.rawData.events[0].leader_weight",
+      "old": 4.9999992633458,
+      "new": 5.9999991359634
+    },
+    {
+      "key": "copernicoData.rawData.events[0].predictive.25K",
+      "old": 0.32817,
+      "new": 0.32637
+    },
+    {
+      "key": "copernicoData.rawData.events[0].predictive.35K",
+      "old": 0.32932,
+      "new": 0.32751
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.average",
+      "new": 0.34561
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.averageNet",
+      "new": 0.33394
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.location",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.net",
+      "new": 8348540
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.pos",
+      "new": 4809
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.posCat",
+      "new": 291
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.posCatNet",
+      "new": 286
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.posGen",
+      "new": 676
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.posGenNet",
+      "new": 663
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.posNet",
+      "new": 4773
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.rawTime",
+      "new": 1765706357980
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.25K.time",
+      "new": 8640365
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.Media.pos",
+      "old": 5053,
+      "new": 5363
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.Media.posCat",
+      "old": 311,
+      "new": 352
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.Media.posCatNet",
+      "old": 304,
+      "new": 331
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.Media.posGen",
+      "old": 727,
+      "new": 799
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.Media.posGenNet",
+      "old": 700,
+      "new": 760
+    },
+    {
+      "key": "copernicoData.rawData.events[0].rankings.Media.posNet",
+      "old": 4962,
+      "new": 5217
+    },
+    {
+      "key": "copernicoData.rawData.events[0].splitsSeen",
+      "old": 4,
+      "new": 5
+    },
+    {
+      "key": "copernicoData.rawData.events[0].times.25K.rawTime",
+      "new": 1765706357980
+    },
+    {
+      "key": "copernicoData.rawData.events[0].times.25K.split",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.rawData.events[0].times.25K.time",
+      "new": 8640365
+    },
+    {
+      "key": "copernicoData.rawData.locations[9]",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.times.25K.raw.rawTime",
+      "new": 1765706357980
+    },
+    {
+      "key": "copernicoData.times.25K.rawTime",
+      "new": 1765706357980
+    },
+    {
+      "key": "copernicoData.times.25K.split",
+      "new": "25K"
+    },
+    {
+      "key": "copernicoData.times.25K.time",
+      "new": 8640365
+    },
+    {
+      "key": "lastCheckpoint.location",
+      "old": null,
+      "new": "10k"
+    },
+    {
+      "key": "lastCheckpoint.point",
+      "old": null,
+      "new": "10K"
+    },
+    {
+      "key": "lastCheckpoint.processedAt._nanoseconds",
+      "old": 499000000,
+      "new": 605000000
+    },
+    {
+      "key": "lastCheckpoint.processedAt._seconds",
+      "old": 1768241013,
+      "new": 1768242350
+    },
+    {
+      "key": "lastSplitSeen",
+      "old": "Media",
+      "new": "25K"
+    },
+    {
+      "key": "locations[9]",
+      "new": "25K"
+    },
+    {
+      "key": "splitsSeen",
+      "old": 4,
+      "new": 5
+    },
+    {
+      "key": "updatedAt._nanoseconds",
+      "old": 499000000,
+      "new": 605000000
+    },
+    {
+      "key": "updatedAt._seconds",
+      "old": 1768241013,
+      "new": 1768242350
+    },
+    {
+      "key": "webhookProcessedAt._nanoseconds",
+      "old": 499000000,
+      "new": 605000000
+    },
+    {
+      "key": "webhookProcessedAt._seconds",
+      "old": 1768241013,
+      "new": 1768242350
+    }
+  ]
+}

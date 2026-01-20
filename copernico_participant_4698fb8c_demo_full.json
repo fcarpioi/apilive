@@ -1,0 +1,252 @@
+{
+  "result": {
+    "code": 1
+  },
+  "data": {
+    "name": "Adrian Ruben",
+    "surname": "Benitez",
+    "gender": "male",
+    "events": [
+      {
+        "event": "Marathon",
+        "dorsal": "12481",
+        "chip": [
+          "12481"
+        ],
+        "team": "",
+        "team_type": [],
+        "category": "M35",
+        "attributes": {},
+        "gunTime": "2026-01-09T08:05:05.524Z",
+        "gunTimeMode": "wave",
+        "gunTimeModeConfig": {
+          "wave": "Marathon"
+        },
+        "auto_category": false,
+        "auto_chip": false,
+        "status": "running",
+        "realStatus": "running",
+        "startTime": 377447,
+        "startRawTime": 1767946282971,
+        "startNetTime": 377447,
+        "distance": 21097,
+        "leader_weight": 6.9999992010349,
+        "maxConsecutiveSplitsMissing": 0,
+        "splitsMissing": 0,
+        "issuesCount": {
+          "data": 0,
+          "times": 0
+        },
+        "splitsSeen": 6,
+        "last_split_seen": "HM",
+        "times": {
+          "Start": {
+            "time": 377447,
+            "split": "Start",
+            "rawTime": 1767946282971
+          },
+          "5K": {
+            "time": 2214019,
+            "split": "5K",
+            "rawTime": 1767948119543
+          },
+          "10K": {
+            "time": 3982600,
+            "split": "10K",
+            "rawTime": 1767949888124
+          },
+          "15K": {
+            "time": 5752771,
+            "split": "15K",
+            "rawTime": 1767951658295
+          },
+          "20K": {
+            "time": 7574552,
+            "split": "20K",
+            "rawTime": 1767953480076
+          },
+          "HM": {
+            "time": 7989650,
+            "split": "HM",
+            "rawTime": 1767953895174
+          }
+        },
+        "rankings": {
+          "5K": {
+            "time": 2214019,
+            "net": 1836572,
+            "average": 0.4428,
+            "averageNet": 0.36731,
+            "location": "5K",
+            "rawTime": 1767948119543,
+            "pos": 9418,
+            "posGen": 7940,
+            "posCat": 1183,
+            "posNet": 9114,
+            "posGenNet": 7747,
+            "posCatNet": 1171
+          },
+          "10K": {
+            "time": 3982600,
+            "net": 3605153,
+            "average": 0.39826,
+            "averageNet": 0.36052,
+            "location": "10K",
+            "rawTime": 1767949888124,
+            "pos": 9152,
+            "posGen": 7775,
+            "posCat": 1178,
+            "posNet": 8957,
+            "posGenNet": 7651,
+            "posCatNet": 1167
+          },
+          "15K": {
+            "time": 5752771,
+            "net": 5375324,
+            "average": 0.38352,
+            "averageNet": 0.35835,
+            "location": "15K",
+            "rawTime": 1767951658295,
+            "pos": 8983,
+            "posGen": 7660,
+            "posCat": 1167,
+            "posNet": 8828,
+            "posGenNet": 7562,
+            "posCatNet": 1154
+          },
+          "20K": {
+            "time": 7574552,
+            "net": 7197105,
+            "average": 0.37873,
+            "averageNet": 0.35986,
+            "location": "20K",
+            "rawTime": 1767953480076,
+            "pos": 8922,
+            "posGen": 7616,
+            "posCat": 1155,
+            "posNet": 8807,
+            "posGenNet": 7544,
+            "posCatNet": 1148
+          },
+          "Media": {
+            "time": 7989650,
+            "net": 7612203,
+            "average": 0.37871,
+            "averageNet": 0.36082,
+            "location": "HM",
+            "rawTime": 1767953895174,
+            "pos": 8985,
+            "posGen": 7673,
+            "posCat": 1157,
+            "posNet": 8875,
+            "posGenNet": 7602,
+            "posCatNet": 1150
+          }
+        },
+        "leader": {
+          "time": 7989650,
+          "split": "HM",
+          "weight": 6.9999992010349,
+          "average": 0.37871,
+          "rawTime": 1767953895174,
+          "location": "HM",
+          "pos": 9067,
+          "posGen": 7743,
+          "posCat": 1165
+        },
+        "predictive": {
+          "Start": 0.36687,
+          "5K": 0.36731,
+          "10K": 0.35372,
+          "15K": 0.35403,
+          "20K": 0.36436,
+          "HM": 0.37839,
+          "25K": 0.37839,
+          "30K": 0.37839,
+          "35K": 0.37839,
+          "40K": 0.37839
+        },
+        "backups": {},
+        "mst": [
+          {
+            "split": "Finish",
+            "times": [
+              373642
+            ]
+          }
+        ],
+        "custom-rankings": [],
+        "commentator": {
+          "5K_name": "5K",
+          "5K_time": 2214019,
+          "5K_pos": 9418,
+          "5K_posGen": 7940,
+          "5K_posCat": 1183,
+          "10K_name": "10K",
+          "10K_time": 3982600,
+          "10K_pos": 9152,
+          "10K_posGen": 7775,
+          "10K_posCat": 1178,
+          "15K_name": "15K",
+          "15K_time": 5752771,
+          "15K_pos": 8983,
+          "15K_posGen": 7660,
+          "15K_posCat": 1167,
+          "20K_name": "20K",
+          "20K_time": 7574552,
+          "20K_pos": 8922,
+          "20K_posGen": 7616,
+          "20K_posCat": 1155,
+          "HM_name": "HM",
+          "HM_time": 7989650,
+          "HM_pos": 8985,
+          "HM_posGen": 7673,
+          "HM_posCat": 1157,
+          "25K_name": null,
+          "25K_time": null,
+          "25K_pos": null,
+          "25K_posGen": null,
+          "25K_posCat": null,
+          "30K_name": null,
+          "30K_time": null,
+          "30K_pos": null,
+          "30K_posGen": null,
+          "30K_posCat": null,
+          "35K_name": null,
+          "35K_time": null,
+          "35K_pos": null,
+          "35K_posGen": null,
+          "35K_posCat": null,
+          "40K_name": null,
+          "40K_time": null,
+          "40K_pos": null,
+          "40K_posGen": null,
+          "40K_posCat": null,
+          "Finish_name": null,
+          "Finish_time": null,
+          "Finish_pos": null,
+          "Finish_posGen": null,
+          "Finish_posCat": null
+        },
+        "penalties": [],
+        "waveTime": 1767945905524,
+        "teamsIds": []
+      }
+    ],
+    "importId": "472e6a50-ed31-11f0-9d0a-39a97466cfcd",
+    "featured": false,
+    "user_id": 0,
+    "locations": [
+      "START",
+      "FINISH",
+      "5K",
+      "10K",
+      "15K",
+      "20K",
+      "HM"
+    ],
+    "id": "4698fb8c-b728-56c8-949d-682c10551dfd",
+    "color": "03a678",
+    "fullName": "Adrian Ruben Benitez"
+  }
+}

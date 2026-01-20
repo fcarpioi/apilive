@@ -140,9 +140,16 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
             console.log(`📍 [apiSimple] Split encontrado en índice ${splitIndex}: ${checkpointId}`);
 
             // Guardar en la misma estructura donde se encontró el evento
-            const splitClipsRef = eventRef.collection("split-clips").doc(checkpointId);
+            const splitClipsCol = eventRef.collection("split-clips");
 
-            await splitClipsRef.set({
+            // Buscar si ya existe un registro para el mismo splitName + participantId
+            const existingSplitQuery = await splitClipsCol
+              .where("splitName", "==", checkpointId)
+              .where("participantId", "==", participantId)
+              .limit(1)
+              .get();
+
+            const splitPayload = {
               splitName: checkpointId,
               splitIndex: splitIndex,
               clipUrl: finalClipUrl,
@@ -150,11 +157,18 @@ async function generateVideoClip({ streamId, timestamp, raceId, eventId, partici
               raceId: raceId,
               eventId: eventId,
               streamId: streamId,
-              timestamp: timestamp,
+              timestamp: timestamp ? new Date(timestamp).toISOString() : null,
               generatedAt: admin.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+            };
 
-            console.log(`✅ [apiSimple] ClipUrl guardado en split: ${checkpointId}`);
+            if (!existingSplitQuery.empty) {
+              const docRef = existingSplitQuery.docs[0].ref;
+              await docRef.update(splitPayload);
+              console.log(`✅ [apiSimple] ClipUrl actualizado en split (mismo split+participant): ${docRef.id}`);
+            } else {
+              const newDocRef = await splitClipsCol.add({ ...splitPayload, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+              console.log(`✅ [apiSimple] ClipUrl guardado en split: ${newDocRef.id}`);
+            }
           }
         }
 

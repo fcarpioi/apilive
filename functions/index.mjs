@@ -1,5 +1,6 @@
 // indexSimple.mjs - Versión simplificada para despliegue
 import { onRequest } from "firebase-functions/v2/https";
+import { setGlobalOptions } from "firebase-functions/v2/options";
 import express from "express";
 import cors from "cors";
 
@@ -53,6 +54,7 @@ function normalizeUTF8Object(obj) {
 // 🔥 Importar triggers de Firestore
 // import { onUserFollowsParticipant } from "./triggers/followingTrigger.mjs"; // COMENTADO TEMPORALMENTE
 import { onStoryCreated } from "./triggers/storyNotificationTrigger.mjs";
+import { onEventWritten, onLegacyEventWritten } from "./triggers/eventNormalizationTrigger.mjs";
 
 // Crear la aplicación Express principal
 const app = express();
@@ -94,8 +96,9 @@ app.get("/", (req, res) => {
 });
 
 // Exportar la función principal
+setGlobalOptions({ memory: "2GiB", cpu: 1 });
 export const liveApiGateway = onRequest(app);
 
 // 🔥 Exportar triggers de Firestore
 // export { onUserFollowsParticipant }; // COMENTADO TEMPORALMENTE
-export { onStoryCreated };
+export { onStoryCreated, onEventWritten, onLegacyEventWritten };

@@ -21,8 +21,8 @@ class CopernicoConfig {
       },
       "pro": {
         socket: "https://socket-ss.sportmaniacs.com:4319/",
-        api: "https://api.copernico.cloud/api/races",
-        admin: "https://api.copernico.cloud/api/races",
+        api: "https://public-api.copernico.cloud/api/races",
+        admin: "https://public-api.copernico.cloud/api/races",
         token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
       },
       "alpha": {
@@ -89,7 +89,7 @@ class CopernicoConfig {
       // Configuración de cache
       cache: {
         participantTtlMinutes: parseInt(process.env.COPERNICO_CACHE_TTL_MINUTES) || 30,
-        enableCache: process.env.COPERNICO_ENABLE_CACHE !== 'false'
+        enableCache: false
       },
 
       // Configuración de logging
@@ -130,19 +130,40 @@ class CopernicoConfig {
   }
 
   /**
+   * Obtener configuración de un entorno específico (sin mutar estado global)
+   */
+  getEnvironmentConfig(env) {
+    if (!env) {
+      return this.getCurrentEnvironmentConfig();
+    }
+
+    const envConfig = this.config.environments[env];
+    if (!envConfig) {
+      return this.getCurrentEnvironmentConfig();
+    }
+
+    return {
+      baseUrl: envConfig.api,
+      apiKey: envConfig.token,
+      socketUrl: envConfig.socket,
+      adminUrl: envConfig.admin
+    };
+  }
+
+  /**
    * Obtener URL completa para un endpoint de participante
    */
-  getApiUrl(raceId, participantId) {
-    const envConfig = this.getCurrentEnvironmentConfig();
+  getApiUrl(raceId, participantId, env) {
+    const envConfig = this.getEnvironmentConfig(env);
     // La URL base ya incluye /api/races, solo agregar el participante
-    return `${envConfig.baseUrl}/${raceId}/athlete/${participantId}`;
+    return `${envConfig.baseUrl}/${raceId}/athlete/${participantId}/full`;
   }
 
   /**
    * Obtener headers para las requests
    */
-  getRequestHeaders() {
-    const envConfig = this.getCurrentEnvironmentConfig();
+  getRequestHeaders(env) {
+    const envConfig = this.getEnvironmentConfig(env);
     return {
       'Content-Type': 'application/json',
       'x-api-key': envConfig.apiKey,

@@ -1,0 +1,507 @@
+{
+  "generatedAt": "2026-01-12T12:40:33.222Z",
+  "config": {
+    "baseUrl": "https://liveapigateway-3rt3xwiooa-uc.a.run.app",
+    "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+    "appId": "Ryx7YFWobBfGTJqkciCV",
+    "eventId": "Medio Maratón",
+    "participantId": "1ZZCB42Y",
+    "limit": 20,
+    "offsets": [
+      0,
+      10,
+      40
+    ],
+    "runs": 5,
+    "concurrency": 1,
+    "timeoutMs": 15000,
+    "slowMs": 2000,
+    "types": [
+      "ATHLETE_STARTED",
+      "ATHLETE_CROSSED_TIMING_SPLIT",
+      "ATHLETE_FINISHED",
+      "SPONSOR",
+      "COMPLETE_AWARD"
+    ]
+  },
+  "results": [
+    {
+      "name": "Base offset=0",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 459.24879199999987,
+          "max": 1935.697292,
+          "avg": 799.8241503999998,
+          "p50": 511.8596669999997,
+          "p90": 1935.697292,
+          "p95": 1935.697292
+        },
+        "bytes": {
+          "min": 108067,
+          "max": 108067,
+          "avg": 108067
+        }
+      }
+    },
+    {
+      "name": "Base offset=10",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&limit=20&offset=10",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "limit": 20,
+        "offset": 10
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 366.79670799999985,
+          "max": 776.4883329999998,
+          "avg": 528.4139081999999,
+          "p50": 497.74724999999944,
+          "p90": 776.4883329999998,
+          "p95": 776.4883329999998
+        },
+        "bytes": {
+          "min": 102526,
+          "max": 102526,
+          "avg": 102526
+        }
+      }
+    },
+    {
+      "name": "Base offset=40",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&limit=20&offset=40",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "limit": 20,
+        "offset": 40
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 431.061334,
+          "max": 545.6002920000001,
+          "avg": 495.46780020000006,
+          "p50": 509.97845899999993,
+          "p90": 545.6002920000001,
+          "p95": 545.6002920000001
+        },
+        "bytes": {
+          "min": 102519,
+          "max": 102519,
+          "avg": 102519
+        }
+      }
+    },
+    {
+      "name": "Tipo=ATHLETE_STARTED",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&type=ATHLETE_STARTED&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "type": "ATHLETE_STARTED",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 330.8122089999997,
+          "max": 493.0565000000006,
+          "avg": 417.38440840000004,
+          "p50": 444.52850000000035,
+          "p90": 493.0565000000006,
+          "p95": 493.0565000000006
+        },
+        "bytes": {
+          "min": 102502,
+          "max": 102502,
+          "avg": 102502
+        }
+      }
+    },
+    {
+      "name": "Tipo=ATHLETE_CROSSED_TIMING_SPLIT",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&type=ATHLETE_CROSSED_TIMING_SPLIT&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 333.34199999999873,
+          "max": 521.9400829999995,
+          "avg": 414.28999159999984,
+          "p50": 408.1815000000006,
+          "p90": 521.9400829999995,
+          "p95": 521.9400829999995
+        },
+        "bytes": {
+          "min": 102546,
+          "max": 102546,
+          "avg": 102546
+        }
+      }
+    },
+    {
+      "name": "Tipo=ATHLETE_FINISHED",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&type=ATHLETE_FINISHED&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "type": "ATHLETE_FINISHED",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 285.56925000000047,
+          "max": 359.6150409999991,
+          "avg": 319.6895165999995,
+          "p50": 310.2359579999993,
+          "p90": 359.6150409999991,
+          "p95": 359.6150409999991
+        },
+        "bytes": {
+          "min": 105451,
+          "max": 105451,
+          "avg": 105451
+        }
+      }
+    },
+    {
+      "name": "Tipo=SPONSOR",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&type=SPONSOR&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "type": "SPONSOR",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 242.85425000000032,
+          "max": 269.8531669999993,
+          "avg": 254.43002519999936,
+          "p50": 254.07195799999863,
+          "p90": 269.8531669999993,
+          "p95": 269.8531669999993
+        },
+        "bytes": {
+          "min": 366,
+          "max": 366,
+          "avg": 366
+        }
+      }
+    },
+    {
+      "name": "Tipo=COMPLETE_AWARD",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&type=COMPLETE_AWARD&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "type": "COMPLETE_AWARD",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 217.43687499999942,
+          "max": 332.31095899999855,
+          "avg": 281.2075417999993,
+          "p50": 280.87683299999844,
+          "p90": 332.31095899999855,
+          "p95": 332.31095899999855
+        },
+        "bytes": {
+          "min": 373,
+          "max": 373,
+          "avg": 373
+        }
+      }
+    },
+    {
+      "name": "Participante específico",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&participantId=1ZZCB42Y&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "participantId": "1ZZCB42Y",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 308.0786670000016,
+          "max": 626.749749999999,
+          "avg": 482.2052413999998,
+          "p50": 505.6855409999989,
+          "p90": 626.749749999999,
+          "p95": 626.749749999999
+        },
+        "bytes": {
+          "min": 117603,
+          "max": 117603,
+          "avg": 117603
+        }
+      }
+    },
+    {
+      "name": "Participante + Tipo=ATHLETE_STARTED",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&participantId=1ZZCB42Y&type=ATHLETE_STARTED&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "participantId": "1ZZCB42Y",
+        "type": "ATHLETE_STARTED",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 263.34554200000275,
+          "max": 383.6386659999989,
+          "avg": 303.17540840000004,
+          "p50": 284.8597499999996,
+          "p90": 383.6386659999989,
+          "p95": 383.6386659999989
+        },
+        "bytes": {
+          "min": 23544,
+          "max": 23544,
+          "avg": 23544
+        }
+      }
+    },
+    {
+      "name": "Participante + Tipo=ATHLETE_CROSSED_TIMING_SPLIT",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&participantId=1ZZCB42Y&type=ATHLETE_CROSSED_TIMING_SPLIT&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "participantId": "1ZZCB42Y",
+        "type": "ATHLETE_CROSSED_TIMING_SPLIT",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 276.77237500000047,
+          "max": 532.315292000003,
+          "avg": 370.2429332000007,
+          "p50": 321.7182500000017,
+          "p90": 532.315292000003,
+          "p95": 532.315292000003
+        },
+        "bytes": {
+          "min": 58350,
+          "max": 58350,
+          "avg": 58350
+        }
+      }
+    },
+    {
+      "name": "Participante + Tipo=ATHLETE_FINISHED",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&participantId=1ZZCB42Y&type=ATHLETE_FINISHED&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "participantId": "1ZZCB42Y",
+        "type": "ATHLETE_FINISHED",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 307.622457999998,
+          "max": 423.7882090000021,
+          "avg": 365.2845998000004,
+          "p50": 375.23262500000055,
+          "p90": 423.7882090000021,
+          "p95": 423.7882090000021
+        },
+        "bytes": {
+          "min": 71534,
+          "max": 71534,
+          "avg": 71534
+        }
+      }
+    },
+    {
+      "name": "Participante + Tipo=SPONSOR",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&participantId=1ZZCB42Y&type=SPONSOR&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "participantId": "1ZZCB42Y",
+        "type": "SPONSOR",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 213.89691700000185,
+          "max": 343.51445799999783,
+          "avg": 269.29656679999897,
+          "p50": 240.145999999997,
+          "p90": 343.51445799999783,
+          "p95": 343.51445799999783
+        },
+        "bytes": {
+          "min": 366,
+          "max": 366,
+          "avg": 366
+        }
+      }
+    },
+    {
+      "name": "Participante + Tipo=COMPLETE_AWARD",
+      "url": "https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/race-events-v2?raceId=69200553-464c-4bfd-9b35-4ca6ac1f17f5&appId=Ryx7YFWobBfGTJqkciCV&eventId=Medio+Marat%C3%B3n&participantId=1ZZCB42Y&type=COMPLETE_AWARD&limit=20&offset=0",
+      "params": {
+        "raceId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
+        "appId": "Ryx7YFWobBfGTJqkciCV",
+        "eventId": "Medio Maratón",
+        "participantId": "1ZZCB42Y",
+        "type": "COMPLETE_AWARD",
+        "limit": 20,
+        "offset": 0
+      },
+      "summary": {
+        "count": 5,
+        "okCount": 5,
+        "errorCount": 0,
+        "slowCount": 0,
+        "statusCounts": {
+          "200": 5
+        },
+        "durationMs": {
+          "min": 203.0895410000012,
+          "max": 277.39466699999684,
+          "avg": 227.64677500000033,
+          "p50": 221.2067500000012,
+          "p90": 277.39466699999684,
+          "p95": 277.39466699999684
+        },
+        "bytes": {
+          "min": 373,
+          "max": 373,
+          "avg": 373
+        }
+      }
+    }
+  ]
+}

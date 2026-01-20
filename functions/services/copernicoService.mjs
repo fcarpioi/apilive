@@ -18,11 +18,12 @@ class CopernicoService {
   /**
    * Obtener datos de participante desde la API de Copernico
    */
-  async getParticipantData(raceId, participantId) {
+  async getParticipantData(raceId, participantId, envOverride = null, options = {}) {
     try {
       // Verificar cache primero
-      const cacheKey = `${raceId}_${participantId}`;
-      if (this.config.get('cache.enableCache') && this.cache.has(cacheKey)) {
+      const cacheKey = `${envOverride || 'default'}_${raceId}_${participantId}`;
+      const forceRefresh = options.forceRefresh === true;
+      if (!forceRefresh && this.config.get('cache.enableCache') && this.cache.has(cacheKey)) {
         const cached = this.cache.get(cacheKey);
         const now = Date.now();
         const ttlMs = this.config.get('cache.participantTtlMinutes') * 60 * 1000;
@@ -34,9 +35,12 @@ class CopernicoService {
           this.cache.delete(cacheKey);
         }
       }
+      if (forceRefresh) {
+        this.cache.delete(cacheKey);
+      }
 
-      const url = this.config.getApiUrl(raceId, participantId);
-      const headers = this.config.getRequestHeaders();
+      const url = this.config.getApiUrl(raceId, participantId, envOverride);
+      const headers = this.config.getRequestHeaders(envOverride);
       const timeoutMs = this.config.get('request.timeoutMs');
 
       console.log(`🌐 [CopernicoService] Obteniendo datos de: ${url}`);
@@ -102,7 +106,7 @@ class CopernicoService {
         if (retryAttempts > 0) {
           console.log(`🔄 [CopernicoService] Reintentando... (${retryAttempts} intentos restantes)`);
           await this.delay(this.config.get('request.retryDelayMs'));
-          return this.getParticipantDataWithRetry(raceId, participantId, retryAttempts - 1);
+          return this.getParticipantDataWithRetry(raceId, participantId, envOverride, retryAttempts - 1);
         }
       }
 
@@ -113,18 +117,18 @@ class CopernicoService {
   /**
    * Método auxiliar para reintentos
    */
-  async getParticipantDataWithRetry(raceId, participantId, attemptsLeft) {
+  async getParticipantDataWithRetry(raceId, participantId, envOverride, attemptsLeft, options = {}) {
     if (attemptsLeft <= 0) {
       throw new Error('Se agotaron los intentos de retry');
     }
 
     try {
-      return await this.getParticipantData(raceId, participantId);
+      return await this.getParticipantData(raceId, participantId, envOverride, options);
     } catch (error) {
       if (attemptsLeft > 1) {
         console.log(`🔄 [CopernicoService] Reintentando... (${attemptsLeft - 1} intentos restantes)`);
         await this.delay(this.config.get('request.retryDelayMs'));
-        return this.getParticipantDataWithRetry(raceId, participantId, attemptsLeft - 1);
+        return this.getParticipantDataWithRetry(raceId, participantId, envOverride, attemptsLeft - 1, options);
       }
       throw error;
     }
@@ -211,6 +215,7 @@ class CopernicoService {
         netTime: timeData.netTime,
         average: timeData.average,
         averageNet: timeData.averageNet,
+        rawTime: timeData.rawTime ?? timeData.raw?.rawTime,
         // ✅ MODIFICADO: Preservar estructura completa de raw
         raw: {
           created: timeData.raw?.created,
@@ -225,7 +230,7 @@ class CopernicoService {
           valid: timeData.raw?.valid,
           offset: timeData.raw?.offset,
           originalTime: timeData.raw?.originalTime, // ← CRUCIAL para timing
-          rawTime: timeData.raw?.rawTime,          // ← CRUCIAL para timing
+          rawTime: timeData.raw?.rawTime ?? timeData.rawTime,          // ← CRUCIAL para timing
           times: timeData.raw?.times || {}         // ← Tiempos calculados
         }
       };

@@ -11,8 +11,8 @@ const ENDPOINT_URL = 'https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/checkpo
 const CSV_PARTICIPANTS_PATH = process.env.PARTICIPANTS_CSV_PATH || '/Users/fernandocarpio/Downloads/media_maraton.csv';
 
 // Configuración de timing
-const TIMING_MODE = process.argv[2] || 'real'; // 'real' o 'test'
-const REAL_TIMING = TIMING_MODE === 'real';
+const TIMING_MODE = process.argv[2] || 'test'; // 'real' o 'test'
+const REAL_TIMING = TIMING_MODE === 'test';
 
 console.log(`🕐 MODO DE TIMING: ${REAL_TIMING ? 'REAL (minutos reales)' : 'TEST (segundos acelerados)'}`);
 

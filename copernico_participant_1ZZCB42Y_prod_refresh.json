@@ -1,0 +1,197 @@
+{
+  "result": {
+    "code": 1
+  },
+  "data": {
+    "id": "1ZZCB42Y",
+    "name": "Nabil",
+    "surname": "Chahboun",
+    "e-mail": "nabilchahboun05@gmail.com",
+    "NOMBRE QUE QUIERES QUE APAREZCA EN EL DORSAL": "Chahboun",
+    "document": "257535536",
+    "gender": "male",
+    "birthdate": "2005-07-07",
+    "phone": "+31 0648253932",
+    "TELÉFONO EN CASO DE EMERGENCIA": "+31 6 21496287",
+    "PAÍS": "Países Bajos",
+    "PROVINCIA": "Utrecht",
+    "club": "Utrecht Atletiek",
+    "PAIS NOMBRE": "Países Bajos",
+    "nationality": "NED",
+    "Discapacitado": "No",
+    "discapacidad": null,
+    "Sillas": "No",
+    "importId": "98667e00-d6af-11f0-b08f-a53cbe3865ce",
+    "featured": false,
+    "user_id": 0,
+    "locations": [
+      "Backup Meta",
+      "Meta",
+      "Premeta",
+      "10K",
+      "Backup 15k TS",
+      "Backup 15k",
+      "15K",
+      "Backup Meta MM",
+      "META 21K"
+    ],
+    "color": "f8ba52",
+    "fullName": "Nabil Chahboun",
+    "box": "Box 1",
+    "event": "Medio Maratón",
+    "dorsal": "14588",
+    "chip": [
+      14588
+    ],
+    "team": "",
+    "team_type": [],
+    "category": "Sub 23 M",
+    "attributes": {
+      "Malagueños": null,
+      "Españoles": null
+    },
+    "gunTime": "2025-12-14T07:30:13.700Z",
+    "gunTimeMode": "wave",
+    "gunTimeModeConfig": {
+      "wave": "S 8:30"
+    },
+    "auto_category": true,
+    "auto_chip": true,
+    "status": "finished",
+    "realStatus": "finished",
+    "startTime": 0,
+    "startRawTime": 1765697413450,
+    "startNetTime": -250,
+    "distance": 21097,
+    "leader_weight": 4.9999995922801,
+    "maxConsecutiveSplitsMissing": 0,
+    "splitsMissing": 0,
+    "issuesCount": {
+      "data": 7,
+      "times": 0
+    },
+    "splitsSeen": 4,
+    "last_split_seen": "Media",
+    "times": {
+      "Salida": {
+        "time": 0,
+        "split": "Salida",
+        "rawTime": 1765697413450
+      },
+      "10K": {
+        "time": 1912598,
+        "split": "10K",
+        "rawTime": 1765699326298
+      },
+      "15K": {
+        "time": 2889441,
+        "split": "15K",
+        "rawTime": 1765700303141
+      },
+      "Media": {
+        "time": 4077198,
+        "split": "Media",
+        "rawTime": 1765701490898
+      }
+    },
+    "rankings": {
+      "10K": {
+        "time": 1912598,
+        "net": 1912598,
+        "average": 0.19126,
+        "averageNet": 0.19126,
+        "location": "10K",
+        "rawTime": 1765699326298,
+        "pos": 2,
+        "posGen": 2,
+        "posCat": 1,
+        "posNet": 2,
+        "posGenNet": 2,
+        "posCatNet": 1
+      },
+      "15K": {
+        "time": 2889441,
+        "net": 2889441,
+        "average": 0.19263,
+        "averageNet": 0.19263,
+        "location": "15K",
+        "rawTime": 1765700303141,
+        "pos": 2,
+        "posGen": 2,
+        "posCat": 1,
+        "posNet": 2,
+        "posGenNet": 2,
+        "posCatNet": 1
+      },
+      "Media": {
+        "time": 4077198,
+        "net": 4077198,
+        "average": 0.19326,
+        "averageNet": 0.19326,
+        "location": "META 21K",
+        "rawTime": 1765701490898,
+        "pos": 1,
+        "posGen": 1,
+        "posCat": 1,
+        "posNet": 2,
+        "posGenNet": 2,
+        "posCatNet": 1
+      }
+    },
+    "leader": {
+      "time": 4077198,
+      "split": "Media",
+      "weight": 4.9999995922801,
+      "average": 0.19326,
+      "rawTime": 1765701490898,
+      "location": "META 21K",
+      "pos": 1,
+      "posGen": 1,
+      "posCat": 1
+    },
+    "predictive": {
+      "Salida": 0.175,
+      "10K": 0.19126,
+      "15K": 0.19537
+    },
+    "backups": {
+      "Salida": {
+        "time": 0,
+        "physicalLocation": "Backup Meta",
+        "offset": 2000
+      },
+      "15K": {
+        "time": 2883689,
+        "physicalLocation": "Backup 15k TS",
+        "offset": 8000
+      },
+      "Media": {
+        "time": 4075810,
+        "physicalLocation": "Backup Meta MM",
+        "offset": 2000
+      }
+    },
+    "mst": [],
+    "custom-rankings": [],
+    "commentator": {
+      "10K_name": "10K",
+      "10K_time": 1912598,
+      "10K_pos": 2,
+      "10K_posGen": 2,
+      "10K_posCat": 1,
+      "15K_name": "15K",
+      "15K_time": 2889441,
+      "15K_pos": 2,
+      "15K_posGen": 2,
+      "15K_posCat": 1,
+      "META 21K_name": "Media",
+      "META 21K_time": 4077198,
+      "META 21K_pos": 1,
+      "META 21K_posGen": 1,
+      "META 21K_posCat": 1
+    },
+    "penalties": [],
+    "waveTime": 1765697413700,
+    "teamsIds": []
+  }
+}

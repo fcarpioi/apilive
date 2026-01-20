@@ -1,0 +1,42 @@
+import admin from "firebase-admin";
+
+const participantId = process.argv[2];
+if (!participantId) {
+  console.error("Usage: node scripts/find_participant.mjs <participantId>");
+  process.exit(1);
+}
+
+admin.initializeApp();
+const db = admin.firestore();
+
+const seen = new Set();
+
+async function logSnapshot(label, snapshot) {
+  if (snapshot.empty) {
+    console.log(`${label}: no matches`);
+    return;
+  }
+  console.log(`${label}: ${snapshot.size} match(es)`);
+  snapshot.forEach((doc) => {
+    if (seen.has(doc.ref.path)) return;
+    seen.add(doc.ref.path);
+    const data = doc.data();
+    console.log(`- ${doc.ref.path}`);
+    console.log(`  externalId: ${data.externalId ?? null}`);
+    console.log(`  name: ${data.fullName ?? data.name ?? null}`);
+    console.log(`  dorsal: ${data.dorsal ?? null}`);
+  });
+}
+
+const byDocId = await db
+  .collectionGroup("participants")
+  .where(admin.firestore.FieldPath.documentId(), "==", participantId)
+  .get();
+
+const byExternalId = await db
+  .collectionGroup("participants")
+  .where("externalId", "==", participantId)
+  .get();
+
+await logSnapshot("By document ID", byDocId);
+await logSnapshot("By externalId", byExternalId);
