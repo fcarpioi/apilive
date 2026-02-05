@@ -226,7 +226,7 @@ router.post("/participant-checkpoint", async (req, res) => {
     const { runnerId, raceId, eventId, apiKey, data } = req.body;
     
     // 1. Validar API key
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0";
+    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
     if (!apiKey || apiKey !== expectedApiKey) {
       console.error("❌ API key inválida");
       return res.status(401).json({ error: "API key inválida" });

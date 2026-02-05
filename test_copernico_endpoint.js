@@ -18,7 +18,7 @@ const testData = {
   "extraData": {
     "point": "10K" // Punto de control donde se detectó
   },
-  "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0"
+  "apiKey": "MISSING_WEBHOOK_API_KEY"
 };
 
 const testDataModification = {
@@ -28,7 +28,7 @@ const testDataModification = {
   "extraData": {
     "point": "FINISH"
   },
-  "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0"
+  "apiKey": "MISSING_WEBHOOK_API_KEY"
 };
 
 const invalidTestData = {
@@ -89,7 +89,7 @@ async function runTests() {
   // Test 5: Parámetros faltantes
   const missingParamsData = {
     "competitionId": "race-001",
-    "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0"
+    "apiKey": "MISSING_WEBHOOK_API_KEY"
     // Faltan type y participantId
   };
   await testEndpoint(missingParamsData, "Test 5: Parámetros faltantes");

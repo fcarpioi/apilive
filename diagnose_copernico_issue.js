@@ -9,7 +9,7 @@ import fetch from 'node-fetch';
 const COPERNICO_CONFIG = {
   api: "https://api.copernico.cloud/api/races",
   socket: "https://socket-ss.sportmaniacs.com:4319/",
-  token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
+  token: "MISSING_COPERNICO_API_KEY"
 };
 
 const RACE_ID = 'generali-maraton-malaga-2025';

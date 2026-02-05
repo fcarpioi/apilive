@@ -12,7 +12,7 @@ class CopernicoSubscriptionManager {
   constructor() {
     this.activeSubscriptions = new Map(); // raceId -> Set de participantIds
     this.webhookUrl = 'https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway/api/webhook/runner-checkpoint';
-    this.webhookApiKey = process.env.WEBHOOK_API_KEY || '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+    this.webhookApiKey = process.env.WEBHOOK_API_KEY || 'MISSING_WEBHOOK_API_KEY';
   }
 
   /**

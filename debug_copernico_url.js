@@ -6,7 +6,7 @@
 
 const PRODUCTION_CONFIG = {
   baseUrl: 'https://api.copernico.cloud/api/races',
-  apiKey: 'CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF',
+  apiKey: 'MISSING_COPERNICO_API_KEY',
   raceId: 'generali-maraton-malaga-2025',
   participantId: '64D271D9'
 };

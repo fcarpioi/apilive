@@ -6,7 +6,7 @@
 
 const headers = {
   'Content-Type': 'application/json',
-  'x-api-key': 'CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF',
+  'x-api-key': 'MISSING_COPERNICO_API_KEY',
   'User-Agent': 'LiveCopernico-API/1.0',
   'Accept': 'application/json'
 };
@@ -169,7 +169,7 @@ async function testParticipantData(raceId, participantId) {
 
 async function testCompleteEndpoint(participantId) {
   const testPayload = {
-    "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
+    "apiKey": "MISSING_WEBHOOK_API_KEY",
     "competitionId": newRaceData.raceId,
     "copernicoId": newRaceData.copernicoId,
     "type": "detection",

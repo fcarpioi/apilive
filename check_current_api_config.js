@@ -12,25 +12,25 @@ const copernicoEnvironments = {
     socket: "http://socketadmin-copernico.local.sportmaniacs.com/",
     api: "http://copernico.local.sportmaniacs.com/api/races",
     admin: "http://copernico.local.sportmaniacs.com/api/races",
-    token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
+    token: "MISSING_COPERNICO_API_KEY"
   },
   "pro": {
     socket: "https://socket-ss.sportmaniacs.com:4319/",
     api: "https://api.copernico.cloud/api/races",
     admin: "https://api.copernico.cloud/api/races",
-    token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
+    token: "MISSING_COPERNICO_API_KEY"
   },
   "alpha": {
     socket: "https://socket-ss.sportmaniacs.com:4319/",
     api: "https://psexjdg973.execute-api.eu-west-1.amazonaws.com/alpha/api/races",
     admin: "https://psexjdg973.execute-api.eu-west-1.amazonaws.com/alpha/api/races",
-    token: "mKINguaR0D6Qm3T5KPTUiaETudOt1teR5I8T4JjN"
+    token: "MISSING_COPERNICO_API_KEY"
   },
   "demo": {
     socket: "https://socket-ss.sportmaniacs.com:4319/",
     api: "https://demo-api.copernico.cloud/api/races",
     admin: "https://demo-api.copernico.cloud/api/races",
-    token: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF"
+    token: "MISSING_COPERNICO_API_KEY"
   }
 };
 

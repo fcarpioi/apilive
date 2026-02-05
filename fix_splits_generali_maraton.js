@@ -94,7 +94,7 @@ async function fixSplitsAndTimingPoints() {
     
     console.log("\n🧪 DATOS ACTUALIZADOS PARA PRUEBAS:");
     console.log(`{
-  "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
+  "apiKey": "MISSING_WEBHOOK_API_KEY",
   "competitionId": "${raceData.raceId}",
   "copernicoId": "generali-maraton-malaga-2025",
   "type": "detection",

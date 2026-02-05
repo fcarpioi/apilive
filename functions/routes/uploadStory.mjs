@@ -12,11 +12,15 @@ const router = express.Router();
 
 // 📌 Configuración de Backblaze
 const backblazeConfig = {
-    key_id: "003f9b4aeb02d5e0000000002",
-    key: "K0031zsdF1J6Gj2zPOlDaRzei7y9XwI",
-    bucket_id: "4f69eb541a9e1b30925d051e",
-    bucket_name: "LiveCopernico"
+    key_id: process.env.B2_APPLICATION_KEY_ID,
+    key: process.env.B2_APPLICATION_KEY,
+    bucket_id: process.env.B2_BUCKET_ID,
+    bucket_name: process.env.B2_BUCKET_NAME
 };
+
+if (!backblazeConfig.key_id || !backblazeConfig.key || !backblazeConfig.bucket_id || !backblazeConfig.bucket_name) {
+    console.warn("⚠️ Backblaze B2 config missing: set B2_APPLICATION_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET_ID, B2_BUCKET_NAME.");
+}
 
 // 📌 Inicializa Backblaze
 const b2 = new B2({

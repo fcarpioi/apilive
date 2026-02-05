@@ -7,8 +7,8 @@
 import fetch from 'node-fetch';
 
 const TOKENS = {
-  current: "CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF",
-  alpha: "mKINguaR0D6Qm3T5KPTUiaETudOt1teR5I8T4JjN"
+  current: "MISSING_COPERNICO_API_KEY",
+  alpha: "MISSING_COPERNICO_API_KEY"
 };
 
 const COPERNICO_API = "https://api.copernico.cloud/api/races";

@@ -8,10 +8,14 @@
 // Importar módulos necesarios
 import fetch from 'node-fetch';
 
-const RACE_ID = 'generali-maraton-malaga-2025';
-const COMPETITION_ID = '69200553-464c-4bfd-9b35-4ca6ac1f17f5';
-const API_ENDPOINT = 'https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/checkpoint-participant';
-const API_KEY = '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+const RACE_ID = process.env.COPERNICO_RACE_ID || 'generali-maraton-malaga-2025';
+const COMPETITION_ID = process.env.COPERNICO_COMPETITION_ID || '69200553-464c-4bfd-9b35-4ca6ac1f17f5';
+const API_ENDPOINT = process.env.COPERNICO_WEBHOOK_ENDPOINT || 'https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/checkpoint-participant';
+const API_KEY = process.env.WEBHOOK_API_KEY;
+
+if (!API_KEY) {
+  console.warn("⚠️ Missing WEBHOOK_API_KEY env var.");
+}
 
 // Mapeo de splits de Copernico a nuestros checkpoints
 const CHECKPOINT_MAPPING = {

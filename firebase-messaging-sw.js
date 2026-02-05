@@ -5,14 +5,14 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-// 🔧 Configuración Firebase para live-copernico
-const firebaseConfig = {
-  apiKey: "AIzaSyAeh1ZcY0i05YH9nQQgYmbABcNAmwWx0eA",
-  authDomain: "live-copernico.firebaseapp.com",
-  projectId: "live-copernico",
-  storageBucket: "live-copernico.firebasestorage.app",
-  messagingSenderId: "62103923048",
-  appId: "1:62103923048:android:3416344fab2afc15720edd"
+// 🔧 Configuración Firebase (inyectar en build/runtime)
+const firebaseConfig = self.__FIREBASE_CONFIG__ || {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
 };
 
 // 🚀 Inicializar Firebase en Service Worker

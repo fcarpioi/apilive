@@ -12,7 +12,7 @@
  */
 
 const BASE_URL = 'https://us-central1-live-copernico.cloudfunctions.net/liveApiGateway/api';
-const API_KEY = '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+const API_KEY = 'MISSING_WEBHOOK_API_KEY';
 
 // Obtener argumentos de línea de comandos
 const raceId = process.argv[2] || 'test-race-' + Date.now();

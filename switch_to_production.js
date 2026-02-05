@@ -45,7 +45,7 @@ async function switchToProduction() {
     
     console.log("\n🚀 CONFIGURACIÓN DE PRODUCCIÓN:");
     console.log("   URL: https://api.copernico.cloud/api/races");
-    console.log("   Token: CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF");
+    console.log("   Token: MISSING_COPERNICO_API_KEY");
     console.log("   Socket: https://socket-ss.sportmaniacs.com:4319/");
     
     console.log("\n⚠️ IMPORTANTE:");
@@ -58,7 +58,7 @@ async function switchToProduction() {
     console.log("   2. Reiniciar el servidor");
     console.log("   3. Verificar que apunte a producción con:");
     console.log("   curl https://api.copernico.cloud/api/races \\");
-    console.log("     -H 'x-api-key: CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF'");
+    console.log("     -H 'x-api-key: MISSING_COPERNICO_API_KEY'");
     
     console.log("\n✅ INSTRUCCIONES COMPLETADAS");
     

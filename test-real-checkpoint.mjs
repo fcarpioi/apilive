@@ -11,7 +11,7 @@
 import fetch from 'node-fetch';
 
 const BASE_URL = "https://liveapigateway-3rt3xwiooa-uc.a.run.app";
-const API_KEY = "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0";
+const API_KEY = "MISSING_WEBHOOK_API_KEY";
 
 async function testRealCheckpoint() {
   try {

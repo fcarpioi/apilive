@@ -55,6 +55,7 @@ function normalizeUTF8Object(obj) {
 // import { onUserFollowsParticipant } from "./triggers/followingTrigger.mjs"; // COMENTADO TEMPORALMENTE
 import { onStoryCreated } from "./triggers/storyNotificationTrigger.mjs";
 import { onEventWritten, onLegacyEventWritten } from "./triggers/eventNormalizationTrigger.mjs";
+import { cleanupEventSubcollectionsDaily } from "./triggers/cleanupEventSubcollections.mjs";
 
 // Crear la aplicación Express principal
 const app = express();
@@ -102,3 +103,4 @@ export const liveApiGateway = onRequest(app);
 // 🔥 Exportar triggers de Firestore
 // export { onUserFollowsParticipant }; // COMENTADO TEMPORALMENTE
 export { onStoryCreated, onEventWritten, onLegacyEventWritten };
+export { cleanupEventSubcollectionsDaily };

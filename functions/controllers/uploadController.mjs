@@ -1,9 +1,15 @@
 import B2 from 'backblaze-b2';
 
-const b2 = new B2({
-  applicationKeyId: '003f9b4aeb02d5e0000000002', // Key ID correcto
-  applicationKey: 'K0031zsdF1J6Gj2zPOlDaRzei7y9XwI', // Application Key correcto
-});
+const b2Config = {
+  applicationKeyId: process.env.B2_APPLICATION_KEY_ID,
+  applicationKey: process.env.B2_APPLICATION_KEY
+};
+
+if (!b2Config.applicationKeyId || !b2Config.applicationKey) {
+  console.warn("⚠️ Backblaze B2 keys missing: set B2_APPLICATION_KEY_ID and B2_APPLICATION_KEY.");
+}
+
+const b2 = new B2(b2Config);
 
 export const uploadToB2 = async (req, res) => {
   try {
@@ -16,7 +22,10 @@ export const uploadToB2 = async (req, res) => {
     console.log('Autorización con B2 exitosa');
 
     // Obtener URL de subida
-    const bucketId = '4f69eb541a9e1b30925d051e'; // Bucket ID correcto
+    const bucketId = process.env.B2_BUCKET_ID;
+    if (!bucketId) {
+      return res.status(500).json({ error: 'B2_BUCKET_ID not configured' });
+    }
     const { data: uploadUrlData } = await b2.getUploadUrl({ bucketId });
     const { uploadUrl, authorizationToken } = uploadUrlData;
 
@@ -34,7 +43,8 @@ export const uploadToB2 = async (req, res) => {
     });
 
     // URL pública (ajustar según tu bucket y región)
-    const fileUrl = `https://f000.backblazeb2.com/file/<NOMBRE_DEL_BUCKET>/${fileName}`; // Ajusta esto
+    const baseUrl = process.env.B2_PUBLIC_BASE_URL || "";
+    const fileUrl = baseUrl ? `${baseUrl}/${fileName}` : "";
 
     res.status(200).json({
       message: 'Archivo subido con éxito',

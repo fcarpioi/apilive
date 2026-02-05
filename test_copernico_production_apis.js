@@ -6,7 +6,7 @@
 
 const PRODUCTION_CONFIG = {
   baseUrl: 'https://api.copernico.cloud/api/races',
-  apiKey: 'CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF',
+  apiKey: 'MISSING_COPERNICO_API_KEY',
   raceId: 'generali-maraton-malaga-2025'
 };
 
@@ -114,7 +114,7 @@ async function testCopernicoProductionAPIs() {
     console.log(`   GET ${PRODUCTION_CONFIG.baseUrl}/{raceId}/athlete/{participantId}`);
     console.log("");
     console.log("4. 🔑 Headers requeridos:");
-    console.log("   x-api-key: CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF");
+    console.log("   x-api-key: MISSING_COPERNICO_API_KEY");
     console.log("   Content-Type: application/json");
     
   } catch (error) {

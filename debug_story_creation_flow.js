@@ -13,7 +13,7 @@ async function debugStoryCreationFlow() {
   console.log("=" * 60);
   
   const payload = {
-    "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
+    "apiKey": "MISSING_WEBHOOK_API_KEY",
     "competitionId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
     "copernicoId": "generali-maraton-malaga-2025",
     "type": "detection",

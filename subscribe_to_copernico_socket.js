@@ -9,7 +9,7 @@ import fetch from 'node-fetch';
 const RACE_ID = 'generali-maraton-malaga-2025';
 const COMPETITION_ID = '69200553-464c-4bfd-9b35-4ca6ac1f17f5';
 const COPERNICO_ENDPOINT = 'https://liveapigateway-3rt3xwiooa-uc.a.run.app/api/copernico';
-const API_KEY = '9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0';
+const API_KEY = 'MISSING_WEBHOOK_API_KEY';
 
 // Suscribirse a TODOS los participantes de la carrera (no especificar participantIds = todos)
 

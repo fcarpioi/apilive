@@ -6,7 +6,7 @@
 
 const PRODUCTION_CONFIG = {
   baseUrl: 'https://api.copernico.cloud/api/races',
-  apiKey: 'CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF',
+  apiKey: 'MISSING_COPERNICO_API_KEY',
   raceId: 'generali-maraton-malaga-2025',
   participantId: '64D271D9'
 };
@@ -120,7 +120,7 @@ async function getParticipantData() {
         // Datos para testing del endpoint
         console.log("\n🧪 DATOS PARA PROBAR TU ENDPOINT:");
         console.log(`{
-  "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
+  "apiKey": "MISSING_WEBHOOK_API_KEY",
   "competitionId": "69200553-464c-4bfd-9b35-4ca6ac1f17f5",
   "copernicoId": "generali-maraton-malaga-2025",
   "type": "detection",

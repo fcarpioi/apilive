@@ -12,11 +12,11 @@ Esta documentación describe la nueva integración del endpoint `/api/checkpoint
 
 ```bash
 # Configuración Copernico - Desarrollo
-COPERNICO_DEV_BASE_URL=https://demo-api.copernico.cloud
+COPERNICO_DEV_BASE_URL=https://{copernico-dev-base-url}
 COPERNICO_DEV_API_KEY=your-dev-api-key
 
 # Configuración Copernico - Producción  
-COPERNICO_PROD_BASE_URL=https://vendor-api.copernico.cloud
+COPERNICO_PROD_BASE_URL=https://{copernico-prod-base-url}
 COPERNICO_PROD_API_KEY=your-prod-api-key
 
 # Configuración de comportamiento
@@ -53,7 +53,7 @@ POST /api/checkpoint-participant
   "extraData": {
     "point": "10K"
   },
-  "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0"
+  "apiKey": "{WEBHOOK_API_KEY}"
 }
 ```
 
@@ -77,7 +77,7 @@ POST /api/checkpoint-participant
 - ✅ Verificar API key
 
 ### **2. Obtención de Datos de Copernico**
-- 🌐 Llamada a: `/api/races/{competitionId}/athlete/{participantId}`
+- 🌐 Llamada a: `/api/races/{competitionId}/athlete/{participantId}` (base URL configurada por entorno)
 - 🔄 Reintentos automáticos en caso de fallo
 - 💾 Cache de respuestas (30 minutos por defecto)
 
@@ -161,12 +161,12 @@ node test_copernico_endpoint.js
 ## 🔧 **Configuración de Entornos**
 
 ### **Desarrollo:**
-- Base URL: `https://demo-api.copernico.cloud`
+- Base URL: `https://{copernico-dev-base-url}`
 - Cache habilitado para desarrollo rápido
 - Logs detallados habilitados
 
 ### **Producción:**
-- Base URL: `https://vendor-api.copernico.cloud`
+- Base URL: `https://{copernico-prod-base-url}`
 - Cache optimizado para performance
 - Logs mínimos para seguridad
 

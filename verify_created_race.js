@@ -122,7 +122,7 @@ async function verifyAndCompleteRace() {
     
     console.log("\n🧪 DATOS PARA PRUEBAS CON COPERNICO:");
     console.log(`{
-  "apiKey": "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
+  "apiKey": "MISSING_WEBHOOK_API_KEY",
   "competitionId": "${newRaceId}",
   "copernicoId": "generali-maraton-malaga-2025",
   "type": "detection",

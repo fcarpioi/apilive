@@ -88,7 +88,7 @@ async function testNewEndpoint() {
     runnerId: "test123",
     raceId: "test_race",
     eventId: "test_event",
-    apiKey: "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0",
+    apiKey: "MISSING_WEBHOOK_API_KEY",
     data: {
       id: "test123",
       name: "Juan",
@@ -241,7 +241,7 @@ async function testOldWebhook() {
     raceId: "test_race",
     eventId: "test_event",
     streamId: "ca7a9dec-b50b-510c-bf86-058664b46422",
-    apiKey: "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0"
+    apiKey: "MISSING_WEBHOOK_API_KEY"
   };
 
   try {
@@ -321,7 +321,7 @@ async function testVideoClips() {
       raceId: "test_race_video",
       eventId: "test_event_video",
       streamId: checkpoint.streamId, // UUID único por checkpoint
-      apiKey: "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0"
+      apiKey: "MISSING_WEBHOOK_API_KEY"
     };
 
     try {
@@ -373,7 +373,7 @@ async function testDeduplication() {
     raceId: "test_race_dedup",
     eventId: "test_event_dedup",
     streamId: "ca7a9dec-b50b-510c-bf86-058664b46422",
-    apiKey: "9a6cf30847d9d4c1a9612270bc7dfa500cf557267d7cbbfe656034122fbe2ea0"
+    apiKey: "MISSING_WEBHOOK_API_KEY"
   };
 
   try {

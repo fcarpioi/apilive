@@ -6,7 +6,7 @@
 
 const headers = {
   'Content-Type': 'application/json',
-  'x-api-key': 'CBYVVSjdeA9WmQWzUvwD61o9CTHQL6yP2aXyq1TF',
+  'x-api-key': 'MISSING_COPERNICO_API_KEY',
   'User-Agent': 'LiveCopernico-API/1.0',
   'Accept': 'application/json'
 };
