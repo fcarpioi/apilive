@@ -160,74 +160,30 @@ router.post("/sendEmailVerificationCode", async (req, res) => {
  */
 router.get("/config-v4", async (req, res) => {
   try {
-    const { raceId, bundleId, raceName } = req.query;
+    const { raceId, appId } = req.query;
 
-    if (!raceId && !bundleId && !raceName) {
+    if (!raceId || !appId) {
       return res.status(400).json({
-        error: "Se requiere al menos uno de los siguientes parámetros: raceId, bundleId, raceName",
-        required: ["raceId", "bundleId", "raceName"]
+        error: "raceId y appId son obligatorios",
+        required: ["raceId", "appId"]
       });
     }
 
-    console.log(`⚙️ [getConfigV4] Buscando app - raceId: ${raceId}, bundleId: ${bundleId}, raceName: ${raceName}`);
+    console.log(`⚙️ [getConfigV4] Buscando app - raceId: ${raceId}, appId: ${appId}`);
 
     const db = admin.firestore();
-    let targetApp = null;
-    let targetRaceId = null;
+    const appDoc = await db.collection('races').doc(raceId)
+      .collection('apps').doc(appId).get();
 
-    if (raceId) {
-      const appsSnapshot = await db.collection('races').doc(raceId)
-        .collection('apps').get();
-
-      if (!appsSnapshot.empty) {
-        targetApp = { id: appsSnapshot.docs[0].id, ...appsSnapshot.docs[0].data() };
-        targetRaceId = raceId;
-      }
-    } else {
-      const knownRaceId = "26dc137a-34e2-44a0-918b-a5af620cf281";
-      const knownAppsSnapshot = await db.collection('races').doc(knownRaceId)
-        .collection('apps').get();
-
-      for (const appDoc of knownAppsSnapshot.docs) {
-        const appData = appDoc.data();
-        if ((bundleId && appData.bundleId === bundleId) ||
-            (raceName && appData.raceName === raceName)) {
-          targetApp = { id: appDoc.id, ...appData };
-          targetRaceId = knownRaceId;
-          break;
-        }
-      }
-
-      if (!targetApp) {
-        const racesSnapshot = await db.collection('races').get();
-
-        for (const raceDoc of racesSnapshot.docs) {
-          const currentRaceId = raceDoc.id;
-          if (currentRaceId === knownRaceId) continue;
-
-          const appsSnapshot = await db.collection('races').doc(currentRaceId)
-            .collection('apps').get();
-
-          for (const appDoc of appsSnapshot.docs) {
-            const appData = appDoc.data();
-            if ((bundleId && appData.bundleId === bundleId) ||
-                (raceName && appData.raceName === raceName)) {
-              targetApp = { id: appDoc.id, ...appData };
-              targetRaceId = currentRaceId;
-              break;
-            }
-          }
-          if (targetApp) break;
-        }
-      }
-    }
-
-    if (!targetApp || !targetRaceId) {
+    if (!appDoc.exists) {
       return res.status(404).json({
         error: "App no encontrada",
-        filters: { raceId, bundleId, raceName }
+        filters: { raceId, appId }
       });
     }
+
+    const targetApp = { id: appDoc.id, ...appDoc.data() };
+    const targetRaceId = raceId;
 
     const raceDoc = await db.collection('races').doc(targetRaceId).get();
     const raceData = raceDoc.exists ? raceDoc.data() : {};
@@ -769,6 +725,13 @@ router.post("/follow-v3", async (req, res) => {
       profileId: followerId,
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
+    try {
+      await participantRef.set({
+        followsCount: admin.firestore.FieldValue.increment(1)
+      }, { merge: true });
+    } catch (countError) {
+      console.warn("⚠️ No se pudo actualizar followsCount:", countError.message);
+    }
 
     const response = {
       message: "Seguimiento registrado correctamente.",
@@ -988,6 +951,16 @@ router.post("/unfollow", async (req, res) => {
     // Eliminar el seguimiento de ambas colecciones
     await followingsRef.delete();
     await followersRef.delete();
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(participantRef);
+        const current = snap.exists ? (snap.data().followsCount || 0) : 0;
+        const next = Math.max(0, current - 1);
+        tx.set(participantRef, { followsCount: next }, { merge: true });
+      });
+    } catch (countError) {
+      console.warn("⚠️ No se pudo actualizar followsCount:", countError.message);
+    }
 
     return res.status(200).json({
       message: "Seguimiento eliminado correctamente.",
@@ -1994,6 +1967,7 @@ router.get("/participant-v3", async (req, res) => {
     }
 
     let resolvedParticipantId = participantId;
+    let followsCount = null;
     try {
       let participantDoc = null;
       if (appId) {
@@ -2013,6 +1987,9 @@ router.get("/participant-v3", async (req, res) => {
         const data = participantDoc.data() || {};
         if (data.externalId) {
           resolvedParticipantId = data.externalId;
+        }
+        if (typeof data.followsCount === "number") {
+          followsCount = data.followsCount;
         }
       }
     } catch (mapError) {
@@ -2047,7 +2024,8 @@ router.get("/participant-v3", async (req, res) => {
       id: participantId,
       ...transformed.participant,
       externalId: resolvedParticipantId,
-      copernicoData: copernicoDataPayload
+      copernicoData: copernicoDataPayload,
+      ...(followsCount !== null ? { followsCount } : {})
     };
 
     if (appId) {
@@ -9318,6 +9296,7 @@ router.get("/search/participants-v3", async (req, res) => {
     }
 
     let athletes = Array.isArray(payload.data) ? payload.data : [];
+    const totalFromCopernico = athletes.length;
 
     // Filtrar por eventId si viene en la estructura de Copernico
     athletes = athletes.filter((athlete) => {
@@ -9430,9 +9409,21 @@ router.get("/search/participants-v3", async (req, res) => {
       };
     });
 
+    const scoreParticipant = (p) => {
+      if (p.following) return 2;
+      if (p.featured) return 1;
+      return 0;
+    };
+
+    const participantsSorted = participantsWithFollowing
+      .map((p, idx) => ({ p, idx, score: scoreParticipant(p) }))
+      .sort((a, b) => (b.score - a.score) || (a.idx - b.idx))
+      .map(({ p }) => p);
+
     return res.status(200).json({
-      participants: participantsWithFollowing,
-      total: participantsWithFollowing.length,
+      participants: participantsSorted,
+      total: participantsSorted.length,
+      totalCopernico: totalFromCopernico,
       query: query || "",
       searchMethod: "copernico_api",
       raceId,

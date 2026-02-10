@@ -1600,6 +1600,32 @@
           }
         },
         {
+          "name": "Get User Following Count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/following/count?userId={{userId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "following",
+                "count"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                }
+              ]
+            },
+            "description": "Contar participantes seguidos por un usuario"
+          }
+        },
+        {
           "name": "Seguir Participante",
           "request": {
             "method": "POST",
@@ -1623,7 +1649,7 @@
                 "follow"
               ]
             },
-            "description": "Seguir a un participante específico. MIGRADO para nueva estructura races/apps/events. Requiere appId como parámetro obligatorio."
+            "description": "Seguir a un participante específico. MIGRADO para nueva estructura races/apps/events. Requiere appId como parámetro obligatorio.\n\nActualiza followsCount en el participante: +1 al seguir, -1 al dejar de seguir (mínimo 0)."
           }
         },
         {
@@ -1650,7 +1676,7 @@
                 "unfollow"
               ]
             },
-            "description": "Dejar de seguir a un participante específico. MIGRADO para nueva estructura races/apps/events. Requiere appId como parámetro obligatorio."
+            "description": "Dejar de seguir a un participante específico. MIGRADO para nueva estructura races/apps/events. Requiere appId como parámetro obligatorio.\n\nActualiza followsCount en el participante: +1 al seguir, -1 al dejar de seguir (mínimo 0)."
           }
         },
         {
@@ -2612,11 +2638,26 @@
                 "story"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" },
-                { "key": "appId", "value": "{{appId}}" },
-                { "key": "eventId", "value": "{{eventId}}" },
-                { "key": "participantId", "value": "{{participantId}}" },
-                { "key": "storyId", "value": "{{storyId}}" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                },
+                {
+                  "key": "participantId",
+                  "value": "{{participantId}}"
+                },
+                {
+                  "key": "storyId",
+                  "value": "{{storyId}}"
+                }
               ]
             },
             "description": "Elimina una historia específica y sus subcolecciones. Requiere participantId y storyId."
@@ -2638,9 +2679,18 @@
                 "story"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" },
-                { "key": "appId", "value": "{{appId}}" },
-                { "key": "eventId", "value": "{{eventId}}" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                }
               ]
             },
             "description": "Elimina todas las historias del evento (iterando participantes). No enviar participantId para modo event-wide."
@@ -2666,15 +2716,46 @@
                 "race-events-v3"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" },
-                { "key": "appId", "value": "{{appId}}" },
-                { "key": "eventId", "value": "{{eventId}}" },
-                { "key": "type", "value": "", "disabled": true },
-                { "key": "participantId", "value": "", "disabled": true },
-                { "key": "audience", "value": "all", "disabled": true },
-                { "key": "userId", "value": "{{userId}}", "disabled": true },
-                { "key": "limit", "value": "10" },
-                { "key": "offset", "value": "0" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                },
+                {
+                  "key": "type",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "participantId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "audience",
+                  "value": "all",
+                  "disabled": true
+                },
+                {
+                  "key": "userId",
+                  "value": "{{userId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
               ]
             },
             "description": "Race events v3. Params: raceId/appId/eventId requeridos. Opcionales: type, participantId, audience=all|featured, userId, limit, offset."
@@ -2695,13 +2776,34 @@
                 "race-events-v3"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" },
-                { "key": "appId", "value": "{{appId}}" },
-                { "key": "eventId", "value": "{{eventId}}" },
-                { "key": "audience", "value": "featured" },
-                { "key": "userId", "value": "{{userId}}" },
-                { "key": "limit", "value": "10" },
-                { "key": "offset", "value": "0" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                },
+                {
+                  "key": "audience",
+                  "value": "featured"
+                },
+                {
+                  "key": "userId",
+                  "value": "{{userId}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
               ]
             },
             "description": "Race events v3 filtrado. audience=featured y userId opcional para incluir seguidos."
@@ -2722,10 +2824,22 @@
                 "participant-v3"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" },
-                { "key": "eventId", "value": "{{eventId}}" },
-                { "key": "participantId", "value": "{{participantId}}" },
-                { "key": "appId", "value": "{{appId}}" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                },
+                {
+                  "key": "participantId",
+                  "value": "{{participantId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                }
               ]
             },
             "description": "Participante v3 desde Copernico. Params: raceId, eventId, participantId requeridos; appId opcional."
@@ -2747,15 +2861,45 @@
                 "leaderboard-v3"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" },
-                { "key": "appId", "value": "{{appId}}" },
-                { "key": "eventId", "value": "{{eventId}}" },
-                { "key": "type", "value": "overall" },
-                { "key": "gender", "value": "male", "disabled": true },
-                { "key": "category", "value": "M45", "disabled": true },
-                { "key": "removeEmpty", "value": "1", "disabled": true },
-                { "key": "limit", "value": "20" },
-                { "key": "offset", "value": "0" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                },
+                {
+                  "key": "type",
+                  "value": "overall"
+                },
+                {
+                  "key": "gender",
+                  "value": "male",
+                  "disabled": true
+                },
+                {
+                  "key": "category",
+                  "value": "M45",
+                  "disabled": true
+                },
+                {
+                  "key": "removeEmpty",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
               ]
             },
             "description": "Leaderboard v3 desde Copernico. type=overall|gender|category. gender/category opcionales. removeEmpty solo aplica cuando type=gender o type=category sin filtro."
@@ -2777,14 +2921,29 @@
                 "participants-v3"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" },
-                { "key": "appId", "value": "{{appId}}" },
-                { "key": "eventId", "value": "{{eventId}}" },
-                { "key": "query", "value": "Mateo" },
-                { "key": "limit", "value": "20" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}"
+                },
+                {
+                  "key": "query",
+                  "value": "Mateo"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
               ]
             },
-            "description": "Busqueda v3 desde Copernico /athletes/list."
+            "description": "Busqueda v3 desde Copernico /athletes/list.\n\nRespuesta incluye: total (filtrado) y totalCopernico (total crudo de Copernico).\n\nOrden: primero following=true (requiere userId), luego featured=true, luego el resto. Si no envías userId, following siempre es false."
           }
         },
         {
@@ -2802,7 +2961,10 @@
                 "config-v3"
               ],
               "query": [
-                { "key": "raceId", "value": "{{raceId}}" }
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                }
               ]
             },
             "description": "Config v3 con publishedRankings (overall/category/gender/attr_*) y maps por evento."
@@ -2813,7 +2975,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -2837,8 +3002,14 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "apiKey", "value": "{{webhookApiKey}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apiKey",
+                "value": "{{webhookApiKey}}"
+              }
             ],
             "body": {
               "mode": "raw",
