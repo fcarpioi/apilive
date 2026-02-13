@@ -2482,7 +2482,9 @@ router.get("/apps/leaderboard", async (req, res) => {
       removeEmpty,
       limit = 50,
       offset = 0,
-      page
+      page,
+      userId,
+      followingOnly
     } = req.query;
 
     if (!raceId || !appId || !eventId) {
@@ -2647,6 +2649,20 @@ router.get("/apps/leaderboard", async (req, res) => {
  *   get:
  *     summary: (BETA) Leaderboard desde Copernico
  *     description: Consulta leaders directamente en Copernico segun el entorno.
+ *     parameters:
+ *       - in: query
+ *         name: userId
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: ID del usuario para filtrar solo participantes seguidos.
+ *       - in: query
+ *         name: followingOnly
+ *         required: false
+ *         schema:
+ *           type: string
+ *           example: "1"
+ *         description: Si es "1" y se provee userId, retorna solo participantes seguidos con posición calculada por participante.
  */
 router.get("/apps/leaderboard-v3", async (req, res) => {
   try {
@@ -2661,7 +2677,9 @@ router.get("/apps/leaderboard-v3", async (req, res) => {
       removeEmpty,
       limit = 50,
       offset = 0,
-      page
+      page,
+      userId,
+      followingOnly
     } = req.query;
 
     if (!raceId || !appId || !eventId) {
@@ -2847,6 +2865,147 @@ router.get("/apps/leaderboard-v3", async (req, res) => {
 
       return groups;
     };
+
+    const resolveExternalId = async (participantId) => {
+      try {
+        const participantRef = db.collection("races").doc(raceId)
+          .collection("apps").doc(appId)
+          .collection("events").doc(eventId)
+          .collection("participants").doc(participantId);
+        const participantDoc = await participantRef.get();
+        if (participantDoc.exists) {
+          const data = participantDoc.data() || {};
+          return data.externalId || participantId;
+        }
+      } catch (error) {
+        console.warn("No se pudo resolver externalId del participante:", error.message);
+      }
+      return participantId;
+    };
+
+    const shouldUseFollowingsOnly = Boolean(userId) && String(followingOnly || "").toLowerCase() === "1";
+
+    if (shouldUseFollowingsOnly) {
+      const followingsSnapshot = await db.collection("users").doc(userId)
+        .collection("followings")
+        .where("profileType", "==", "participant")
+        .where("raceId", "==", raceId)
+        .where("appId", "==", appId)
+        .where("eventId", "==", eventId)
+        .get();
+
+      if (followingsSnapshot.empty) {
+        return res.status(200).json({
+          raceId,
+          appId,
+          eventId,
+          type: normalizedType,
+          gender: normalizedType === "gender" ? (gender || null) : null,
+          category: normalizedType === "category" ? (category || null) : null,
+          split: split || null,
+          limit: limitNum,
+          page: pageValue,
+          offset: offsetNum,
+          groupCount: 1,
+          totalParticipants: 0,
+          groups: [{
+            group: leaderGroup || "all",
+            totalCandidates: 0,
+            returned: 0,
+            hasMore: false,
+            nextOffset: null,
+            leaders: []
+          }]
+        });
+      }
+
+      const followedIds = followingsSnapshot.docs.map(doc => {
+        const data = doc.data() || {};
+        return data.profileId || doc.id;
+      });
+
+      const leaders = [];
+      for (const participantId of followedIds) {
+        const resolvedExternalId = await resolveExternalId(participantId);
+        try {
+          const copernicoData = await copernicoService.getParticipantData(raceSlug, resolvedExternalId, copernicoEnv);
+          const transformed = copernicoService.transformCopernicoData(copernicoData);
+          const selectedRanking = pickParticipantRanking(transformed, split);
+          if (!selectedRanking || !selectedRanking.data) continue;
+
+          const participantGenderRaw = transformed.participant?.gender || copernicoData?.gender || "";
+          const participantGender = normalizeGender(participantGenderRaw) || null;
+          const participantCategory = (transformed.participant?.category || copernicoData?.events?.[0]?.category || "").toString() || null;
+
+          if (normalizedType === "gender" && gender && participantGender !== normalizeGender(gender)) {
+            continue;
+          }
+          if (normalizedType === "category" && category && participantCategory?.toLowerCase() !== category.toString().toLowerCase()) {
+            continue;
+          }
+
+          const position = getPositionByType(selectedRanking.data, normalizedType);
+          if (position === null || position === undefined) continue;
+
+          const normalizedPositions = normalizePositionsFromRanking(selectedRanking.data);
+          const timeValue = selectedRanking.data.net ?? selectedRanking.data.time ?? null;
+
+          leaders.push({
+            participantId,
+            externalId: resolvedExternalId,
+            fullName: transformed.participant?.fullName || [copernicoData?.name, copernicoData?.surname].filter(Boolean).join(" ").trim() || null,
+            dorsal: transformed.participant?.dorsal || copernicoData?.events?.[0]?.dorsal || null,
+            gender: participantGender,
+            category: participantCategory,
+            status: transformed.participant?.status || transformed.participant?.realStatus || null,
+            split: selectedRanking.key,
+            splitOrder: selectedRanking.order,
+            distance: selectedRanking.distance || null,
+            time: timeValue,
+            average: selectedRanking.data.averageNet ?? selectedRanking.data.average ?? null,
+            position,
+            positions: normalizedPositions
+          });
+        } catch (followError) {
+          console.warn("No se pudo obtener ranking del seguido:", followError.message);
+        }
+      }
+
+      const sortFn = (a, b) => {
+        if (a.position !== b.position) return (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER);
+        if (a.time !== b.time) return (a.time ?? Number.MAX_SAFE_INTEGER) - (b.time ?? Number.MAX_SAFE_INTEGER);
+        return (a.splitOrder ?? 0) - (b.splitOrder ?? 0);
+      };
+
+      leaders.sort(sortFn);
+      const paginated = leaders.slice(offsetNum, offsetNum + limitNum);
+      const nextOffset = offsetNum + paginated.length;
+      const hasMore = nextOffset < leaders.length;
+      const selectedSplit = split || (paginated[0]?.split ?? null);
+
+      return res.status(200).json({
+        raceId,
+        appId,
+        eventId,
+        type: normalizedType,
+        gender: normalizedType === "gender" ? (gender || null) : null,
+        category: normalizedType === "category" ? (category || null) : null,
+        split: selectedSplit,
+        limit: limitNum,
+        page: pageValue,
+        offset: offsetNum,
+        groupCount: 1,
+        totalParticipants: leaders.length,
+        groups: [{
+          group: leaderGroup || "all",
+          totalCandidates: leaders.length,
+          returned: paginated.length,
+          hasMore,
+          nextOffset: hasMore ? nextOffset : null,
+          leaders: paginated
+        }]
+      });
+    }
 
     if (normalizedType === "gender" && !gender) {
       const optionGroups = await fetchLeadersWithOptions("gender", "gender");
@@ -5182,16 +5341,19 @@ router.post("/checkpoint-participant", async (req, res) => {
     console.log(`🔑 Queue Key: ${queueKey}`);
 
     // 2. VERIFICAR SI YA ESTÁ EN COLA O PROCESÁNDOSE
-    const existingQueueRef = db.collection('processing_queue').doc(queueKey);
-    const existingQueue = await existingQueueRef.get();
+    const existingQueueSnap = await db.collection('processing_queue')
+      .where('queueKey', '==', queueKey)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
 
-    if (existingQueue.exists) {
-      const queueData = existingQueue.data();
+    if (!existingQueueSnap.empty) {
+      const queueData = existingQueueSnap.docs[0].data();
       const timeDiff = Date.now() - queueData.createdAt.toMillis();
 
-      // Si está en cola hace menos de 1 minuto, no duplicar
-      if (timeDiff < 1 * 60 * 1000) { // 1 minuto
-        console.log(`⚠️ Request ya está en cola desde hace ${Math.round(timeDiff/1000)}s`);
+      // Si está en cola, no duplicar
+      if (["queued"].includes(queueData.status)) {
+        console.log(`⚠️ Request ya está en cola (status=${queueData.status})`);
 
         return res.status(200).json({
           success: true,
