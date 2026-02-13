@@ -5,6 +5,8 @@ import admin from "firebase-admin";
 import fetch from "node-fetch";
 import { v4 as uuidv4 } from "uuid";
 import axios from 'axios';
+import crypto from "crypto";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 
 /**
  * Función para normalizar encoding UTF-8 en objetos
@@ -76,6 +78,7 @@ const router = express.Router();
 
 const eventResolutionCache = new Map();
 const EVENT_CACHE_TTL_MS = 5 * 60 * 1000;
+const CHECKPOINT_JOB_CHUNK_SIZE = 100;
 
 router.use(express.json({ limit: "50mb" }));
 router.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -293,11 +296,20 @@ router.get("/config-v4", async (req, res) => {
         return null;
       }
 
+      const finished = (
+        eventData?.finished ??
+        eventData?.copernico_data?.finished ??
+        matchingEvent?.finished ??
+        matchingEvent?.status?.finished ??
+        false
+      );
+
       const publishedRankings = buildPublishedRankings(matchingEvent || {});
       const eventMaps = matchingEvent?.maps ?? matchingEvent?.map ?? [];
       return {
         eventId: eventId,
         ...eventData,
+        finished,
         media: mediaByType,
         publishedRankings,
         maps: eventMaps,
@@ -356,6 +368,24 @@ router.get("/config-v4", async (req, res) => {
  *         schema:
  *           type: string
  *         description: Identificador del usuario.
+ *       - in: query
+ *         name: raceId
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filtra el conteo por carrera.
+ *       - in: query
+ *         name: appId
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filtra el conteo por app.
+ *       - in: query
+ *         name: eventId
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Filtra el conteo por evento.
  *     responses:
  *       '200':
  *         description: Feed obtenido exitosamente.
@@ -619,7 +649,7 @@ router.post("/follow", async (req, res) => {
 // Nueva version con carga de participante basica y creacion de historias en background
 router.post("/follow-v3", async (req, res) => {
   try {
-    let { followerId, followingId, raceId, appId, eventId } = req.body;
+    let { followerId, followingId, raceId, appId, eventId, eventStatus } = req.body;
     if (!followerId || !followingId || !raceId || !appId || !eventId) {
       return res.status(400).json({
         message: "followerId, followingId, raceId, appId y eventId son obligatorios."
@@ -707,9 +737,6 @@ router.post("/follow-v3", async (req, res) => {
       return res.status(400).json({ message: "Ya sigues a este participante." });
     }
 
-    const existingFollowersSnap = await participantRef.collection("followers").limit(1).get();
-    const isFirstFollower = existingFollowersSnap.empty;
-
     const followingData = {
       profileType: "participant",
       profileId: followingId,
@@ -744,14 +771,10 @@ router.post("/follow-v3", async (req, res) => {
 
     res.status(200).json(response);
 
-    if (!isFirstFollower) {
-      return;
-    }
-
     setImmediate(async () => {
       try {
-        const storiesSnap = await participantRef.collection("stories").limit(1).get();
-        if (!storiesSnap.empty) {
+        const normalizedStatus = String(eventStatus || "").trim().toLowerCase();
+        if (normalizedStatus !== "in progress") {
           return;
         }
 
@@ -783,11 +806,64 @@ router.post("/follow-v3", async (req, res) => {
           }
         }
 
+        const normalizeKey = (value) => String(value || '').trim().toLowerCase();
         const times = effectiveTransformed.times || {};
+        const timeEntries = Object.entries(times);
+        if (timeEntries.length === 0) {
+          console.log(`ℹ️ [FOLLOW v3] Sin tiempos disponibles; no se generan historias`);
+          return;
+        }
+
+        const rawLastSplitSeen =
+          effectiveTransformed?.participant?.lastSplitSeen ||
+          effectiveTransformed?.rawData?.events?.[0]?.last_split_seen ||
+          effectiveTransformed?.rawData?.events?.[0]?.lastSplitSeen ||
+          null;
+
+        let lastSplitKey = null;
+        if (rawLastSplitSeen) {
+          const lastNorm = normalizeKey(rawLastSplitSeen);
+          const match = timeEntries.find(([pointName]) => normalizeKey(pointName) === lastNorm);
+          if (match) {
+            lastSplitKey = match[0];
+          }
+        }
+
+        const entriesWithOrder = timeEntries.map(([pointName, timeData], index) => {
+          const orderValue = Number.isFinite(Number(timeData?.order))
+            ? Number(timeData.order)
+            : (Number.isFinite(Number(timeData?.distance)) ? Number(timeData.distance) : index);
+          return { pointName, timeData, orderValue };
+        });
+
+        let maxOrder = null;
+        if (lastSplitKey) {
+          const match = entriesWithOrder.find(entry => entry.pointName === lastSplitKey);
+          if (match) {
+            maxOrder = match.orderValue;
+          }
+        }
+
+        const filteredEntries = entriesWithOrder.filter(entry => {
+          const timeData = entry.timeData || {};
+          const hasTime = Boolean(timeData.raw?.rawTime || timeData.rawTime || timeData.time || timeData.netTime);
+          if (!hasTime) return false;
+          if (maxOrder !== null) {
+            return entry.orderValue <= maxOrder;
+          }
+          return true;
+        });
+
+        if (filteredEntries.length === 0) {
+          console.log(`ℹ️ [FOLLOW v3] No hay splits válidos para generar historias`);
+          return;
+        }
+
         const location = { raceId, appId, eventId };
         let streamsResult = { success: false, streamMap: null };
         let videoSplits = null;
         let splitKeys = [];
+        let hasEnabledSplit = false;
         try {
           const eventDoc = await db.collection('races').doc(raceId)
             .collection('apps').doc(appId)
@@ -795,25 +871,19 @@ router.post("/follow-v3", async (req, res) => {
             .get();
           videoSplits = eventDoc.exists ? eventDoc.data()?.videoSplits : null;
           splitKeys = videoSplits ? Object.keys(videoSplits) : [];
-          if (splitKeys.length > 0) {
-            console.log(`🎬 [FOLLOW v3] videoSplits keys (sample):`, splitKeys.slice(0, 10));
-          }
-          const hasEnabledSplit = splitKeys.some(key => videoSplits?.[key]?.status === true);
+          hasEnabledSplit = splitKeys.some(key => videoSplits?.[key]?.status === true);
           if (hasEnabledSplit) {
             streamsResult = await getCompetitionStreams(raceId);
-            const streamKeys = streamsResult?.streamMap ? Object.keys(streamsResult.streamMap) : [];
-            console.log(`🎬 [FOLLOW v3] Streams fetch: success=${streamsResult?.success} keys=${streamKeys.length}`);
-            if (streamKeys.length > 0) {
-              console.log(`🎬 [FOLLOW v3] StreamMap keys (sample):`, streamKeys.slice(0, 10));
-            }
           } else {
-            console.log(`🎬 [FOLLOW v3] Skip streams: videoSplits sin splits habilitados`);
+            console.log(`🎬 [FOLLOW v3] Sin splits habilitados; no se consultan streams`);
           }
         } catch (streamError) {
           console.error("❌ [FOLLOW v3] Error obteniendo streams:", streamError.message);
         }
 
-        for (const [pointName, timeData] of Object.entries(times)) {
+        for (const entry of filteredEntries) {
+          const pointName = entry.pointName;
+          const timeData = entry.timeData || {};
           const pointNorm = String(pointName || "").toLowerCase();
           const isPreMeta = /pre[-\s]?meta/.test(pointNorm) ||
               (pointNorm.includes("pre") && pointNorm.includes("meta"));
@@ -838,15 +908,10 @@ router.post("/follow-v3", async (req, res) => {
           const rawTimeValue = timeData.raw?.rawTime || timeData.rawTime || null;
 
           const pointKey = pointName || null;
-          const locationKey = resolvedLocation || null;
           const pointMatch = pointKey ? splitKeys.find(key => key.toLowerCase() === pointKey.toLowerCase()) : null;
           const matchedKey = pointMatch || null;
           const splitStatus = matchedKey ? videoSplits?.[matchedKey]?.status : undefined;
           const allowClipGeneration = Boolean(videoSplits && splitKeys.length > 0 && splitStatus === true);
-          console.log(`🎬 [FOLLOW v3] videoSplits check: point="${pointKey}" location="${locationKey}" matched="${matchedKey}" status=${splitStatus}`);
-          if (!allowClipGeneration) {
-            console.log(`🎬 [FOLLOW v3] Clip skipped: videoSplits no habilitado para point="${pointKey}" location="${locationKey}"`);
-          }
 
           await createAutomaticStory(
             db,
@@ -859,7 +924,7 @@ router.post("/follow-v3", async (req, res) => {
           );
         }
       } catch (error) {
-        console.error("Error creando historias por primer follower:", error);
+        console.error("Error creando historias en follow-v3:", error);
       }
     });
   } catch (error) {
@@ -2432,7 +2497,8 @@ router.get("/apps/leaderboard", async (req, res) => {
     }
     const limitNum = Math.max(1, Math.min(parseInt(limit, 10) || 50, 200));
     const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-    const pageNum = Math.max(1, parseInt(page, 10) || 0);
+    const rawPage = parseInt(page, 10);
+    const pageNum = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 0;
 
     const db = admin.firestore();
     const participantsSnapshot = await db.collection("races").doc(raceId)
@@ -5296,7 +5362,11 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
       });
     }
 
-    const participantIdKey = participantId || (Array.isArray(participantsIds) ? `batch_${participantsIds.length}` : "batch");
+    const idsArray = Array.isArray(participantsIds) ? participantsIds : [];
+    const idsHash = idsArray.length > 0
+      ? crypto.createHash("sha1").update(idsArray.join("|")).digest("hex").slice(0, 10)
+      : null;
+    const participantIdKey = participantId || (idsArray.length > 0 ? `batch_${idsArray.length}_${idsHash}` : "batch");
     console.log(`📋 Procesando evento v3 ${type} para participante: ${participantIdKey} en competición: ${competitionId}`);
 
     const db = admin.firestore();
@@ -5342,11 +5412,12 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
       queueKey,
       competitionId,
       copernicoId,
-      participantsIds: Array.isArray(participantsIds) ? participantsIds : null,
+      participantId: participantId || null,
+      participantsCount: idsArray.length || null,
       type,
       extraData: normalizedExtraData,
       rawTime: rawTime || null,
-      status: 'queued',
+      status: (type === 'creation' || type === 'deletion') ? 'queued_jobs' : 'queued',
       createdAt: timestamp,
       expireAt,
       attempts: 0,
@@ -5355,16 +5426,23 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
 
     await existingQueueRef.set(queueData);
 
+    const jobsTotal = (type === 'creation' || type === 'deletion')
+      ? Math.ceil(idsArray.length / CHECKPOINT_JOB_CHUNK_SIZE)
+      : null;
+
     const responseData = {
       requestId,
       queueKey,
       competitionId,
-      participantsIds: Array.isArray(participantsIds) ? participantsIds : null,
+      participantsCount: idsArray.length || null,
       type,
       status: "queued",
       queuedAt: new Date().toISOString(),
       estimatedProcessingTime: "1-2 minutos"
     };
+    if (jobsTotal !== null) {
+      responseData.jobsTotal = jobsTotal;
+    }
     if (participantId) {
       responseData.participantId = participantId;
     }
@@ -5375,34 +5453,45 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
       data: responseData
     });
 
-    setImmediate(async () => {
-      try {
-        await existingQueueRef.update({
-          status: 'processing',
-          processingStartedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+    if (type === 'creation' || type === 'deletion') {
+      await existingQueueRef.set({
+        jobsTotal,
+        jobsCompleted: 0,
+        jobsFailed: 0
+      }, { merge: true });
 
-        await processCheckpointInBackgroundV3(
+      const db = admin.firestore();
+      let batch = db.batch();
+      let pending = 0;
+
+      for (let i = 0; i < idsArray.length; i += CHECKPOINT_JOB_CHUNK_SIZE) {
+        const chunk = idsArray.slice(i, i + CHECKPOINT_JOB_CHUNK_SIZE);
+        const jobRef = db.collection("processing_queue_jobs").doc();
+        batch.set(jobRef, {
+          queueKey,
+          requestId,
           competitionId,
           copernicoId,
-          participantId,
-          participantsIds,
           type,
-          normalizedExtraData,
-          rawTime,
-          requestId,
-          queueKey
-        );
-      } catch (backgroundError) {
-        console.error(`❌ Error en procesamiento background v3 para ${requestId}:`, backgroundError);
-        await existingQueueRef.update({
-          status: 'failed',
-          error: backgroundError.message,
-          failedAt: admin.firestore.FieldValue.serverTimestamp(),
-          attempts: admin.firestore.FieldValue.increment(1)
+          participantsIds: chunk,
+          extraData: normalizedExtraData,
+          rawTime: rawTime || null,
+          status: "queued",
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
+        pending += 1;
+
+        if (pending >= 400) {
+          await batch.commit();
+          batch = db.batch();
+          pending = 0;
+        }
       }
-    });
+
+      if (pending > 0) {
+        await batch.commit();
+      }
+    }
   } catch (error) {
     console.error("❌ Error procesando webhook checkpoint v3:", error);
     return res.status(500).json({
@@ -5724,12 +5813,13 @@ async function processCheckpointInBackground(competitionId, copernicoId, partici
     if (locations.length === 0) {
       console.log(`⚠️ [BACKGROUND] No se encontraron eventos para competitionId: ${competitionId}`);
 
+      const safeParticipantData = participantData ?? null;
       // Actualizar checkpoint como completado pero sin ubicaciones
       await checkpointRef.update({
         status: 'completed_no_events',
         completedAt: timestamp,
         message: `No se encontraron eventos para competitionId: ${competitionId}`,
-        participantData: participantData,
+        ...(safeParticipantData !== null ? { participantData: safeParticipantData } : {}),
         searchedEvent: extraData?.event || null,
         checkpointInfo: {
           point: extraData?.point ?? null,
@@ -5844,10 +5934,11 @@ async function processCheckpointInBackground(competitionId, copernicoId, partici
   }
 }
 
-async function processCheckpointInBackgroundV3(competitionId, copernicoId, participantId, participantsIds, type, extraData, rawTime, requestId, queueKey) {
+async function processCheckpointInBackgroundV3(competitionId, copernicoId, participantId, participantsIds, type, extraData, rawTime, requestId, queueKey, options = {}) {
   console.log(`🔄 [BACKGROUND v3] Procesando checkpoint: ${requestId}`);
   const db = admin.firestore();
   const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const updateQueue = options.updateQueue !== false;
 
   try {
     const checkpointData = {
@@ -6003,11 +6094,12 @@ async function processCheckpointInBackgroundV3(competitionId, copernicoId, parti
     }
 
     if (locations.length === 0) {
+      const safeParticipantData = participantData ?? null;
       await checkpointRef.update({
         status: 'completed_no_events',
         completedAt: timestamp,
         message: `No se encontraron eventos para competitionId: ${competitionId}`,
-        participantData: participantData,
+        ...(safeParticipantData !== null ? { participantData: safeParticipantData } : {}),
         searchedEvent: extraData?.event || null
       });
       return;
@@ -6046,19 +6138,23 @@ async function processCheckpointInBackgroundV3(competitionId, copernicoId, parti
       }
 
       const copernicoEventsByParticipant = new Map();
-      await Promise.all(ids.map(async (pid) => {
-        try {
-          const copernicoData = await copernicoService.getParticipantData(raceSlug, pid, copernicoEnv);
-          const rawEvents = Array.isArray(copernicoData?.events) ? copernicoData.events : [];
-          const eventIds = rawEvents
-            .map(evt => String(evt?.event || evt?.name || evt?.eventName || "").trim())
-            .filter(Boolean);
-          copernicoEventsByParticipant.set(pid, new Set(eventIds));
-        } catch (error) {
-          console.warn(`⚠️ [BACKGROUND v3] No se pudo obtener eventos de Copernico para ${pid}:`, error.message);
-          copernicoEventsByParticipant.set(pid, new Set());
-        }
-      }));
+      const COPERNICO_BATCH_SIZE = 10;
+      for (let i = 0; i < ids.length; i += COPERNICO_BATCH_SIZE) {
+        const batch = ids.slice(i, i + COPERNICO_BATCH_SIZE);
+        await Promise.all(batch.map(async (pid) => {
+          try {
+            const copernicoData = await copernicoService.getParticipantData(raceSlug, pid, copernicoEnv);
+            const rawEvents = Array.isArray(copernicoData?.events) ? copernicoData.events : [];
+            const eventIds = rawEvents
+              .map(evt => String(evt?.event || evt?.name || evt?.eventName || "").trim())
+              .filter(Boolean);
+            copernicoEventsByParticipant.set(pid, new Set(eventIds));
+          } catch (error) {
+            console.warn(`⚠️ [BACKGROUND v3] No se pudo obtener eventos de Copernico para ${pid}:`, error.message);
+            copernicoEventsByParticipant.set(pid, new Set());
+          }
+        }));
+      }
 
       const processParticipant = async (pid) => {
         const participantResults = [];
@@ -6133,15 +6229,17 @@ async function processCheckpointInBackgroundV3(competitionId, copernicoId, parti
 
       await Promise.all(ids.map(processParticipant));
 
-      await db.collection('processing_queue').doc(queueKey).update({
-        status: 'completed',
-        completedAt: timestamp,
-        expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-        results: results,
-        locationsProcessed: locations.length
-      });
+      if (updateQueue) {
+        await db.collection('processing_queue').doc(queueKey).update({
+          status: 'completed',
+          completedAt: timestamp,
+          expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+          results: results,
+          locationsProcessed: locations.length
+        });
+      }
 
-      return;
+      return { results, locationsProcessed: locations.length };
     }
 
     const firstLocation = locations[0];
@@ -6386,29 +6484,34 @@ async function processCheckpointInBackgroundV3(competitionId, copernicoId, parti
       }
     }
 
-    await db.collection('processing_queue').doc(queueKey).update({
-      status: 'completed',
-      completedAt: timestamp,
-      expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-      results: results,
-      locationsProcessed: locations.length,
-      checkpointInfo: {
-        point: extraData?.point ?? null,
-        event: extraData?.event ?? null,
-        location: extraData?.location ?? null
-      }
-    });
+    if (updateQueue) {
+      await db.collection('processing_queue').doc(queueKey).update({
+        status: 'completed',
+        completedAt: timestamp,
+        expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+        results: results,
+        locationsProcessed: locations.length,
+        checkpointInfo: {
+          point: extraData?.point ?? null,
+          event: extraData?.event ?? null,
+          location: extraData?.location ?? null
+        }
+      });
+    }
 
     console.log(`✅ [BACKGROUND v3] Procesamiento completado para: ${requestId}`);
+    return { results, locationsProcessed: locations.length };
   } catch (error) {
     console.error(`❌ [BACKGROUND v3] Error procesando ${requestId}:`, error.message);
-    await db.collection('processing_queue').doc(queueKey).update({
-      status: 'failed',
-      error: error.message,
-      failedAt: timestamp,
-      expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-      attempts: admin.firestore.FieldValue.increment(1)
-    });
+    if (updateQueue) {
+      await db.collection('processing_queue').doc(queueKey).update({
+        status: 'failed',
+        error: error.message,
+        failedAt: timestamp,
+        expireAt: admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+        attempts: admin.firestore.FieldValue.increment(1)
+      });
+    }
     throw error;
   }
 }
@@ -6948,9 +7051,6 @@ async function createSplitClipsFromStory({ db, raceId, appId, eventId, participa
  * Crear story automática para un checkpoint
  */
 async function createAutomaticStory(db, location, participantData, extraData, streamMap, copernicoData = null, rawTime = null, options = {}) {
-  console.log(`📖 [STORY] Creando story automática para checkpoint: ${extraData?.point}`);
-  console.log(`⏰ [STORY] RawTime recibido en createAutomaticStory:`, rawTime);
-
   try {
     const { updateOnly = false, skipClipGeneration = false } = options;
     let { raceId, appId, eventId } = location;
@@ -6959,11 +7059,6 @@ async function createAutomaticStory(db, location, participantData, extraData, st
     const originalEventId = eventId;
     eventId = normalizeUTF8InObject(eventId);
 
-    if (originalEventId !== eventId) {
-      console.log(`🔤 [STORY] EventID normalizado: "${originalEventId}" → "${eventId}"`);
-    }
-
-    console.log(`📍 [STORY] Ubicación: races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantData.externalId}/stories`);
     const participantId = participantData.externalId;
 
     // 1. Determinar tipo de story basado en checkpointType (si viene) o heurísticas de punto/ubicación
@@ -7050,17 +7145,8 @@ async function createAutomaticStory(db, location, participantData, extraData, st
     let streamId = null;
     if (extraData?.location && streamMap) {
       const locationKey = extraData.location.toLowerCase();
-      const streamKeys = Object.keys(streamMap);
       streamId = streamMap[locationKey];
-
-      console.log(`🎬 [STORY] Buscando streamId para location: '${locationKey}'`);
-      console.log(`🎬 [STORY] StreamMap keys (${streamKeys.length}) sample:`, streamKeys.slice(0, 10));
-      console.log(`🎬 [STORY] StreamId encontrado: ${streamId}`);
-    } else if (extraData?.location && !streamMap) {
-      console.log(`🎬 [STORY] No streamMap disponible para location: "${extraData.location}"`);
     } else if (!extraData?.location && streamMap) {
-      console.log(`🎬 [STORY] No location en extraData; streamMap keys (${Object.keys(streamMap).length}) sample:`, Object.keys(streamMap).slice(0, 10));
-
       // Si no se encuentra, intentar con variaciones comunes
       if (!streamId) {
         // Intentar con variaciones para checkpoints intermedios
@@ -7069,7 +7155,6 @@ async function createAutomaticStory(db, location, participantData, extraData, st
           const availableStreams = Object.keys(streamMap);
           if (availableStreams.length > 0) {
             streamId = streamMap[availableStreams[0]];
-            console.log(`🎬 [STORY] Usando primer stream disponible para checkpoint '${locationKey}': ${streamId}`);
           }
         }
       }
@@ -7168,19 +7253,15 @@ async function createAutomaticStory(db, location, participantData, extraData, st
       if (hasMedia || updateOnly) {
         return { success: true, storyId: existingStoryDoc.id, updated: true };
       }
-      console.log(`🧪 [STORY] Story sin media; intentando generar clip: ${existingStoryDoc.id}`);
       storyRef = existingStoryDoc.ref;
     }
 
     if (updateOnly) {
-      console.log(`ℹ️ [STORY] UpdateOnly activo y no existe story para "${splitNameValue}"`);
       return { success: false, storyId: null, updated: false, skipped: true };
     }
 
     // 4. Guardar story en Firestore
     const storyPath = `races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories`;
-    console.log(`📍 [STORY] Ruta final del documento: ${storyPath}`);
-    console.log(`🔤 [STORY] EventID en ruta: "${eventId}" [${Array.from(eventId).map(c => c.charCodeAt(0)).join(', ')}]`);
     if (!storyRef) {
       storyRef = await db.collection(storyPath).add(storyData);
       eventStoryRef = db.collection('races').doc(raceId)
@@ -7230,14 +7311,12 @@ async function createAutomaticStory(db, location, participantData, extraData, st
             'generationInfo.status': 'no_video_splits_config',
             'generationInfo.reason': 'video_splits_not_configured'
           });
-          console.log(`ℹ️ [STORY] Clip no generado: no existe videoSplits configurado`);
         } else if (splitStatus !== true) {
           allowClipGeneration = false;
           await updateStoryRefs({
             'generationInfo.status': 'video_split_disabled',
             'generationInfo.reason': 'video_split_status_not_true'
           });
-          console.log(`ℹ️ [STORY] Clip no generado: videoSplits["${matchedKey || splitLookupName}"].status != true`);
         }
       } catch (videoSplitError) {
         console.error(`❌ [STORY] Error validando videoSplits:`, videoSplitError.message);
@@ -7250,8 +7329,6 @@ async function createAutomaticStory(db, location, participantData, extraData, st
     }
 
     if (!skipClipGeneration && streamId && allowClipGeneration) {
-      console.log(`🎬 [STORY] Generando clip automáticamente con streamId: ${streamId}`);
-
       try {
         // Determinar timestamp del checkpoint - PRIORIDAD: rawTime del webhook
         let checkpointRawTime = null;
@@ -7261,7 +7338,6 @@ async function createAutomaticStory(db, location, participantData, extraData, st
         if (rawTime) {
           checkpointRawTime = rawTime; // UNIX timestamp en milliseconds
           checkpointTimestamp = new Date(checkpointRawTime).toISOString();
-          console.log(`⏰ [STORY] Usando rawTime del webhook: ${checkpointRawTime} (${checkpointTimestamp})`);
         }
         // 2. FALLBACK: Buscar rawTime en datos transformados de Copernico
         else if (copernicoData && copernicoData.times) {
@@ -7272,9 +7348,6 @@ async function createAutomaticStory(db, location, participantData, extraData, st
           if (timeEntry && (timeEntry.raw?.rawTime || timeEntry.rawTime)) {
             checkpointRawTime = timeEntry.raw?.rawTime || timeEntry.rawTime;
             checkpointTimestamp = new Date(checkpointRawTime).toISOString();
-            console.log(`⏰ [STORY] Usando rawTime de Copernico Data: ${checkpointRawTime} (${checkpointTimestamp})`);
-          } else {
-            console.log(`⚠️ [STORY] No se encontró rawTime para punto/location: ${pointName || 'null'} / ${locationName || 'null'}. Puntos disponibles:`, Object.keys(times));
           }
         }
         // 3. FALLBACK LEGACY: Buscar rawTime en datos de Copernico API (ESTRUCTURA ANTIGUA)
@@ -7289,18 +7362,10 @@ async function createAutomaticStory(db, location, participantData, extraData, st
             if (timeEntry && (timeEntry.raw?.rawTime || timeEntry.rawTime)) {
               checkpointRawTime = timeEntry.raw?.rawTime || timeEntry.rawTime; // UNIX timestamp en milliseconds
               checkpointTimestamp = new Date(checkpointRawTime).toISOString();
-              console.log(`⏰ [STORY] Usando rawTime de Copernico API (legacy): ${checkpointRawTime} (${checkpointTimestamp})`);
-            } else {
-              console.log(`⚠️ [STORY] No se encontró rawTime para punto/location: ${pointName || 'null'} / ${locationName || 'null'}. Puntos disponibles:`, Object.keys(times));
             }
           }
         }
 
-        if (!checkpointRawTime) {
-          console.log(`⚠️ [STORY] No hay rawTime disponible, usando timestamp actual`);
-        }
-
-        console.log(`🎬 [STORY] Generando clip con timestamp: ${checkpointTimestamp}`);
         clipResult = await generateStoryVideoClip(streamId, checkpointRawTime || Date.now(), extraData);
 
         if (clipResult.success) {
@@ -7319,8 +7384,7 @@ async function createAutomaticStory(db, location, participantData, extraData, st
               apiResponse: clipResult.generationInfo.apiResponse
             }
           });
-
-          console.log(`✅ [STORY] Clip generado y story actualizada: ${clipResult.clipUrl}`);
+          console.log(`✅ [STORY] Clip generado: ${clipResult.clipUrl}`);
 
           try {
             const notificationStoryData = {
@@ -7368,7 +7432,7 @@ async function createAutomaticStory(db, location, participantData, extraData, st
             'generationInfo.failedAt': admin.firestore.FieldValue.serverTimestamp()
           });
 
-          console.log(`❌ [STORY] Error generando clip: ${clipResult.error}`);
+          console.error(`❌ [STORY] Error generando clip: ${clipResult.error}`);
         }
       } catch (clipError) {
         console.error(`❌ [STORY] Error en generación de clip:`, clipError);
@@ -7408,11 +7472,6 @@ async function createAutomaticStory(db, location, participantData, extraData, st
 async function processParticipantInLocation(db, location, participantData, timestamp, extraData = {}, rawTime = null, transformedData = null) {
   const { raceId, appId, eventId } = location;
 
-  console.log(`🔄 [BACKGROUND] Procesando en: ${raceId}/${appId}/${eventId}`);
-  console.log(`📊 [BACKGROUND] Datos del checkpoint:`, extraData);
-  console.log(`⏰ [BACKGROUND] RawTime del webhook:`, rawTime);
-  console.log(`🗂️ [BACKGROUND] Datos de Copernico disponibles:`, !!transformedData);
-
   // Agregar raceId y eventId específicos + datos del checkpoint + DATOS COMPLETOS DE COPERNICO
   const locationParticipantData = {
     ...participantData,
@@ -7450,7 +7509,6 @@ async function processParticipantInLocation(db, location, participantData, times
   if (existingParticipant.exists) {
     // Actualizar existente
     await participantRef.update(locationParticipantData);
-    console.log(`🔄 [BACKGROUND] Participante existente actualizado: ${participantId}`);
   } else {
     // Crear nuevo usando externalId como document ID
     locationParticipantData.createdAt = timestamp;
@@ -7460,8 +7518,6 @@ async function processParticipantInLocation(db, location, participantData, times
     await participantRef.set(locationParticipantData);
     participantId = externalId; // El ID del documento es el externalId
     isNewParticipant = true;
-
-    console.log(`🎯 [BACKGROUND] Participante creado con externalId como document ID: ${participantId}`);
   }
 
   console.log(`✅ [BACKGROUND] Participante ${isNewParticipant ? 'creado' : 'actualizado'}: ${participantId}`);
@@ -8702,19 +8758,34 @@ router.get("/participants/followers/count", async (req, res) => {
  */
 router.get("/users/following/count", async (req, res) => {
   try {
-    const { userId } = req.query;
+    const { userId, raceId, appId, eventId } = req.query;
     if (!userId) {
       return res.status(400).json({
         error: "El parámetro userId es obligatorio.",
       });
     }
     const db = admin.firestore();
-    const followingsRef = db.collection("users").doc(userId)
+    let followingsRef = db.collection("users").doc(userId)
       .collection("followings")
       .where("profileType", "==", "participant");
+    if (raceId) {
+      followingsRef = followingsRef.where("raceId", "==", raceId);
+    }
+    if (appId) {
+      followingsRef = followingsRef.where("appId", "==", appId);
+    }
+    if (eventId) {
+      followingsRef = followingsRef.where("eventId", "==", eventId);
+    }
     const followingsSnapshot = await followingsRef.get();
     const followingCount = followingsSnapshot.size;
-    return res.status(200).json({ userId, followingCount });
+    return res.status(200).json({
+      userId,
+      ...(raceId ? { raceId } : {}),
+      ...(appId ? { appId } : {}),
+      ...(eventId ? { eventId } : {}),
+      followingCount
+    });
   } catch (error) {
     console.error("Error al contar los participantes seguidos:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
@@ -9420,9 +9491,15 @@ router.get("/search/participants-v3", async (req, res) => {
       .sort((a, b) => (b.score - a.score) || (a.idx - b.idx))
       .map(({ p }) => p);
 
+    let finalParticipants = participantsSorted;
+    const isQueryEmpty = !searchTerm;
+    if (isQueryEmpty && userId && followedParticipantsMap.size > 0) {
+      finalParticipants = participantsSorted.filter(p => p.following);
+    }
+
     return res.status(200).json({
-      participants: participantsSorted,
-      total: participantsSorted.length,
+      participants: finalParticipants,
+      total: finalParticipants.length,
       totalCopernico: totalFromCopernico,
       query: query || "",
       searchMethod: "copernico_api",
@@ -10999,6 +11076,152 @@ router.post("/admin/backfill-story-dates", async (req, res) => {
 
 /**
  * @openapi
+ * /api/admin/update-event-status:
+ *   post:
+ *     summary: Actualizar finished y waves de un evento
+ *     description: Actualiza el estado del evento (finished) y/o el arreglo waves. Requiere API key.
+ *     tags:
+ *       - Admin
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               raceId:
+ *                 type: string
+ *               eventId:
+ *                 type: string
+ *               appId:
+ *                 type: string
+ *                 description: Opcional si el eventId es único en la race.
+ *               finished:
+ *                 type: boolean
+ *               waves:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                     started:
+ *                       type: boolean
+ *               apiKey:
+ *                 type: string
+ *             required:
+ *               - raceId
+ *               - eventId
+ *               - apiKey
+ *     responses:
+ *       200:
+ *         description: Evento actualizado
+ *       400:
+ *         description: Parámetros faltantes o inválidos
+ *       403:
+ *         description: API key inválida
+ *       404:
+ *         description: Evento no encontrado
+ *       409:
+ *         description: EventId duplicado en más de una app
+ */
+router.post("/admin/update-event-status", async (req, res) => {
+  try {
+    const apiKey = req.headers?.apikey || req.headers?.apiKey || req.body?.apiKey;
+    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
+    if (!apiKey || apiKey !== expectedApiKey) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const { raceId, eventId, appId, finished, waves } = req.body || {};
+    if (!raceId || !eventId) {
+      return res.status(400).json({
+        error: "raceId y eventId son obligatorios",
+        required: ["raceId", "eventId"]
+      });
+    }
+    if (finished === undefined && waves === undefined) {
+      return res.status(400).json({
+        error: "Debes enviar finished y/o waves para actualizar"
+      });
+    }
+
+    const updateData = {};
+    if (finished !== undefined) {
+      updateData.finished = Boolean(finished);
+    }
+    if (waves !== undefined) {
+      if (!Array.isArray(waves)) {
+        return res.status(400).json({ error: "waves debe ser un array" });
+      }
+      const invalidWave = waves.find(wave => !wave || typeof wave !== "object" || !wave.name);
+      if (invalidWave) {
+        return res.status(400).json({ error: "Cada wave debe incluir el campo name" });
+      }
+      updateData.waves = waves;
+    }
+    updateData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+
+    const db = admin.firestore();
+    let targetRef = null;
+    let resolvedAppId = appId || null;
+
+    if (appId) {
+      const eventRef = db.collection("races").doc(raceId)
+        .collection("apps").doc(appId)
+        .collection("events").doc(eventId);
+      const eventDoc = await eventRef.get();
+      if (!eventDoc.exists) {
+        return res.status(404).json({ error: "Evento no encontrado", raceId, appId, eventId });
+      }
+      targetRef = eventRef;
+    } else {
+      const appsSnapshot = await db.collection("races").doc(raceId).collection("apps").get();
+      const matches = [];
+      for (const appDoc of appsSnapshot.docs) {
+        const eventRef = db.collection("races").doc(raceId)
+          .collection("apps").doc(appDoc.id)
+          .collection("events").doc(eventId);
+        const eventDoc = await eventRef.get();
+        if (eventDoc.exists) {
+          matches.push({ appId: appDoc.id, ref: eventRef });
+        }
+      }
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Evento no encontrado", raceId, eventId });
+      }
+      if (matches.length > 1) {
+        return res.status(409).json({
+          error: "EventId existe en más de una app. Envía appId.",
+          raceId,
+          eventId,
+          apps: matches.map(m => m.appId)
+        });
+      }
+
+      targetRef = matches[0].ref;
+      resolvedAppId = matches[0].appId;
+    }
+
+    await targetRef.set(updateData, { merge: true });
+    return res.status(200).json({
+      success: true,
+      raceId,
+      appId: resolvedAppId,
+      eventId,
+      updated: Object.keys(updateData)
+    });
+  } catch (error) {
+    console.error("❌ Error en POST /api/admin/update-event-status:", error);
+    return res.status(500).json({ error: "Error interno del servidor", message: error.message });
+  }
+});
+
+/**
+ * @openapi
  * /api/webhook/runner-checkpoint:
  *   post:
  *     summary: Webhook para eventos de checkpoint de corredores
@@ -12512,15 +12735,13 @@ router.get("/races/:raceId/apps/:appId/events_splits", async (req, res) => {
       const splits = copernicoData.splits || [];
       totalSplits += splits.length;
 
-      // Extraer waves de copernico_data
-      const waves = copernicoData.waves || [];
-
       // Extraer categories de copernico_data
       const categories = copernicoData.categories || [];
 
-      // Calcular estado del evento
-      const finished = copernicoData.finished || false;
-      const wavesStarted = copernicoData.wavesStarted || false;
+      // Calcular estado del evento usando finished y waves.started
+      const finished = Boolean(eventData.finished ?? copernicoData.finished ?? false);
+      const wavesData = Array.isArray(eventData.waves) ? eventData.waves : (copernicoData.waves || []);
+      const wavesStarted = Array.isArray(wavesData) && wavesData.some(wave => wave?.started === true);
 
       let state = "NOT_STARTED";
       if (finished) {
@@ -12552,7 +12773,7 @@ router.get("/races/:raceId/apps/:appId/events_splits", async (req, res) => {
           wavesStarted: wavesStarted,
           state: state
         },
-        waves: waves.map(wave => ({
+        waves: wavesData.map(wave => ({
           name: wave.name || "Salida",
           startTime: wave.startTime || null,
           started: wave.started || false
@@ -12932,6 +13153,148 @@ router.get('/races/:raceId/events/:eventId/participants/:participantId/splits-wi
       success: false,
       error: "Error interno del servidor",
       message: error.message
+    });
+  }
+});
+
+export const onCheckpointQueueCreated = onDocumentCreated("processing_queue/{queueKey}", async (event) => {
+  const data = event.data?.data();
+  if (!data) return;
+
+  const { competitionId, copernicoId, participantId, type, extraData, rawTime, requestId, queueKey } = data;
+  if (type === 'creation' || type === 'deletion') {
+    return;
+  }
+
+  const queueRef = event.data.ref;
+  try {
+    await queueRef.update({
+      status: 'processing',
+      processingStartedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    await processCheckpointInBackgroundV3(
+      competitionId,
+      copernicoId,
+      participantId,
+      null,
+      type,
+      extraData,
+      rawTime,
+      requestId,
+      queueKey,
+      { updateQueue: true }
+    );
+  } catch (error) {
+    console.error(`❌ Error en trigger de queue ${queueKey}:`, error.message);
+    try {
+      await queueRef.update({
+        status: 'failed',
+        error: error.message,
+        failedAt: admin.firestore.FieldValue.serverTimestamp(),
+        attempts: admin.firestore.FieldValue.increment(1)
+      });
+    } catch (updateError) {
+      console.error(`❌ Error actualizando queue ${queueKey}:`, updateError.message);
+    }
+  }
+});
+
+export const onCheckpointQueueJobCreated = onDocumentCreated("processing_queue_jobs/{jobId}", async (event) => {
+  const jobData = event.data?.data();
+  if (!jobData) return;
+
+  const {
+    queueKey,
+    requestId,
+    competitionId,
+    copernicoId,
+    type,
+    participantsIds,
+    extraData,
+    rawTime
+  } = jobData;
+
+  const jobRef = event.data.ref;
+  const db = admin.firestore();
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+  try {
+    await jobRef.update({
+      status: 'processing',
+      processingStartedAt: timestamp
+    });
+
+    const result = await processCheckpointInBackgroundV3(
+      competitionId,
+      copernicoId,
+      null,
+      participantsIds,
+      type,
+      extraData,
+      rawTime,
+      requestId,
+      queueKey,
+      { updateQueue: false }
+    );
+
+    const results = Array.isArray(result?.results) ? result.results : [];
+    const successCount = results.filter(r => r && r.success !== false && !r.error).length;
+    const failureCount = results.length - successCount;
+
+    await jobRef.update({
+      status: 'completed',
+      completedAt: timestamp,
+      resultsCount: results.length,
+      successCount,
+      failureCount
+    });
+
+    const queueRef = db.collection('processing_queue').doc(queueKey);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(queueRef);
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      const nextCompleted = (data.jobsCompleted || 0) + 1;
+      const nextFailed = (data.jobsFailed || 0) + (failureCount > 0 ? 1 : 0);
+      const updates = {
+        jobsCompleted: nextCompleted,
+        jobsFailed: nextFailed,
+        updatedAt: timestamp
+      };
+      if (data.jobsTotal && nextCompleted >= data.jobsTotal) {
+        updates.status = nextFailed > 0 ? 'completed_with_errors' : 'completed';
+        updates.completedAt = timestamp;
+        updates.expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
+      }
+      tx.update(queueRef, updates);
+    });
+  } catch (error) {
+    console.error(`❌ Error en job ${event.params.jobId}:`, error.message);
+    await jobRef.update({
+      status: 'failed',
+      error: error.message,
+      failedAt: timestamp
+    });
+
+    const queueRef = db.collection('processing_queue').doc(queueKey);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(queueRef);
+      if (!snap.exists) return;
+      const data = snap.data() || {};
+      const nextCompleted = (data.jobsCompleted || 0) + 1;
+      const nextFailed = (data.jobsFailed || 0) + 1;
+      const updates = {
+        jobsCompleted: nextCompleted,
+        jobsFailed: nextFailed,
+        updatedAt: timestamp
+      };
+      if (data.jobsTotal && nextCompleted >= data.jobsTotal) {
+        updates.status = 'completed_with_errors';
+        updates.completedAt = timestamp;
+        updates.expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
+      }
+      tx.update(queueRef, updates);
     });
   }
 });

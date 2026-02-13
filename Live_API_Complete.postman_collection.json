@@ -1295,7 +1295,7 @@
                 "events_splits"
               ]
             },
-            "description": "🎯 NUEVO ENDPOINT: Obtener información completa de una carrera específica, incluyendo todos sus eventos con splits y estados actuales.\\n\\n📥 VARIABLES CONFIGURADAS POR DEFECTO:\\n- raceId: {{raceId}} = 26dc137a-34e2-44a0-918b-a5af620cf281\\n- appId: {{appId}} = Qmhfu2mx669sRaDe2LOg (Gijón 2025)\\n\\n📤 RESPUESTA CON DATOS POR DEFECTO:\\n- race: Sin nombre (cronochip, UTC)\\n- app: Gijón 2025\\n- events: 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)\\n- summary: 3 eventos totales, 7 splits, estados calculados\\n\\n🚦 ESTADOS DE EVENTOS:\\n- NOT_STARTED: !wavesStarted && !finished\\n- IN_PROGRESS: wavesStarted && !finished\\n- FINISHED: finished === true\\n\\n✅ CASOS DE ERROR:\\n- 404 RACE_NOT_FOUND: Race no encontrada\\n- 404 APP_NOT_FOUND: App no encontrada en la race\\n- 500 INTERNAL_ERROR: Error interno del servidor\\n\\n🧪 PROBADO Y FUNCIONANDO: Usa variables de colección configuradas"
+            "description": "🎯 NUEVO ENDPOINT: Obtener información completa de una carrera específica, incluyendo todos sus eventos con splits y estados actuales.\\n\\n📥 VARIABLES CONFIGURADAS POR DEFECTO:\\n- raceId: {{raceId}} = 26dc137a-34e2-44a0-918b-a5af620cf281\\n- appId: {{appId}} = Qmhfu2mx669sRaDe2LOg (Gijón 2025)\\n\\n📤 RESPUESTA CON DATOS POR DEFECTO:\\n- race: Sin nombre (cronochip, UTC)\\n- app: Gijón 2025\\n- events: 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)\\n- summary: 3 eventos totales, 7 splits, estados calculados\\n\\n🚦 ESTADOS DE EVENTOS:\\n- NOT_STARTED: !wavesStarted && !finished\\n- IN_PROGRESS: wavesStarted && !finished\\n- FINISHED: finished === true\\n\\n✅ CASOS DE ERROR:\\n- 404 RACE_NOT_FOUND: Race no encontrada\\n- 404 APP_NOT_FOUND: App no encontrada en la race\\n- 500 INTERNAL_ERROR: Error interno del servidor\\n\\n🧪 PROBADO Y FUNCIONANDO: Usa variables de colección configuradas\n\n🚦 ESTADOS DE EVENTOS (actualizado):\n- NOT_STARTED: finished == false && waves.every(w => !w.started)\n- IN_PROGRESS: finished == false && waves.some(w => w.started)\n- FINISHED: finished == true\n"
           }
         },
         {
@@ -1321,7 +1321,7 @@
                 "events_splits"
               ]
             },
-            "description": "🔧 VERSIÓN HARDCODEADA - GARANTIZADA PARA FUNCIONAR\\n\\n📍 URL COMPLETA SIN VARIABLES:\\nhttps://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/Qmhfu2mx669sRaDe2LOg/events_splits\\n\\n✅ DATOS HARDCODEADOS:\\n- raceId: 26dc137a-34e2-44a0-918b-a5af620cf281\\n- appId: Qmhfu2mx669sRaDe2LOg\\n\\n🎯 USA ESTA VERSIÓN SI:\\n- Las variables no funcionan\\n- Hay problemas de cache en Postman\\n- Necesitas una prueba rápida garantizada\\n\\n📊 RESPUESTA ESPERADA:\\n- success: true\\n- 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)\\n- 7 splits totales\\n- Estados calculados automáticamente"
+            "description": "🔧 VERSIÓN HARDCODEADA - GARANTIZADA PARA FUNCIONAR\\n\\n📍 URL COMPLETA SIN VARIABLES:\\nhttps://liveapigateway-3rt3xwiooa-uc.a.run.app/api/races/26dc137a-34e2-44a0-918b-a5af620cf281/apps/Qmhfu2mx669sRaDe2LOg/events_splits\\n\\n✅ DATOS HARDCODEADOS:\\n- raceId: 26dc137a-34e2-44a0-918b-a5af620cf281\\n- appId: Qmhfu2mx669sRaDe2LOg\\n\\n🎯 USA ESTA VERSIÓN SI:\\n- Las variables no funcionan\\n- Hay problemas de cache en Postman\\n- Necesitas una prueba rápida garantizada\\n\\n📊 RESPUESTA ESPERADA:\\n- success: true\\n- 3 eventos (Invitados, Montjuïc-Tibidabo, Workflows)\\n- 7 splits totales\\n- Estados calculados automáticamente\n\n🚦 ESTADOS DE EVENTOS (actualizado):\n- NOT_STARTED: finished == false && waves.every(w => !w.started)\n- IN_PROGRESS: finished == false && waves.some(w => w.started)\n- FINISHED: finished == true\n"
           }
         }
       ]
@@ -1605,7 +1605,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/users/following/count?userId={{userId}}",
+              "raw": "{{baseUrl}}/api/users/following/count?userId={{userId}}&raceId={{raceId}}&appId={{appId}}&eventId={{eventId}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -1619,10 +1619,25 @@
                 {
                   "key": "userId",
                   "value": "{{userId}}"
+                },
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "eventId",
+                  "value": "{{eventId}}",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Contar participantes seguidos por un usuario"
+            "description": "Contar participantes seguidos por un usuario (opcionalmente filtrado por raceId/appId/eventId)"
           }
         },
         {
@@ -2333,6 +2348,38 @@
             },
             "description": "Crear participante con stories asociadas"
           }
+        },
+        {
+          "name": "POST Update Event Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "apiKey",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"appId\": \"{{appId}}\",\n  \"finished\": false,\n  \"waves\": [\n    { \"name\": \"Wave 1\", \"started\": true },\n    { \"name\": \"Wave 2\", \"started\": false }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/update-event-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "update-event-status"
+              ]
+            }
+          },
+          "description": "Actualiza finished y/o waves en un evento (requiere apiKey)."
         }
       ]
     },
@@ -2943,7 +2990,7 @@
                 }
               ]
             },
-            "description": "Busqueda v3 desde Copernico /athletes/list.\n\nRespuesta incluye: total (filtrado) y totalCopernico (total crudo de Copernico).\n\nOrden: primero following=true (requiere userId), luego featured=true, luego el resto. Si no envías userId, following siempre es false."
+            "description": "Busqueda v3 desde Copernico /athletes/list.\n\nRespuesta incluye: total (filtrado) y totalCopernico (total crudo de Copernico).\n\nOrden: primero following=true (requiere userId), luego featured=true, luego el resto. Si no envías userId, following siempre es false.\n\nSi query está vacío y userId tiene seguidos, devuelve solo seguidos. Si no tiene seguidos, devuelve listado normal (featured + resto)."
           }
         },
         {
@@ -2971,6 +3018,34 @@
           }
         },
         {
+          "name": "GET Config v4",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/config-v4?raceId={{raceId}}&appId={{appId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "config-v4"
+              ],
+              "query": [
+                {
+                  "key": "raceId",
+                  "value": "{{raceId}}"
+                },
+                {
+                  "key": "appId",
+                  "value": "{{appId}}"
+                }
+              ]
+            },
+            "description": "Config v4 con eventos desde Copernico y datos locales. Cada evento incluye el campo finished."
+          }
+        },
+        {
           "name": "POST Follow v3",
           "request": {
             "method": "POST",
@@ -2982,7 +3057,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"followerId\": \"{{userId}}\",\n  \"followingId\": \"{{participantId}}\",\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\"\n}"
+              "raw": "{\n  \"followerId\": \"{{userId}}\",\n  \"followingId\": \"{{participantId}}\",\n  \"raceId\": \"{{raceId}}\",\n  \"appId\": \"{{appId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"eventStatus\": \"In Progress\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/follow-v3",
@@ -2993,7 +3068,8 @@
                 "api",
                 "follow-v3"
               ]
-            }
+            },
+            "description": "Follow v3 con creacion basica del participante.\n\nGenera historias solo si eventStatus == \"In Progress\"."
           },
           "description": "Follow v3 con creacion basica del participante."
         },
