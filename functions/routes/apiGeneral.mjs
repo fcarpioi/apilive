@@ -54,6 +54,83 @@ function normalizeUTF8InObject(obj) {
   }
   return obj;
 }
+
+function sanitizeForFirestoreValue(value, parentIsArray = false) {
+  if (value === undefined || value === null) return null;
+
+  if (typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) return value;
+
+  if (typeof value === "bigint" || typeof value === "symbol" || typeof value === "function") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    const cleanedArray = value
+      .map(item => sanitizeForFirestoreValue(item, true))
+      .filter(item => item !== undefined);
+
+    // Firestore no permite arrays directamente anidados dentro de arrays.
+    if (parentIsArray) {
+      return { items: cleanedArray };
+    }
+    return cleanedArray;
+  }
+
+  if (typeof value === "object") {
+    if (typeof value.toDate === "function") {
+      try {
+        return value.toDate();
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    if (value instanceof Map) {
+      const objFromMap = Object.fromEntries(value.entries());
+      return sanitizeForFirestoreValue(objFromMap, parentIsArray);
+    }
+
+    if (value instanceof Set) {
+      return sanitizeForFirestoreValue(Array.from(value.values()), parentIsArray);
+    }
+
+    const cleaned = {};
+    for (const [key, nestedValue] of Object.entries(value)) {
+      if (!key) continue;
+      if (/^__.*__$/.test(key)) continue;
+      const cleanedValue = sanitizeForFirestoreValue(nestedValue, false);
+      if (cleanedValue !== undefined) {
+        cleaned[key] = cleanedValue;
+      }
+    }
+    return cleaned;
+  }
+
+  return null;
+}
+
+function buildCopernicoEventForStorage(eventData = {}) {
+  const safeEvent = {
+    id: eventData?.id || null,
+    event: eventData?.event || null,
+    name: eventData?.name || null,
+    type: eventData?.type || null,
+    finished: Boolean(eventData?.finished ?? eventData?.status?.finished ?? false),
+    status: sanitizeForFirestoreValue(eventData?.status || null),
+    distance: eventData?.distance ?? null,
+    startTime: eventData?.startTime || null,
+    athletes: eventData?.athletes ?? null,
+    waves: Array.isArray(eventData?.waves) ? sanitizeForFirestoreValue(eventData.waves) : [],
+    splits: Array.isArray(eventData?.splits) ? sanitizeForFirestoreValue(eventData.splits) : [],
+    categories: Array.isArray(eventData?.categories) ? sanitizeForFirestoreValue(eventData.categories) : [],
+    locations: Array.isArray(eventData?.locations) ? sanitizeForFirestoreValue(eventData.locations) : [],
+    maps: sanitizeForFirestoreValue(eventData?.maps ?? eventData?.map ?? [])
+  };
+
+  return sanitizeForFirestoreValue(safeEvent) || {};
+}
 // import monitor from "../monitoring/websocketMonitor.mjs"; // COMENTADO TEMPORALMENTE
 //import dotenv from "dotenv";
 //dotenv.config();
@@ -5547,11 +5624,17 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
     const requestId = `${competitionId}_${participantIdKey}_${type}_${Date.now()}`;
     const queueKey = `${sanitize(competitionId)}_${sanitize(participantIdKey)}_${sanitize(type)}_${sanitize(point)}_${sanitize(location)}_V3`;
 
-    const existingQueueRef = db.collection('processing_queue').doc(queueKey);
-    const existingQueue = await existingQueueRef.get();
+    // 2. VERIFICAR SI YA ESTÁ EN COLA O PROCESÁNDOSE
+    const existingQueueSnap = await db.collection('processing_queue')
+      .where('queueKey', '==', queueKey)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
 
-    if (existingQueue.exists) {
-      const queueData = existingQueue.data();
+    let existingQueueRef = db.collection('processing_queue').doc(queueKey);
+    if (!existingQueueSnap.empty) {
+      existingQueueRef = existingQueueSnap.docs[0].ref;
+      const queueData = existingQueueSnap.docs[0].data();
       const timeDiff = Date.now() - queueData.createdAt.toMillis();
       if (timeDiff < 1 * 60 * 1000) {
         return res.status(200).json({
@@ -11240,8 +11323,8 @@ router.post("/admin/backfill-story-dates", async (req, res) => {
  * @openapi
  * /api/admin/update-event-status:
  *   post:
- *     summary: Actualizar finished y waves de un evento
- *     description: Actualiza el estado del evento (finished) y/o el arreglo waves. Requiere API key.
+ *     summary: Sincronizar eventos de una carrera desde Copernico
+ *     description: Recibe una lista de nombres de eventos, consulta Copernico por competitionId y actualiza los campos del evento en Firestore.
  *     tags:
  *       - Admin
  *     security:
@@ -11255,39 +11338,26 @@ router.post("/admin/backfill-story-dates", async (req, res) => {
  *             properties:
  *               raceId:
  *                 type: string
- *               eventId:
+ *               competitionId:
  *                 type: string
- *               appId:
- *                 type: string
- *                 description: Opcional si el eventId es único en la race.
- *               finished:
- *                 type: boolean
- *               waves:
+ *               eventsNames:
  *                 type: array
  *                 items:
- *                   type: object
- *                   properties:
- *                     name:
- *                       type: string
- *                     started:
- *                       type: boolean
+ *                   type: string
  *               apiKey:
  *                 type: string
  *             required:
  *               - raceId
- *               - eventId
+ *               - competitionId
+ *               - eventsNames
  *               - apiKey
  *     responses:
  *       200:
- *         description: Evento actualizado
+ *         description: Eventos sincronizados
  *       400:
  *         description: Parámetros faltantes o inválidos
  *       403:
  *         description: API key inválida
- *       404:
- *         description: Evento no encontrado
- *       409:
- *         description: EventId duplicado en más de una app
  */
 router.post("/admin/update-event-status", async (req, res) => {
   try {
@@ -11297,84 +11367,307 @@ router.post("/admin/update-event-status", async (req, res) => {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { raceId, eventId, appId, finished, waves } = req.body || {};
-    if (!raceId || !eventId) {
-      return res.status(400).json({
-        error: "raceId y eventId son obligatorios",
-        required: ["raceId", "eventId"]
-      });
-    }
-    if (finished === undefined && waves === undefined) {
-      return res.status(400).json({
-        error: "Debes enviar finished y/o waves para actualizar"
-      });
-    }
+    const {
+      raceId: legacyRaceId,
+      competitionId: incomingCompetitionId,
+      copernicoId: incomingCopernicoId,
+      eventsNames,
+      type
+    } = req.body || {};
 
-    const updateData = {};
-    if (finished !== undefined) {
-      updateData.finished = Boolean(finished);
+    // Compatibilidad de payloads:
+    // Nuevo:  competitionId => raceId Firebase, copernicoId => ID de carrera en Copernico
+    // Legacy: raceId => raceId Firebase, competitionId => ID de carrera en Copernico
+    const resolvedRaceId = String(legacyRaceId || incomingCompetitionId || "").trim();
+    const resolvedCopernicoRaceId = String(
+      incomingCopernicoId ||
+      ((legacyRaceId && incomingCompetitionId) ? incomingCompetitionId : "")
+    ).trim();
+
+    if (!resolvedRaceId || !resolvedCopernicoRaceId || !Array.isArray(eventsNames)) {
+      return res.status(400).json({
+        error: "competitionId (raceId), copernicoId y eventsNames son obligatorios",
+        required: ["competitionId", "copernicoId", "eventsNames"],
+        note: "Compatibilidad legacy: también acepta raceId + competitionId."
+      });
     }
-    if (waves !== undefined) {
-      if (!Array.isArray(waves)) {
-        return res.status(400).json({ error: "waves debe ser un array" });
-      }
-      const invalidWave = waves.find(wave => !wave || typeof wave !== "object" || !wave.name);
-      if (invalidWave) {
-        return res.status(400).json({ error: "Cada wave debe incluir el campo name" });
-      }
-      updateData.waves = waves;
+    const requestedNames = eventsNames
+      .map(name => String(name || "").trim())
+      .filter(Boolean);
+    if (requestedNames.length === 0) {
+      return res.status(400).json({
+        error: "eventsNames debe incluir al menos un nombre de evento"
+      });
     }
-    updateData.updatedAt = admin.firestore.FieldValue.serverTimestamp();
 
     const db = admin.firestore();
-    let targetRef = null;
-    let resolvedAppId = appId || null;
+    const raceRef = db.collection("races").doc(resolvedRaceId);
+    const raceDoc = await raceRef.get();
+    if (!raceDoc.exists) {
+      return res.status(404).json({ error: "Race no encontrada", raceId: resolvedRaceId });
+    }
+    const raceData = raceDoc.data() || {};
 
-    if (appId) {
-      const eventRef = db.collection("races").doc(raceId)
-        .collection("apps").doc(appId)
-        .collection("events").doc(eventId);
-      const eventDoc = await eventRef.get();
-      if (!eventDoc.exists) {
-        return res.status(404).json({ error: "Evento no encontrado", raceId, appId, eventId });
+    const normalizeEventKey = (value) =>
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+    const copernicoEnv = raceData?.copernicoEnv || null;
+    const envConfig = copernicoService.config.getEnvironmentConfig(copernicoEnv);
+    const headers = copernicoService.config.getRequestHeaders(copernicoEnv);
+    const raceUrl = `${envConfig.baseUrl}/${resolvedCopernicoRaceId}`;
+
+    console.log("📤 [update-event-status] Request Copernico", {
+      api: "GET /api/races/{competitionId}",
+      url: raceUrl,
+      method: "GET",
+      payload: null,
+      requestContext: {
+        raceId: resolvedRaceId,
+        copernicoId: resolvedCopernicoRaceId,
+        eventsNames: requestedNames,
+        type: type || null
+      },
+      headers: {
+        "Content-Type": headers["Content-Type"],
+        "x-api-key": headers["x-api-key"] ? "***" : null,
+        "User-Agent": headers["User-Agent"],
+        "Accept": headers["Accept"]
       }
-      targetRef = eventRef;
-    } else {
-      const appsSnapshot = await db.collection("races").doc(raceId).collection("apps").get();
-      const matches = [];
-      for (const appDoc of appsSnapshot.docs) {
-        const eventRef = db.collection("races").doc(raceId)
-          .collection("apps").doc(appDoc.id)
-          .collection("events").doc(eventId);
-        const eventDoc = await eventRef.get();
-        if (eventDoc.exists) {
-          matches.push({ appId: appDoc.id, ref: eventRef });
+    });
+
+    let copernicoEvents = [];
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), copernicoService.config.get("request.timeoutMs") || 10000);
+      const response = await fetch(raceUrl, {
+        method: "GET",
+        headers,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const payload = await response.json();
+      console.log("📥 [update-event-status] Response Copernico", {
+        status: response.status,
+        ok: response.ok,
+        result: payload?.result || null,
+        eventsCount: Array.isArray(payload?.data?.events) ? payload.data.events.length : 0,
+        sampleEvent: Array.isArray(payload?.data?.events) && payload.data.events.length > 0
+          ? {
+              id: payload.data.events[0]?.id || null,
+              event: payload.data.events[0]?.event || null,
+              name: payload.data.events[0]?.name || null,
+              keys: Object.keys(payload.data.events[0] || {})
+            }
+          : null
+      });
+      if (!payload?.result || (payload.result.code !== 0 && payload.result.code !== 1)) {
+        throw new Error(payload?.result?.message || "Respuesta invalida de Copernico");
+      }
+      copernicoEvents = Array.isArray(payload?.data?.events) ? payload.data.events : [];
+    } catch (copernicoError) {
+      return res.status(502).json({
+        error: "No se pudo consultar Copernico",
+        message: copernicoError.message,
+        copernicoId: resolvedCopernicoRaceId
+      });
+    }
+
+    const copernicoByNormalized = new Map();
+    const copernicoByEventId = new Map();
+    for (const eventData of copernicoEvents) {
+      const possibleIds = [eventData?.event, eventData?.id];
+      for (const possibleId of possibleIds) {
+        const normalizedId = normalizeEventKey(normalizeUTF8InObject(possibleId));
+        if (normalizedId) {
+          copernicoByEventId.set(normalizedId, eventData);
         }
       }
 
-      if (matches.length === 0) {
-        return res.status(404).json({ error: "Evento no encontrado", raceId, eventId });
+      const possibleNames = [eventData?.name, eventData?.event, eventData?.id];
+      for (const possibleName of possibleNames) {
+        const normalized = normalizeEventKey(normalizeUTF8InObject(possibleName));
+        if (normalized) {
+          copernicoByNormalized.set(normalized, eventData);
+        }
       }
-      if (matches.length > 1) {
-        return res.status(409).json({
-          error: "EventId existe en más de una app. Envía appId.",
-          raceId,
-          eventId,
-          apps: matches.map(m => m.appId)
-        });
-      }
-
-      targetRef = matches[0].ref;
-      resolvedAppId = matches[0].appId;
     }
 
-    await targetRef.set(updateData, { merge: true });
+    const firestoreByNormalized = new Map();
+    const firestoreByEventId = new Map();
+    const appsSnapshot = await raceRef.collection("apps").get();
+    for (const appDoc of appsSnapshot.docs) {
+      const appId = appDoc.id;
+      const eventsSnapshot = await raceRef.collection("apps").doc(appId).collection("events").get();
+      for (const eventDoc of eventsSnapshot.docs) {
+        const eventData = eventDoc.data() || {};
+        const baseName = eventData.event_info?.name || eventData.name || eventData.eventName || eventDoc.id;
+        const eventIdKey = normalizeEventKey(normalizeUTF8InObject(eventDoc.id));
+        if (!firestoreByEventId.has(eventIdKey)) {
+          firestoreByEventId.set(eventIdKey, []);
+        }
+        firestoreByEventId.get(eventIdKey).push({
+          appId,
+          eventId: eventDoc.id,
+          ref: eventDoc.ref,
+          data: eventData
+        });
+
+        const keys = [...new Set([
+          normalizeEventKey(normalizeUTF8InObject(baseName)),
+          normalizeEventKey(normalizeUTF8InObject(eventDoc.id)),
+          normalizeEventKey(normalizeUTF8InObject(eventData.eventNameNormalized))
+        ].filter(Boolean))];
+        for (const key of keys) {
+          if (!firestoreByNormalized.has(key)) {
+            firestoreByNormalized.set(key, []);
+          }
+          firestoreByNormalized.get(key).push({
+            appId,
+            eventId: eventDoc.id,
+            ref: eventDoc.ref,
+            data: eventData
+          });
+        }
+      }
+    }
+
+    let batch = db.batch();
+    let pending = 0;
+    const results = [];
+    let totalUpdatedDocs = 0;
+
+    const commitBatchIfNeeded = async () => {
+      if (pending >= 400) {
+        await batch.commit();
+        batch = db.batch();
+        pending = 0;
+      }
+    };
+
+    const processedRequestedKeys = new Set();
+    for (const requestedName of requestedNames) {
+      const normalizedRequested = normalizeEventKey(normalizeUTF8InObject(requestedName));
+      if (!normalizedRequested || processedRequestedKeys.has(normalizedRequested)) {
+        continue;
+      }
+      processedRequestedKeys.add(normalizedRequested);
+
+      // Prioridad: buscar por eventId de Firebase
+      let targets = firestoreByEventId.get(normalizedRequested) || [];
+      let matchedBy = "eventId";
+      if (targets.length === 0) {
+        // Fallback: buscar por nombre normalizado
+        targets = firestoreByNormalized.get(normalizedRequested) || [];
+        matchedBy = "name";
+      }
+
+      if (targets.length === 0) {
+        results.push({
+          eventName: requestedName,
+          status: "not_found_in_firestore"
+        });
+        continue;
+      }
+
+      // Prioridad: resolver evento de Copernico por eventId; fallback por nombre
+      let copernicoEvent = copernicoByEventId.get(normalizedRequested) || null;
+      if (!copernicoEvent) {
+        const candidateNames = new Set([normalizedRequested]);
+        for (const target of targets) {
+          const targetName =
+            target?.data?.event_info?.name ||
+            target?.data?.name ||
+            target?.data?.eventName ||
+            target?.eventId;
+          const normalizedTargetName = normalizeEventKey(normalizeUTF8InObject(targetName));
+          if (normalizedTargetName) {
+            candidateNames.add(normalizedTargetName);
+          }
+        }
+
+        for (const candidate of candidateNames) {
+          const candidateEvent = copernicoByNormalized.get(candidate);
+          if (candidateEvent) {
+            copernicoEvent = candidateEvent;
+            break;
+          }
+        }
+      }
+
+      if (!copernicoEvent) {
+        results.push({
+          eventName: requestedName,
+          status: "not_found_in_copernico",
+          matchedBy
+        });
+        continue;
+      }
+
+      const finished = Boolean(
+        copernicoEvent?.finished ??
+        copernicoEvent?.status?.finished ??
+        false
+      );
+      const waves = Array.isArray(copernicoEvent?.waves) ? copernicoEvent.waves : [];
+      const eventName = copernicoEvent?.name || requestedName;
+      const sanitizedCopernicoEvent = buildCopernicoEventForStorage(copernicoEvent);
+
+      for (const target of targets) {
+        const updateData = {
+          name: eventName,
+          finished,
+          waves,
+          copernico_data: sanitizedCopernicoEvent || {},
+          event_info: {
+            name: eventName,
+            type: copernicoEvent?.type || null,
+            distance: copernicoEvent?.distance ?? null,
+            startTime: copernicoEvent?.startTime || null,
+            athletes: copernicoEvent?.athletes ?? null
+          },
+          eventNameNormalized: normalizeEventKey(normalizeUTF8InObject(eventName)),
+          competitionId: resolvedRaceId,
+          copernicoId: resolvedCopernicoRaceId,
+          updateType: type || null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        batch.set(target.ref, updateData, { merge: true });
+        pending += 1;
+        totalUpdatedDocs += 1;
+        await commitBatchIfNeeded();
+      }
+
+      results.push({
+        eventName: requestedName,
+        status: "updated",
+        matchedBy,
+        firestoreDocsUpdated: targets.length
+      });
+    }
+
+    if (pending > 0) {
+      await batch.commit();
+    }
+
     return res.status(200).json({
       success: true,
-      raceId,
-      appId: resolvedAppId,
-      eventId,
-      updated: Object.keys(updateData)
+      raceId: resolvedRaceId,
+      competitionId: resolvedRaceId,
+      copernicoId: resolvedCopernicoRaceId,
+      type: type || null,
+      requestedEvents: requestedNames.length,
+      updatedDocuments: totalUpdatedDocs,
+      results
     });
   } catch (error) {
     console.error("❌ Error en POST /api/admin/update-event-status:", error);

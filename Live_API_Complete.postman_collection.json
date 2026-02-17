@@ -2365,7 +2365,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"raceId\": \"{{raceId}}\",\n  \"eventId\": \"{{eventId}}\",\n  \"appId\": \"{{appId}}\",\n  \"finished\": false,\n  \"waves\": [\n    { \"name\": \"Wave 1\", \"started\": true },\n    { \"name\": \"Wave 2\", \"started\": false }\n  ]\n}"
+              "raw": "{\n  \"copernicoId\": \"{{copernicoId}}\",\n  \"competitionId\": \"{{raceId}}\",\n  \"eventsNames\": [\n    \"{{eventId}}\",\n    \"event-2\"\n  ],\n  \"type\": \"modification\",\n  \"apiKey\": \"{{apiKey}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/admin/update-event-status",
@@ -2379,7 +2379,7 @@
               ]
             }
           },
-          "description": "Actualiza finished y/o waves en un evento (requiere apiKey)."
+          "description": "Sincroniza eventos desde Copernico. Payload nuevo: competitionId=raceId Firebase, copernicoId=id de carrera Copernico. Prioriza match por eventId y fallback por nombre (requiere apiKey)."
         }
       ]
     },
