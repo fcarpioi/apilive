@@ -5334,25 +5334,28 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
     const requestId = `${competitionId}_${participantIdKey}_${type}_${Date.now()}`;
     const queueKey = `${sanitize(competitionId)}_${sanitize(participantIdKey)}_${sanitize(type)}_${sanitize(point)}_${sanitize(location)}_V3`;
 
-    const existingQueueRef = db.collection('processing_queue').doc(queueKey);
-    const existingQueue = await existingQueueRef.get();
+    // 2. VERIFICAR SI YA ESTÁ EN COLA O PROCESÁNDOSE
+    const existingQueueSnap = await db.collection('processing_queue')
+      .where('queueKey', '==', queueKey)
+      .orderBy('createdAt', 'desc')
+      .limit(1)
+      .get();
 
-    if (existingQueue.exists) {
-      const queueData = existingQueue.data();
-      const timeDiff = Date.now() - queueData.createdAt.toMillis();
-      if (timeDiff < 1 * 60 * 1000) {
-        return res.status(200).json({
-          success: true,
-          message: "Request ya está en cola de procesamiento",
-          data: {
-            requestId: queueData.requestId,
-            queueKey,
-            status: "already_queued",
-            queuedAt: queueData.createdAt.toDate().toISOString(),
-            estimatedProcessingTime: "1-2 minutos"
-          }
-        });
-      }
+    let existingQueueRef = db.collection('processing_queue').doc(queueKey);
+    if (!existingQueueSnap.empty) {
+      existingQueueRef = existingQueueSnap.docs[0].ref;
+      const queueData = existingQueueSnap.docs[0].data();
+      return res.status(200).json({
+        success: true,
+        message: "Request ya está en cola de procesamiento",
+        data: {
+          requestId: queueData.requestId,
+          queueKey,
+          status: "already_queued",
+          queuedAt: queueData.createdAt?.toDate ? queueData.createdAt.toDate().toISOString() : null,
+          estimatedProcessingTime: "1 minuto"
+        }
+      });
     }
 
     const expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
