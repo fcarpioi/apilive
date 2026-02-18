@@ -142,9 +142,10 @@ export async function processCheckpointInBackgroundV3(competitionId, copernicoId
                 logStep('followers check done', init);
 
                 if (type === 'modification') {
-                    result.push(await modificationProcess({
+                    results.push(await modificationProcess({
                         hasFollowers,
                         db,
+                        location,
                         raceId,
                         appId,
                         eventId,
@@ -160,10 +161,11 @@ export async function processCheckpointInBackgroundV3(competitionId, copernicoId
                     continue;
                 }
 
-                result.push(await createStory({
+                results.push(await createStory({
                     isFeatured,
                     hasFollowers,
                     db,
+                    location,
                     raceId,
                     appId,
                     eventId,
@@ -714,6 +716,7 @@ async function updateParticipant({
 async function modificationProcess({
                                        hasFollowers,
                                        db,
+                                       location,
                                        raceId,
                                        appId,
                                        eventId,
@@ -774,6 +777,7 @@ async function createStory({
                                isFeatured,
                                hasFollowers,
                                db,
+                               location,
                                raceId,
                                appId,
                                eventId,

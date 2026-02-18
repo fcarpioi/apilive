@@ -10964,7 +10964,12 @@ router.get('/races/:raceId/events/:eventId/participants/:participantId/splits-wi
   }
 });
 
-export const onCheckpointQueueCreated = onDocumentCreated("processing_queue/{queueKey}", async (event) => {
+export const onCheckpointQueueCreated = onDocumentCreated({
+  document: "processing_queue/{queueKey}",
+  timeoutSeconds: 540,
+  memory: "1GiB",
+  region: "us-central1"
+}, async (event) => {
   const data = event.data?.data();
   if (!data) return;
 
@@ -11150,7 +11155,12 @@ export const onClipGenerationJobCreated = onDocumentCreated("clip_generation_job
   }
 });
 
-export const onCheckpointQueueJobCreated = onDocumentCreated("processing_queue_jobs/{jobId}", async (event) => {
+export const onCheckpointQueueJobCreated = onDocumentCreated({
+  document: "processing_queue_jobs/{jobId}",
+  timeoutSeconds: 540,
+  memory: "1GiB",
+  region: "us-central1"
+}, async (event) => {
   const jobData = event.data?.data();
   if (!jobData) return;
 
