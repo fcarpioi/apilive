@@ -201,20 +201,24 @@ export async function processCheckpointInBackgroundV3(competitionId, copernicoId
             }
 
             const copernicoEventsByParticipant = new Map();
+            const copernicoParticipantDataById = new Map();
             const COPERNICO_BATCH_SIZE = 10;
             for (let i = 0; i < ids.length; i += COPERNICO_BATCH_SIZE) {
                 const batch = ids.slice(i, i + COPERNICO_BATCH_SIZE);
                 await Promise.all(batch.map(async (pid) => {
                     try {
                         const copernicoData = await copernicoService.getParticipantData(raceSlug, pid, copernicoEnv);
+                        const transformed = copernicoService.transformCopernicoData(copernicoData);
                         const rawEvents = Array.isArray(copernicoData?.events) ? copernicoData.events : [];
                         const eventIds = rawEvents
                             .map(evt => String(evt?.event || evt?.name || evt?.eventName || "").trim())
                             .filter(Boolean);
                         copernicoEventsByParticipant.set(pid, new Set(eventIds));
+                        copernicoParticipantDataById.set(pid, transformed?.participant || null);
                     } catch (error) {
                         console.warn(`⚠️ [BACKGROUND v3] No se pudo obtener eventos de Copernico para ${pid}:`, error.message);
                         copernicoEventsByParticipant.set(pid, new Set());
+                        copernicoParticipantDataById.set(pid, null);
                     }
                 }));
             }
@@ -236,14 +240,28 @@ export async function processCheckpointInBackgroundV3(competitionId, copernicoId
                     const participantRef = eventRef.collection('participants').doc(pid);
 
                     if (type === 'creation') {
+                        const copernicoParticipant = copernicoParticipantDataById.get(pid) || null;
+                        const hasCopernicoProfile = Boolean(copernicoParticipant && (copernicoParticipant.name || copernicoParticipant.fullName));
                         const basicParticipant = {
                             externalId: pid,
-                            fullName: `Participante ${pid}`,
+                            name: copernicoParticipant?.name || null,
+                            lastName: copernicoParticipant?.lastName || null,
+                            fullName: copernicoParticipant?.fullName ||
+                                `${copernicoParticipant?.name || ""} ${copernicoParticipant?.lastName || ""}`.trim() ||
+                                `Participante ${pid}`,
+                            gender: copernicoParticipant?.gender || null,
+                            birthdate: copernicoParticipant?.birthdate || null,
+                            country: copernicoParticipant?.country || copernicoParticipant?.nationality || null,
+                            nationality: copernicoParticipant?.nationality || null,
+                            dorsal: copernicoParticipant?.dorsal || null,
+                            category: copernicoParticipant?.category || null,
+                            team: copernicoParticipant?.team || null,
+                            club: copernicoParticipant?.club || null,
                             raceId,
                             eventId,
                             competitionId,
-                            featured: false,
-                            dataSource: 'webhook_creation',
+                            featured: copernicoParticipant?.featured === true,
+                            dataSource: hasCopernicoProfile ? 'copernico' : 'webhook_creation',
                             createdAt: timestamp,
                             registerDate: timestamp,
                             updatedAt: timestamp

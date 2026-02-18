@@ -301,11 +301,15 @@
       ]
     },
     {
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION_GROUP",
+      "collectionGroup": "clip_generation_jobs",
+      "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "eventNameNormalized",
+          "fieldPath": "storyRefPath",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
           "order": "ASCENDING"
         }
       ]

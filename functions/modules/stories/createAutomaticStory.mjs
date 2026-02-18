@@ -1,8 +1,5 @@
 import {normalizeUTF8InObject} from "../utils/normalizeUTF8InObject.mjs";
 import admin from "firebase-admin";
-import {generateStoryVideoClip} from "./generateStoryVideoClip.mjs";
-import {createSplitClipsFromStory} from "./createSplitClipsFromStory.mjs";
-import {sendStoryNotificationToFollowers} from "../notifications/sendStoryNotificationToFollowers.mjs";
 
 /**
  * Crear story automática para un checkpoint
@@ -289,12 +286,10 @@ export async function createAutomaticStory(db, location, participantData, extraD
             try {
                 // Determinar timestamp del checkpoint - PRIORIDAD: rawTime del webhook
                 let checkpointRawTime = null;
-                let checkpointTimestamp = new Date().toISOString(); // Default: ahora
 
                 // 1. PRIORIDAD: Usar rawTime del webhook si está disponible
                 if (rawTime) {
                     checkpointRawTime = rawTime; // UNIX timestamp en milliseconds
-                    checkpointTimestamp = new Date(checkpointRawTime).toISOString();
                 }
                 // 2. FALLBACK: Buscar rawTime en datos transformados de Copernico
                 else if (copernicoData && copernicoData.times) {
@@ -304,7 +299,6 @@ export async function createAutomaticStory(db, location, participantData, extraD
                     const timeEntry = resolveTimesEntry(times, pointName) || resolveTimesEntry(times, locationName);
                     if (timeEntry && (timeEntry.raw?.rawTime || timeEntry.rawTime)) {
                         checkpointRawTime = timeEntry.raw?.rawTime || timeEntry.rawTime;
-                        checkpointTimestamp = new Date(checkpointRawTime).toISOString();
                     }
                 }
                 // 3. FALLBACK LEGACY: Buscar rawTime en datos de Copernico API (ESTRUCTURA ANTIGUA)
@@ -312,89 +306,70 @@ export async function createAutomaticStory(db, location, participantData, extraD
                     const events = copernicoData.rawData.events;
                     if (events.length > 0 && events[0].times) {
                         const times = events[0].times;
-
                         const pointName = extraData?.point;
                         const locationName = extraData?.location;
                         const timeEntry = resolveTimesEntry(times, pointName) || resolveTimesEntry(times, locationName);
                         if (timeEntry && (timeEntry.raw?.rawTime || timeEntry.rawTime)) {
                             checkpointRawTime = timeEntry.raw?.rawTime || timeEntry.rawTime; // UNIX timestamp en milliseconds
-                            checkpointTimestamp = new Date(checkpointRawTime).toISOString();
                         }
                     }
                 }
 
-                clipResult = await generateStoryVideoClip(streamId, checkpointRawTime || Date.now(), extraData);
+                // Encolar generación de clip para procesamiento en background
+                const pendingJobSnapshot = await db.collection("clip_generation_jobs")
+                    .where("storyRefPath", "==", storyRef.path)
+                    .where("status", "in", ["queued", "processing"])
+                    .limit(1)
+                    .get();
 
-                if (clipResult.success) {
-                    // Actualizar story con datos del clip generado
+                if (!pendingJobSnapshot.empty) {
+                    const queuedJob = pendingJobSnapshot.docs[0];
+                    clipResult = {
+                        success: true,
+                        queued: true,
+                        jobId: queuedJob.id
+                    };
                     await updateStoryRefs({
-                        fileUrl: clipResult.clipUrl,
-                        fileName: clipResult.fileName,
-                        filePath: clipResult.clipUrl, // Por compatibilidad
-                        generationInfo: {
-                            ...storyData.generationInfo,
-                            status: 'completed',
-                            clipUrl: clipResult.clipUrl,
-                            generatedAt: clipResult.generationInfo.generatedAt,
-                            startTime: clipResult.generationInfo.startTime,
-                            endTime: clipResult.generationInfo.endTime,
-                            apiResponse: clipResult.generationInfo.apiResponse
-                        }
+                        "generationInfo.status": "queued",
+                        "generationInfo.jobId": queuedJob.id
                     });
-                    console.log(`✅ [STORY] Clip generado: ${clipResult.clipUrl}`);
-
-                    try {
-                        const notificationStoryData = {
-                            ...storyData,
-                            fileUrl: clipResult.clipUrl,
-                            description: 'New clip available'
-                        };
-                        await sendStoryNotificationToFollowers({
-                            db,
-                            raceId,
-                            appId,
-                            eventId,
-                            participantId: participantData.externalId,
-                            storyId: storyRef.id,
-                            storyData: notificationStoryData,
-                            participantData
-                        });
-                    } catch (notifyError) {
-                        console.error(`❌ [STORY] Error enviando push de clip completado:`, notifyError.message);
-                    }
-
-                    // 🆕 CREAR SPLIT-CLIPS SI EL CHECKPOINT COINCIDE CON UN SPLIT
-                    try {
-                        await createSplitClipsFromStory({
-                            db,
-                            raceId,
-                            appId,
-                            eventId,
-                            participantId: participantData.externalId,
-                            checkpointId: extraData?.point,
-                            clipUrl: clipResult.clipUrl,
-                            streamId: streamId,
-                            timestamp: checkpointRawTime || Date.now()
-                        });
-                    } catch (splitClipError) {
-                        console.error(`⚠️ [STORY] Error creando split-clips:`, splitClipError);
-                        // No fallar por esto, solo registrar el error
-                    }
-
                 } else {
-                    // Actualizar story con error de generación
-                    await updateStoryRefs({
-                        'generationInfo.status': 'failed',
-                        'generationInfo.error': clipResult.error,
-                        'generationInfo.failedAt': admin.firestore.FieldValue.serverTimestamp()
+                    const clipJobRef = db.collection("clip_generation_jobs").doc();
+                    await clipJobRef.set({
+                        status: "queued",
+                        raceId,
+                        appId,
+                        eventId,
+                        participantId,
+                        participantExternalId: participantData.externalId || participantId,
+                        storyId: storyRef.id,
+                        storyRefPath: storyRef.path,
+                        eventStoryRefPath: eventStoryRef.path,
+                        streamId,
+                        checkpointRawTime: checkpointRawTime || Date.now(),
+                        checkpointId: extraData?.point || extraData?.location || null,
+                        extraData: extraData || {},
+                        participantData: participantData || {},
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        attempts: 0
                     });
 
-                    console.error(`❌ [STORY] Error generando clip: ${clipResult.error}`);
+                    await updateStoryRefs({
+                        "generationInfo.status": "queued",
+                        "generationInfo.jobId": clipJobRef.id,
+                        "generationInfo.queuedAt": admin.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    clipResult = {
+                        success: true,
+                        queued: true,
+                        jobId: clipJobRef.id
+                    };
                 }
             } catch (clipError) {
-                console.error(`❌ [STORY] Error en generación de clip:`, clipError);
+                console.error(`❌ [STORY] Error encolando clip:`, clipError);
 
-                // Actualizar story con error
+                // Actualizar story con error de encolado
                 await updateStoryRefs({
                     'generationInfo.status': 'failed',
                     'generationInfo.error': clipError.message,
