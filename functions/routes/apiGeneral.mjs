@@ -5412,28 +5412,28 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
     const point = normalizedExtraData?.point || normalizedExtraData?.location || "no_point";
     const location = normalizedExtraData?.location || normalizedExtraData?.point || "no_location";
 
-    const requestId = `${competitionId}_${participantIdKey}_${type}_${Date.now()}`;
-    const queueKey = `${sanitize(competitionId)}_${sanitize(participantIdKey)}_${sanitize(type)}_${sanitize(point)}_${sanitize(location)}_V3`;
+    const requestTs = Date.now();
+    const requestId = `${competitionId}_${participantIdKey}_${type}_${requestTs}`;
+    const dedupeKey = `${sanitize(competitionId)}_${sanitize(participantIdKey)}_${sanitize(type)}_${sanitize(point)}_${sanitize(location)}_V3`;
+    const queueKey = `${dedupeKey}_${requestTs}`;
 
     // 2. VERIFICAR SI YA ESTÁ EN COLA O PROCESÁNDOSE
     const existingQueueSnap = await db.collection('processing_queue')
-      .where('queueKey', '==', queueKey)
+      .where('dedupeKey', '==', dedupeKey)
       .orderBy('createdAt', 'desc')
       .limit(1)
       .get();
 
-    let existingQueueRef = db.collection('processing_queue').doc(queueKey);
     if (!existingQueueSnap.empty) {
-      existingQueueRef = existingQueueSnap.docs[0].ref;
       const queueData = existingQueueSnap.docs[0].data();
-      if(["queued"].includes(queueData.status))
+      if (["queued", "queued_jobs", "processing"].includes(queueData.status))
         return res.status(200).json({
           success: true,
-          message: "Request ya está en cola de procesamiento",
+          message: "Request ya está en cola o en procesamiento",
           data: {
             requestId: queueData.requestId,
-            queueKey,
-            status: "already_queued",
+            queueKey: queueData.queueKey || existingQueueSnap.docs[0].id,
+            status: "already_processing",
             queuedAt: queueData.createdAt?.toDate ? queueData.createdAt.toDate().toISOString() : null,
             estimatedProcessingTime: "1 minuto"
           }
@@ -5444,6 +5444,7 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
     const queueData = {
       requestId,
       queueKey,
+      dedupeKey,
       competitionId,
       copernicoId,
       participantId: participantId || null,
@@ -5458,43 +5459,19 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
       source: 'copernico-webhook-v3'
     };
 
-    await existingQueueRef.set(queueData);
-
+    const queueRef = db.collection('processing_queue').doc(queueKey);
     const jobsTotal = (type === 'creation' || type === 'deletion')
       ? Math.ceil(idsArray.length / CHECKPOINT_JOB_CHUNK_SIZE)
       : null;
-
-    const responseData = {
-      requestId,
-      queueKey,
-      competitionId,
-      participantsCount: idsArray.length || null,
-      type,
-      status: "queued",
-      queuedAt: new Date().toISOString(),
-      estimatedProcessingTime: "1-2 minutos"
-    };
     if (jobsTotal !== null) {
-      responseData.jobsTotal = jobsTotal;
-    }
-    if (participantId) {
-      responseData.participantId = participantId;
+      queueData.jobsTotal = jobsTotal;
+      queueData.jobsCompleted = 0;
+      queueData.jobsFailed = 0;
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Request encolada exitosamente para procesamiento",
-      data: responseData
-    });
+    await queueRef.set(queueData);
 
     if (type === 'creation' || type === 'deletion') {
-      await existingQueueRef.set({
-        jobsTotal,
-        jobsCompleted: 0,
-        jobsFailed: 0
-      }, { merge: true });
-
-      const db = admin.firestore();
       let batch = db.batch();
       let pending = 0;
 
@@ -5526,8 +5503,34 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
         await batch.commit();
       }
     }
+
+    const responseData = {
+      requestId,
+      queueKey,
+      competitionId,
+      participantsCount: idsArray.length || null,
+      type,
+      status: "queued",
+      queuedAt: new Date().toISOString(),
+      estimatedProcessingTime: "1-2 minutos"
+    };
+    if (jobsTotal !== null) {
+      responseData.jobsTotal = jobsTotal;
+    }
+    if (participantId) {
+      responseData.participantId = participantId;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Request encolada exitosamente para procesamiento",
+      data: responseData
+    });
   } catch (error) {
     console.error("❌ Error procesando webhook checkpoint v3:", error);
+    if (res.headersSent) {
+      return;
+    }
     return res.status(500).json({
       error: "Error interno del servidor",
       details: error.message
@@ -6212,6 +6215,7 @@ router.get("/race-events-v3", async (req, res) => {
     const db = admin.firestore();
     const limitNum = Math.min(parseInt(limit) || 20, 100);
     const offsetNum = parseInt(offset) || 0;
+    const normalizedEventId = normalizeUTF8InObject(eventId);
 
     const normalizedAudience = String(audience || "all").toLowerCase();
     if (!["all", "featured"].includes(normalizedAudience)) {
@@ -6220,8 +6224,8 @@ router.get("/race-events-v3", async (req, res) => {
       });
     }
 
-    console.log(`🔍 Obteniendo eventos (v3) - Race: ${raceId}, App: ${appId}, Event: ${eventId}, Type: ${type || 'ALL'}, Participant: ${participantId || 'ALL'}, Audience: ${normalizedAudience}, User: ${userId || 'NONE'}`);
-    console.log(`🔤 [race-events-v3] eventId codepoints:`, Array.from(String(eventId || '')).map(c => c.charCodeAt(0)));
+    console.log(`🔍 Obteniendo eventos (v3) - Race: ${raceId}, App: ${appId}, Event: ${normalizedEventId}, Type: ${type || 'ALL'}, Participant: ${participantId || 'ALL'}, Audience: ${normalizedAudience}, User: ${userId || 'NONE'}`);
+    console.log(`🔤 [race-events-v3] eventId codepoints:`, Array.from(String(normalizedEventId || '')).map(c => c.charCodeAt(0)));
 
     try {
       const eventsSnap = await db.collection('races').doc(raceId)
@@ -6255,7 +6259,7 @@ router.get("/race-events-v3", async (req, res) => {
     if (participantId) {
       const participantDoc = await db.collection('races').doc(raceId)
         .collection('apps').doc(appId)
-        .collection('events').doc(eventId)
+        .collection('events').doc(normalizedEventId)
         .collection('participants').doc(participantId).get();
 
       if (!participantDoc.exists) {
@@ -6264,14 +6268,14 @@ router.get("/race-events-v3", async (req, res) => {
           participantId,
           raceId,
           appId,
-          eventId
+          eventId: normalizedEventId
         });
       }
     }
 
     const eventRef = db.collection('races').doc(raceId)
       .collection('apps').doc(appId)
-      .collection('events').doc(eventId);
+      .collection('events').doc(normalizedEventId);
 
     if (debugStoryId) {
       try {
@@ -6285,27 +6289,18 @@ router.get("/race-events-v3", async (req, res) => {
       }
     }
 
-    // Leer desde la colección de stories por evento (desnormalizada)
-    let storiesQuery = eventRef.collection('stories');
+    const buildStoriesQuery = () => {
+      let query = eventRef.collection('stories');
+      if (participantId) {
+        query = query.where('participantId', '==', participantId);
+      }
+      if (type) {
+        query = query.where('type', '==', type);
+      }
+      return query.orderBy('updatedAt', 'desc');
+    };
 
-    if (participantId) {
-      storiesQuery = storiesQuery.where('participantId', '==', participantId);
-    }
-    if (type) {
-      storiesQuery = storiesQuery.where('type', '==', type);
-    }
-
-    storiesQuery = storiesQuery.orderBy('updatedAt', 'desc');
-
-    let totalStories = null;
-    try {
-      const countSnapshot = await storiesQuery.count().get();
-      totalStories = countSnapshot.data().count || 0;
-    } catch (error) {
-      totalStories = null;
-    }
-
-    const storiesSnapshot = await storiesQuery.offset(offsetNum).limit(limitNum).get();
+    const storiesQuery = buildStoriesQuery();
 
     let followedIds = new Set();
     if (userId) {
@@ -6315,7 +6310,7 @@ router.get("/race-events-v3", async (req, res) => {
           .collection("followings")
           .where("profileType", "==", "participant")
           .where("raceId", "==", raceId)
-          .where("eventId", "==", eventId);
+          .where("eventId", "==", normalizedEventId);
         if (appId) {
           followingsQuery = followingsQuery.where("appId", "==", appId);
         }
@@ -6326,9 +6321,139 @@ router.get("/race-events-v3", async (req, res) => {
           if (data.profileId) {
             followedIds.add(String(data.profileId));
           }
+          followedIds.add(String(doc.id));
         });
       } catch (followError) {
         console.warn("No se pudieron obtener followings para filtrar:", followError.message);
+      }
+    }
+
+    const isFeaturedByStoryData = (storyData) =>
+      storyData?.featured === true || storyData?.participant?.featured === true;
+
+    const matchesAudienceByStoryData = (storyData) => {
+      const storyParticipantId = String(
+        storyData?.participantId ||
+        storyData?.participant?.externalId ||
+        storyData?.participant?.id ||
+        ""
+      );
+      if (userId) {
+        if (normalizedAudience === "featured") {
+          return followedIds.has(storyParticipantId) || isFeaturedByStoryData(storyData);
+        }
+        return followedIds.has(storyParticipantId);
+      }
+
+      if (normalizedAudience === "featured") {
+        return isFeaturedByStoryData(storyData);
+      }
+      return true;
+    };
+
+    const getUpdatedAtMs = (storyDoc) => {
+      const data = storyDoc.data() || {};
+      const v = data.updatedAt || data.date || data.createdAt || null;
+      if (!v) return 0;
+      if (typeof v.toMillis === "function") return v.toMillis();
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      const parsed = Date.parse(String(v));
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    const chunkArray = (arr, size) => {
+      const chunks = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
+
+    const loadUnionDocs = async (queries, target) => {
+      const map = new Map();
+      let maybeMore = false;
+
+      for (const query of queries) {
+        const snap = await query.limit(target).get();
+        if (snap.size >= target) {
+          maybeMore = true;
+        }
+        for (const doc of snap.docs) {
+          map.set(doc.id, doc);
+        }
+      }
+
+      const docs = Array.from(map.values()).sort((a, b) => getUpdatedAtMs(b) - getUpdatedAtMs(a));
+      return {docs, maybeMore};
+    };
+
+    let selectedStoryDocs = [];
+    let totalStories = null;
+    let hasMore = false;
+    const filterApplied = normalizedAudience === "featured" || Boolean(userId);
+
+    if (!filterApplied) {
+      try {
+        const countSnapshot = await storiesQuery.count().get();
+        totalStories = countSnapshot.data().count || 0;
+      } catch (error) {
+        totalStories = null;
+      }
+      const storiesSnapshot = await storiesQuery.offset(offsetNum).limit(limitNum).get();
+      selectedStoryDocs = storiesSnapshot.docs;
+      hasMore = totalStories !== null ? (offsetNum + limitNum) < totalStories : selectedStoryDocs.length === limitNum;
+    } else {
+      const target = offsetNum + limitNum + 1;
+      const chunkSize = 10;
+      const queryList = [];
+
+      if (userId) {
+        let followedList = Array.from(followedIds);
+        if (participantId) {
+          followedList = followedList.filter(id => id === String(participantId));
+        }
+
+        if (followedList.length > 0) {
+          const chunks = chunkArray(followedList, chunkSize);
+          chunks.forEach((idsChunk) => {
+            let query = eventRef.collection('stories').where('participantId', 'in', idsChunk);
+            if (type) {
+              query = query.where('type', '==', type);
+            }
+            queryList.push(query.orderBy('updatedAt', 'desc'));
+          });
+        }
+
+        if (normalizedAudience === "featured") {
+          let featuredQuery = eventRef.collection('stories').where('featured', '==', true);
+          if (participantId) {
+            featuredQuery = featuredQuery.where('participantId', '==', participantId);
+          }
+          if (type) {
+            featuredQuery = featuredQuery.where('type', '==', type);
+          }
+          queryList.push(featuredQuery.orderBy('updatedAt', 'desc'));
+        }
+      } else if (normalizedAudience === "featured") {
+        let featuredQuery = eventRef.collection('stories').where('featured', '==', true);
+        if (participantId) {
+          featuredQuery = featuredQuery.where('participantId', '==', participantId);
+        }
+        if (type) {
+          featuredQuery = featuredQuery.where('type', '==', type);
+        }
+        queryList.push(featuredQuery.orderBy('updatedAt', 'desc'));
+      }
+
+      if (queryList.length === 0) {
+        selectedStoryDocs = [];
+        totalStories = 0;
+        hasMore = false;
+      } else {
+        const {docs, maybeMore} = await loadUnionDocs(queryList, target);
+        selectedStoryDocs = docs.slice(offsetNum, offsetNum + limitNum);
+        hasMore = docs.length > (offsetNum + limitNum) || maybeMore;
+        totalStories = maybeMore ? null : docs.length;
       }
     }
 
@@ -6379,7 +6504,7 @@ router.get("/race-events-v3", async (req, res) => {
 
       return participantData;
     };
-    const allStoryDocs = storiesSnapshot.docs;
+    const allStoryDocs = selectedStoryDocs;
     const participantIds = [...new Set(
       allStoryDocs
         .map(doc => doc.data()?.participantId || doc.data()?.participant?.externalId)
@@ -6542,9 +6667,9 @@ router.get("/race-events-v3", async (req, res) => {
       return story;
     });
 
-    const filterApplied = normalizedAudience === "featured" || Boolean(userId);
-    const totalSafe = filterApplied ? stories.length : (totalStories !== null ? totalStories : offsetNum + stories.length);
-    const hasMore = filterApplied ? false : (totalStories !== null ? (offsetNum + limitNum) < totalStories : stories.length === limitNum);
+    const totalSafe = totalStories !== null
+      ? totalStories
+      : (offsetNum + stories.length + (hasMore ? 1 : 0));
 
     console.log(`✅ ${stories.length} stories de ${totalSafe} (type=${type || 'ALL'}, participant=${participantId || 'ALL'})`);
 
@@ -6565,7 +6690,7 @@ router.get("/race-events-v3", async (req, res) => {
         participantId: participantId || null,
         raceId,
         appId,
-        eventId,
+        eventId: normalizedEventId,
         audience: normalizedAudience,
         userId: userId || null
       },
@@ -11126,9 +11251,13 @@ export const onClipGenerationJobCreated = onDocumentCreated("clip_generation_job
           storyData: {
             ...storyData,
             fileUrl: clipResult.clipUrl,
-            description: "New clip available"
+            description: "Clip disponible para ver"
           },
-          participantData: participantData || storyData.participant || {}
+          participantData: participantData || storyData.participant || {},
+          notificationOverrides: {
+            notificationType: "STORY_CLIP_READY",
+            body: "El clip del checkpoint ya esta disponible."
+          }
         });
       }
     } catch (notifyError) {

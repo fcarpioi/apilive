@@ -9,7 +9,8 @@ export async function sendStoryNotificationToFollowers({
                                                     participantId,
                                                     storyId,
                                                     storyData,
-                                                    participantData
+                                                    participantData,
+                                                    notificationOverrides = {}
                                                 }) {
     const participantRef = db.collection('races').doc(raceId)
         .collection('apps').doc(appId)
@@ -43,6 +44,25 @@ export async function sendStoryNotificationToFollowers({
         participantId,
         storyId
     });
+
+    if (notificationOverrides.title) {
+        payload.notification.title = notificationOverrides.title;
+        if (payload.apns?.payload?.aps?.alert) {
+            payload.apns.payload.aps.alert.title = notificationOverrides.title;
+        }
+    }
+    if (notificationOverrides.body) {
+        payload.notification.body = notificationOverrides.body;
+        if (payload.apns?.payload?.aps?.alert) {
+            payload.apns.payload.aps.alert.body = notificationOverrides.body;
+        }
+    }
+    if (notificationOverrides.notificationType) {
+        payload.data.notificationType = notificationOverrides.notificationType;
+    }
+    if (notificationOverrides.description) {
+        payload.data.description = notificationOverrides.description;
+    }
 
     const chunkSize = 500;
     for (let i = 0; i < tokens.length; i += chunkSize) {

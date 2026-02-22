@@ -5,8 +5,9 @@ import {findEventsByCompetition} from "../competitions/findEventsByCompetition.m
 import copernicoService from "../../services/copernicoService.mjs";
 import {getCompetitionStreams} from "../competitions/getCompetitionStreams.mjs";
 import {
-    sendSilentCheckpointNotificationToFollowers
-} from "../notifications/sendSilentCheckpointNotificationToFollowers.mjs";
+    sendCheckpointNotificationToFollowers
+} from "../notifications/sendCheckpointNotificationToFollowers.mjs";
+import {sendStoryNotificationToFollowers} from "../notifications/sendStoryNotificationToFollowers.mjs";
 import {createAutomaticStory} from "../stories/createAutomaticStory.mjs";
 import {recoverRaceData} from "../db/recoverRaceData.mjs";
 
@@ -389,39 +390,52 @@ async function createDeleteParticipant({
     const ids = Array.isArray(participantsIds) ? participantsIds : [];
     const results = [];
 
-    let raceSlug = competitionId;
-    if (copernicoId) {
-        raceSlug = copernicoId;
-    } else if (raceData && raceData.race_info && raceData.race_info.id) {
-        raceSlug = raceData.race_info.id;
-    }
-
     const copernicoEventsByParticipant = new Map();
     const copernicoParticipantDataById = new Map();
 
-    for (let i = 0; i < ids.length; i += COPERNICO_BATCH_SIZE) {
-        const batch = ids.slice(i, i + COPERNICO_BATCH_SIZE);
-        await Promise.all(batch.map(async (pid) => {
-            try {
-                const copernicoData = await copernicoService.getParticipantData(raceSlug, pid, copernicoEnv);
-                const transformed = copernicoService.transformCopernicoData(copernicoData);
-                const rawEvents = Array.isArray(copernicoData?.events) ? copernicoData.events : [];
-                const eventIds = rawEvents
-                    .map(evt => String(evt?.event || evt?.name || evt?.eventName || "").trim())
-                    .filter(Boolean);
-                copernicoEventsByParticipant.set(pid, new Set(eventIds));
-                copernicoParticipantDataById.set(pid, transformed?.participant || null);
-            } catch (error) {
-                console.warn(`⚠️ [BACKGROUND v3] No se pudo obtener eventos de Copernico para ${pid}:`, error.message);
-                copernicoEventsByParticipant.set(pid, new Set());
-                copernicoParticipantDataById.set(pid, null);
-            }
-        }));
+    if (type === 'creation') {
+        let raceSlug = competitionId;
+        if (copernicoId) {
+            raceSlug = copernicoId;
+        } else if (raceData && raceData.race_info && raceData.race_info.id) {
+            raceSlug = raceData.race_info.id;
+        }
+
+        for (let i = 0; i < ids.length; i += COPERNICO_BATCH_SIZE) {
+            const batch = ids.slice(i, i + COPERNICO_BATCH_SIZE);
+            await Promise.all(batch.map(async (pid) => {
+                try {
+                    const copernicoData = await copernicoService.getParticipantData(raceSlug, pid, copernicoEnv);
+                    const transformed = copernicoService.transformCopernicoData(copernicoData);
+                    const rawEvents = Array.isArray(copernicoData?.events) ? copernicoData.events : [];
+                    const eventIds = rawEvents
+                        .map(evt => String(evt?.event || evt?.name || evt?.eventName || "").trim())
+                        .filter(Boolean);
+                    copernicoEventsByParticipant.set(pid, new Set(eventIds));
+                    copernicoParticipantDataById.set(pid, transformed?.participant || null);
+                } catch (error) {
+                    console.warn(`⚠️ [BACKGROUND v3] No se pudo obtener eventos de Copernico para ${pid}:`, error.message);
+                    copernicoEventsByParticipant.set(pid, new Set());
+                    copernicoParticipantDataById.set(pid, null);
+                }
+            }));
+        }
     }
 
     const processParticipant = async (pid) => {
         const participantResults = [];
         const participantEvents = copernicoEventsByParticipant.get(pid) || new Set();
+
+        if (type === 'creation' && participantEvents.size === 0) {
+            participantResults.push({
+                participantId: pid,
+                action: 'skipped',
+                success: false,
+                reason: 'no_events_resolved_for_creation'
+            });
+            results.push(...participantResults);
+            return;
+        }
 
         await Promise.all(locations.map(async (loc) => {
             const {raceId, appId, eventId} = loc;
@@ -429,7 +443,7 @@ async function createDeleteParticipant({
                 .collection('apps').doc(appId)
                 .collection('events').doc(eventId);
 
-            if (!participantEvents.has(eventId)) {
+            if (type === 'creation' && !participantEvents.has(eventId)) {
                 return;
             }
 
@@ -730,7 +744,7 @@ async function modificationProcess({
                                        rawTime
                                    }) {
     if (hasFollowers) {
-        await sendSilentCheckpointNotificationToFollowers({
+        await sendCheckpointNotificationToFollowers({
             db,
             raceId,
             appId,
@@ -757,6 +771,15 @@ async function modificationProcess({
             rawTime,
             {updateOnly: false, skipClipGeneration: false}
         );
+        await notifyStoryCreationWithoutClip({
+            db,
+            raceId,
+            appId,
+            eventId,
+            participantId: participantDocId,
+            storyResult,
+            participantData
+        });
     }
 
     return {
@@ -804,6 +827,15 @@ async function createStory({
             copernicoSuccess ? transformedData : null,
             rawTime
         );
+        await notifyStoryCreationWithoutClip({
+            db,
+            raceId,
+            appId,
+            eventId,
+            participantId: participantDocId,
+            storyResult,
+            participantData
+        });
         logStep('after createAutomaticStory', init);
     }
 
@@ -819,4 +851,48 @@ async function createStory({
         storyCreated: storyResult?.success || false,
         storyId: storyResult?.storyId || null
     };
+}
+
+async function notifyStoryCreationWithoutClip({
+                                                  db,
+                                                  raceId,
+                                                  appId,
+                                                  eventId,
+                                                  participantId,
+                                                  storyResult,
+                                                  participantData
+                                              }) {
+    if (!storyResult?.success || !storyResult?.storyId || storyResult?.updated) {
+        return;
+    }
+
+    try {
+        const storyDoc = await db.collection('races').doc(raceId)
+            .collection('apps').doc(appId)
+            .collection('events').doc(eventId)
+            .collection('stories').doc(storyResult.storyId)
+            .get();
+
+        if (!storyDoc.exists) {
+            return;
+        }
+
+        const storyData = storyDoc.data() || {};
+        await sendStoryNotificationToFollowers({
+            db,
+            raceId,
+            appId,
+            eventId,
+            participantId,
+            storyId: storyResult.storyId,
+            storyData,
+            participantData: participantData || storyData.participant || {},
+            notificationOverrides: {
+                notificationType: "NEW_STORY_PENDING_CLIP",
+                body: "Nuevo checkpoint disponible. El clip se esta generando."
+            }
+        });
+    } catch (notifyError) {
+        console.error(`⚠️ [BACKGROUND v3] Error enviando push de story sin clip:`, notifyError.message);
+    }
 }
