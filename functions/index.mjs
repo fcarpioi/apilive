@@ -5,7 +5,7 @@ import express from "express";
 import cors from "cors";
 
 // Importar el router completo con search/participants actualizado
-import apiGeneralRouter, { onCheckpointQueueCreated, onCheckpointQueueJobCreated, onClipGenerationJobCreated } from "./routes/apiGeneral.mjs";
+import apiGeneralRouter from "./routes/apiGeneral.mjs";
 
 /**
  * Función para normalizar encoding UTF-8 en objetos
@@ -104,4 +104,5 @@ export const liveApiGateway = onRequest(app);
 // export { onUserFollowsParticipant }; // COMENTADO TEMPORALMENTE
 export { onStoryCreated, onEventWritten, onLegacyEventWritten };
 export { cleanupEventSubcollectionsDaily };
-export { onCheckpointQueueCreated, onCheckpointQueueJobCreated, onClipGenerationJobCreated };
+// triggers de queue manejados por v2: onCheckpointQueueCreatedV2, onCheckpointQueueJobCreatedV2, onClipGenerationJobCreatedV2
+// export { onCheckpointQueueCreated, onCheckpointQueueJobCreated, onClipGenerationJobCreated };

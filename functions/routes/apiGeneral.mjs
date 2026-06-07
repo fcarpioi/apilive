@@ -37,11 +37,23 @@ import {createAutomaticStory} from "../modules/stories/createAutomaticStory.mjs"
 import {generateStoryVideoClip} from "../modules/stories/generateStoryVideoClip.mjs";
 import {createSplitClipsFromStory} from "../modules/stories/createSplitClipsFromStory.mjs";
 import {sendStoryNotificationToFollowers} from "../modules/notifications/sendStoryNotificationToFollowers.mjs";
-import {processCheckpointInBackground} from "../modules/process/processCheckpointInBackground.mjs";
 import {processCheckpointInBackgroundV3} from "../modules/process/processCheckpointInBackgroundV3.mjs";
 import {generateVideoClip} from "../modules/videos/generateVideoClip.mjs";
 import {generateAutomaticStoryForCheckpoint} from "../modules/stories/generateAutomaticStoryForCheckpoint.mjs";
 import {recoverRaceData} from "../modules/db/recoverRaceData.mjs";
+import {
+  requireFields,
+  sendError,
+  extractApiKey,
+  hasValidApiKey,
+  buildAppRef,
+  buildEventRef,
+  buildParticipantRef,
+  buildStoryRef,
+  ensureParticipantExists,
+  ensureStoryExists,
+  resolveParticipantWithLegacyFallback
+} from "../modules/routes/apiRouteHelpers.mjs";
 
 // Inicializar Firebase Admin (si aún no lo está)
 if (!admin.apps.length) {
@@ -618,99 +630,27 @@ router.get("/events", async (req, res) => {
  *       '500':
  *         description: Error interno del servidor.
  */
-router.post("/follow", async (req, res) => {
-  try {
-    let { followerId, followingId, raceId, appId, eventId } = req.body;
-    if (!followerId || !followingId || !raceId || !appId || !eventId) {
-      return res.status(400).json({
-        message: "followerId, followingId, raceId, appId y eventId son obligatorios.",
-      });
-    }
-
-    // Normalizar eventId para evitar problemas de encoding
-    eventId = normalizeUTF8InObject(eventId);
-
-    const db = admin.firestore();
-
-    // 🆕 NUEVA ESTRUCTURA: Solo buscar en estructura con appId
-    console.log(`🔍 [FOLLOW] Buscando participante: races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`);
-    const participantRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(followingId);
-
-    const participantDoc = await participantRef.get();
-    if (!participantDoc.exists) {
-      return res.status(404).json({
-        message: "El participante no existe en este evento.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`
-      });
-    }
-    const followingsRef = db.collection("users").doc(followerId).collection("followings").doc(followingId);
-    const followersRef = participantRef.collection("followers").doc(followerId);
-    const alreadyFollowing = await followingsRef.get();
-    if (alreadyFollowing.exists) {
-      return res.status(400).json({ message: "Ya sigues a este participante." });
-    }
-
-    // 💾 Guardar seguimiento con appId si está disponible
-    const followingData = {
-      profileType: "participant",
-      profileId: followingId,
-      raceId: raceId,
-      eventId: eventId,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    // ✅ Agregar appId si está disponible (nueva estructura)
-    if (appId) {
-      followingData.appId = appId;
-    }
-
-    await followingsRef.set(followingData);
-    await followersRef.set({
-      profileType: "user",
-      profileId: followerId,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const response = {
-      message: "Seguimiento registrado correctamente.",
-      followerId,
-      followingId,
-      raceId,
-      eventId,
-    };
-
-    // ✅ Incluir appId en respuesta si está disponible
-    if (appId) {
-      response.appId = appId;
-    }
-
-    return res.status(200).json(response);
-  } catch (error) {
-    console.error("Error al seguir participante:", error);
-    return res.status(500).json({ message: "Error interno del servidor", error: error.message });
-  }
-});
-
-// Nueva version con carga de participante basica y creacion de historias en background
 router.post("/follow-v3", async (req, res) => {
   try {
     let { followerId, followingId, raceId, appId, eventId, eventStatus } = req.body;
-    if (!followerId || !followingId || !raceId || !appId || !eventId) {
-      return res.status(400).json({
-        message: "followerId, followingId, raceId, appId y eventId son obligatorios."
+    const missingRequired = requireFields(req.body, ["followerId", "followingId", "raceId", "appId", "eventId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "followerId, followingId, raceId, appId y eventId son obligatorios.", {
+        message: "followerId, followingId, raceId, appId y eventId son obligatorios.",
+        required: ["followerId", "followingId", "raceId", "appId", "eventId"],
+        missing: missingRequired
       });
     }
 
     eventId = normalizeUTF8InObject(eventId);
     const db = admin.firestore();
 
-    const participantRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(followingId);
+    const participantRef = buildParticipantRef(db, {
+      raceId,
+      appId,
+      eventId,
+      participantId: followingId
+    });
 
     let participantDoc = await participantRef.get();
     let resolvedExternalId = followingId;
@@ -768,7 +708,7 @@ router.post("/follow-v3", async (req, res) => {
     const followersRef = participantRef.collection("followers").doc(followerId);
     const alreadyFollowing = await followingsRef.get();
     if (alreadyFollowing.exists) {
-      return res.status(400).json({ message: "Ya sigues a este participante." });
+      return sendError(res, 400, "Ya sigues a este participante.", { message: "Ya sigues a este participante." });
     }
 
     const followingData = {
@@ -884,10 +824,7 @@ router.post("/follow-v3", async (req, res) => {
         let splitKeys = [];
         let hasEnabledSplit = false;
         try {
-          const eventDoc = await db.collection('races').doc(raceId)
-            .collection('apps').doc(appId)
-            .collection('events').doc(eventId)
-            .get();
+          const eventDoc = await buildEventRef(db, { raceId, appId, eventId }).get();
           videoSplits = eventDoc.exists ? eventDoc.data()?.videoSplits : null;
           splitKeys = videoSplits ? Object.keys(videoSplits) : [];
           hasEnabledSplit = splitKeys.some(key => videoSplits?.[key]?.status === true);
@@ -996,9 +933,12 @@ router.post("/follow-v3", async (req, res) => {
 router.post("/unfollow", async (req, res) => {
   try {
     let { followerId, followingId, raceId, appId, eventId } = req.body;
-    if (!followerId || !followingId || !raceId || !appId || !eventId) {
-      return res.status(400).json({
+    const missingRequired = requireFields(req.body, ["followerId", "followingId", "raceId", "appId", "eventId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "followerId, followingId, raceId, appId y eventId son obligatorios.", {
         message: "followerId, followingId, raceId, appId y eventId son obligatorios.",
+        required: ["followerId", "followingId", "raceId", "appId", "eventId"],
+        missing: missingRequired
       });
     }
 
@@ -1009,17 +949,18 @@ router.post("/unfollow", async (req, res) => {
 
     // 🆕 NUEVA ESTRUCTURA: Solo buscar en estructura con appId
     console.log(`🔍 [UNFOLLOW] Buscando participante: races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`);
-    const participantRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(followingId);
+    const participantRef = buildParticipantRef(db, {
+      raceId,
+      appId,
+      eventId,
+      participantId: followingId
+    });
 
-    const participantDoc = await participantRef.get();
-    if (!participantDoc.exists) {
-      return res.status(404).json({
-        message: "El participante no existe en este evento.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`
-      });
+    const participantCheck = await ensureParticipantExists(res, participantRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${followingId}`
+    });
+    if (!participantCheck.exists) {
+      return participantCheck.response;
     }
 
     // Referencias a los documentos de seguimiento
@@ -1029,7 +970,7 @@ router.post("/unfollow", async (req, res) => {
     // Verificar que se está siguiendo al participante
     const currentlyFollowing = await followingsRef.get();
     if (!currentlyFollowing.exists) {
-      return res.status(400).json({ message: "No estás siguiendo a este participante." });
+      return sendError(res, 400, "No estás siguiendo a este participante.", { message: "No estás siguiendo a este participante." });
     }
 
     // Eliminar el seguimiento de ambas colecciones
@@ -1106,26 +1047,24 @@ router.post("/unfollow", async (req, res) => {
 router.post("/like", async (req, res) => {
   try {
     const { raceId, appId, eventId, participantId, storyId, userId } = req.body;
-    if (!raceId || !appId || !eventId || !participantId || !storyId || !userId) {
-      return res.status(400).json({
+    const missingRequired = requireFields(req.body, ["raceId", "appId", "eventId", "participantId", "storyId", "userId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "raceId, appId, eventId, participantId, storyId y userId son obligatorios.", {
         message: "raceId, appId, eventId, participantId, storyId y userId son obligatorios.",
+        required: ["raceId", "appId", "eventId", "participantId", "storyId", "userId"],
+        missing: missingRequired
       });
     }
     const db = admin.firestore();
 
     // Usar la estructura correcta: races/apps/events/participants/stories
-    const storyRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId)
-      .collection("stories").doc(storyId);
+    const storyRef = buildStoryRef(db, { raceId, appId, eventId, participantId, storyId });
 
-    const storyDoc = await storyRef.get();
-    if (!storyDoc.exists) {
-      return res.status(404).json({
-        message: "La historia no existe.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
-      });
+    const storyCheck = await ensureStoryExists(res, storyRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+    });
+    if (!storyCheck.exists) {
+      return storyCheck.response;
     }
 
     // Verificar si el usuario ya dio like a esta historia
@@ -1134,7 +1073,7 @@ router.post("/like", async (req, res) => {
       .get();
 
     if (!existingLike.empty) {
-      return res.status(400).json({
+      return sendError(res, 400, "El usuario ya dio like a esta historia.", {
         message: "El usuario ya dio like a esta historia.",
         likeId: existingLike.docs[0].id
       });
@@ -1247,26 +1186,25 @@ router.get("/shares/count", async (req, res) => {
   try {
     const { raceId, appId, eventId, participantId, storyId } = req.query;
 
-    if (!raceId || !appId || !eventId || !participantId) {
-      return res.status(400).json({
+    const missingRequired = requireFields(req.query, ["raceId", "appId", "eventId", "participantId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "raceId, appId, eventId y participantId son obligatorios.", {
         message: "raceId, appId, eventId y participantId son obligatorios.",
+        required: ["raceId", "appId", "eventId", "participantId"],
+        missing: missingRequired
       });
     }
 
     const db = admin.firestore();
 
     // Usar la estructura correcta: races/apps/events/participants
-    const participantRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId);
+    const participantRef = buildParticipantRef(db, { raceId, appId, eventId, participantId });
 
-    const participantDoc = await participantRef.get();
-    if (!participantDoc.exists) {
-      return res.status(404).json({
-        message: "El participante no existe en este evento.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
-      });
+    const participantCheck = await ensureParticipantExists(res, participantRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
+    });
+    if (!participantCheck.exists) {
+      return participantCheck.response;
     }
 
     let totalShares = 0;
@@ -1276,13 +1214,11 @@ router.get("/shares/count", async (req, res) => {
     if (storyId) {
       // Contar comparticiones de una historia específica
       const storyRef = participantRef.collection("stories").doc(storyId);
-      const storyDoc = await storyRef.get();
-
-      if (!storyDoc.exists) {
-        return res.status(404).json({
-          message: "La historia no existe.",
-          path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
-        });
+      const storyCheck = await ensureStoryExists(res, storyRef, {
+        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+      });
+      if (!storyCheck.exists) {
+        return storyCheck.response;
       }
 
       const sharesSnapshot = await storyRef.collection("shares").get();
@@ -1433,25 +1369,24 @@ router.get("/shares/count", async (req, res) => {
 router.get("/likes/count", async (req, res) => {
   try {
     const { raceId, appId, eventId, participantId } = req.query;
-    if (!raceId || !appId || !eventId || !participantId) {
-      return res.status(400).json({
+    const missingRequired = requireFields(req.query, ["raceId", "appId", "eventId", "participantId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "raceId, appId, eventId y participantId son obligatorios.", {
         message: "raceId, appId, eventId y participantId son obligatorios.",
+        required: ["raceId", "appId", "eventId", "participantId"],
+        missing: missingRequired
       });
     }
     const db = admin.firestore();
 
     // Usar la estructura correcta: races/apps/events/participants
-    const participantRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId);
+    const participantRef = buildParticipantRef(db, { raceId, appId, eventId, participantId });
 
-    const participantDoc = await participantRef.get();
-    if (!participantDoc.exists) {
-      return res.status(404).json({
-        message: "El participante no existe en este evento.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
-      });
+    const participantCheck = await ensureParticipantExists(res, participantRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
+    });
+    if (!participantCheck.exists) {
+      return participantCheck.response;
     }
 
     let totalLikes = 0;
@@ -1528,26 +1463,24 @@ router.get("/likes/count", async (req, res) => {
 router.post("/unlike", async (req, res) => {
   try {
     const { raceId, appId, eventId, participantId, storyId, userId } = req.body;
-    if (!raceId || !appId || !eventId || !participantId || !storyId || !userId) {
-      return res.status(400).json({
+    const missingRequired = requireFields(req.body, ["raceId", "appId", "eventId", "participantId", "storyId", "userId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "raceId, appId, eventId, participantId, storyId y userId son obligatorios.", {
         message: "raceId, appId, eventId, participantId, storyId y userId son obligatorios.",
+        required: ["raceId", "appId", "eventId", "participantId", "storyId", "userId"],
+        missing: missingRequired
       });
     }
     const db = admin.firestore();
 
     // Usar la estructura correcta: races/apps/events/participants/stories
-    const storyRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId)
-      .collection("stories").doc(storyId);
+    const storyRef = buildStoryRef(db, { raceId, appId, eventId, participantId, storyId });
 
-    const storyDoc = await storyRef.get();
-    if (!storyDoc.exists) {
-      return res.status(404).json({
-        message: "La historia no existe.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
-      });
+    const storyCheck = await ensureStoryExists(res, storyRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+    });
+    if (!storyCheck.exists) {
+      return storyCheck.response;
     }
 
     // Buscar el like del usuario
@@ -1556,7 +1489,7 @@ router.post("/unlike", async (req, res) => {
       .get();
 
     if (existingLike.empty) {
-      return res.status(400).json({
+      return sendError(res, 400, "El usuario no había dado like a esta historia.", {
         message: "El usuario no había dado like a esta historia."
       });
     }
@@ -1669,27 +1602,25 @@ router.post("/share", async (req, res) => {
     const { raceId, appId, eventId, participantId, storyId, userId, shareType = "other", platform } = req.body;
 
     // Validar parámetros requeridos
-    if (!raceId || !appId || !eventId || !participantId || !storyId || !userId) {
-      return res.status(400).json({
-        message: "raceId, appId, eventId, participantId, storyId y userId son obligatorios."
+    const missingRequired = requireFields(req.body, ["raceId", "appId", "eventId", "participantId", "storyId", "userId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "raceId, appId, eventId, participantId, storyId y userId son obligatorios.", {
+        message: "raceId, appId, eventId, participantId, storyId y userId son obligatorios.",
+        required: ["raceId", "appId", "eventId", "participantId", "storyId", "userId"],
+        missing: missingRequired
       });
     }
 
     const db = admin.firestore();
 
     // Verificar que la historia existe
-    const storyRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId)
-      .collection("stories").doc(storyId);
+    const storyRef = buildStoryRef(db, { raceId, appId, eventId, participantId, storyId });
 
-    const storyDoc = await storyRef.get();
-    if (!storyDoc.exists) {
-      return res.status(404).json({
-        message: "La historia no existe.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
-      });
+    const storyCheck = await ensureStoryExists(res, storyRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+    });
+    if (!storyCheck.exists) {
+      return storyCheck.response;
     }
 
     // Crear registro de compartición (siempre se permite, no hay restricciones como en likes)
@@ -1740,18 +1671,13 @@ router.delete("/apps/story", async (req, res) => {
     }
 
     const db = admin.firestore();
-    const storyRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId)
-      .collection("stories").doc(storyId);
+    const storyRef = buildStoryRef(db, { raceId, appId, eventId, participantId, storyId });
 
-    const storyDoc = await storyRef.get();
-    if (!storyDoc.exists) {
-      return res.status(404).json({
-        message: "La historia no existe.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
-      });
+    const storyCheck = await ensureStoryExists(res, storyRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}/stories/${storyId}`
+    });
+    if (!storyCheck.exists) {
+      return storyCheck.response;
     }
 
     // Eliminar subcolecciones conocidas (por lotes)
@@ -1775,9 +1701,7 @@ router.delete("/apps/story", async (req, res) => {
 
     // Eliminar story espejo en la colección por evento (si existe)
     try {
-      const eventStoryRef = db.collection("races").doc(raceId)
-        .collection("apps").doc(appId)
-        .collection("events").doc(eventId)
+      const eventStoryRef = buildEventRef(db, { raceId, appId, eventId })
         .collection("stories").doc(storyId);
       await eventStoryRef.delete();
     } catch (e) {
@@ -1786,9 +1710,7 @@ router.delete("/apps/story", async (req, res) => {
 
     // También eliminar referencias asociadas en split-clips y timing-clips (por storyId + participantId)
     try {
-      const eventRef = db.collection("races").doc(raceId)
-        .collection("apps").doc(appId)
-        .collection("events").doc(eventId);
+      const eventRef = buildEventRef(db, { raceId, appId, eventId });
 
       const clipCollections = ["split-clips", "timing-clips"];
       for (const colName of clipCollections) {
@@ -1830,9 +1752,7 @@ router.delete("/apps/stories", async (req, res) => {
     }
 
     const db = admin.firestore();
-    const eventRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId);
+    const eventRef = buildEventRef(db, { raceId, appId, eventId });
 
     const participantsSnap = await eventRef.collection("participants").get();
     let deletedStories = 0;
@@ -1941,27 +1861,16 @@ router.get("/participant", async (req, res) => {
     }
 
     const db = admin.firestore();
-    let participantDoc = null;
-    let participantRef = null;
-
-    // Si se proporciona appId, usar nueva estructura
     if (appId) {
       console.log(`🔍 Buscando participante en nueva estructura: races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`);
-      participantRef = db.collection("races").doc(raceId)
-        .collection("apps").doc(appId)
-        .collection("events").doc(eventId)
-        .collection("participants").doc(participantId);
-      participantDoc = await participantRef.get();
     }
-
-    // Si no se encuentra en nueva estructura o no se proporcionó appId, buscar en estructura antigua
-    if (!participantDoc || !participantDoc.exists) {
-      console.log(`🔍 Buscando participante en estructura antigua: races/${raceId}/events/${eventId}/participants/${participantId}`);
-      participantRef = db.collection("races").doc(raceId)
-        .collection("events").doc(eventId)
-        .collection("participants").doc(participantId);
-      participantDoc = await participantRef.get();
-    }
+    console.log(`🔍 Buscando participante en estructura antigua: races/${raceId}/events/${eventId}/participants/${participantId}`);
+    const { participantRef, participantDoc } = await resolveParticipantWithLegacyFallback(db, {
+      raceId,
+      appId,
+      eventId,
+      participantId
+    });
 
     if (!participantDoc.exists) {
       return res.status(404).json({
@@ -2222,18 +2131,14 @@ router.get("/apps/participant", async (req, res) => {
     console.log(`🔍 Obteniendo participante: ${participantId} en Race: ${raceId}, App: ${appId}, Event: ${eventId}`);
 
     // Obtener datos del participante
-    const participantRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId);
-
-    const participantDoc = await participantRef.get();
-    if (!participantDoc.exists) {
-      return res.status(404).json({
-        message: "El participante no existe en este evento.",
-        path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
-      });
+    const participantRef = buildParticipantRef(db, { raceId, appId, eventId, participantId });
+    const participantCheck = await ensureParticipantExists(res, participantRef, {
+      path: `/races/${raceId}/apps/${appId}/events/${eventId}/participants/${participantId}`
+    });
+    if (!participantCheck.exists) {
+      return participantCheck.response;
     }
+    const participantDoc = participantCheck.doc;
 
     const participantData = {
       id: participantDoc.id,
@@ -2273,253 +2178,6 @@ router.get("/apps/participant", async (req, res) => {
 
   } catch (error) {
     console.error("❌ Error al obtener el participante:", error);
-    return res.status(500).json({
-      message: "Error interno del servidor",
-      error: error.message
-    });
-  }
-});
-
-/**
- * @openapi
- * /api/apps/leaderboard:
- *   get:
- *     summary: Obtener líderes de una carrera por tipo (general, género o categoría)
- *     description: Devuelve el leaderboard calculado a partir de los rankings de Copernico almacenados en los participantes.
- *     parameters:
- *       - in: query
- *         name: raceId
- *         required: true
- *         schema:
- *           type: string
- *         description: Identificador de la carrera.
- *       - in: query
- *         name: appId
- *         required: true
- *         schema:
- *           type: string
- *         description: Identificador de la aplicación.
- *       - in: query
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *         description: Identificador del evento.
- *       - in: query
- *         name: type
- *         required: false
- *         schema:
- *           type: string
- *           enum: [overall, gender, category]
- *           default: overall
- *         description: Tipo de leaderboard a retornar.
- *       - in: query
- *         name: gender
- *         required: false
- *         schema:
- *           type: string
- *         description: Género a filtrar cuando type=gender (por ejemplo, male o female).
- *       - in: query
- *         name: category
- *         required: false
- *         schema:
- *           type: string
- *         description: Categoría a filtrar cuando type=category (por ejemplo, Sub 23 M).
- *       - in: query
- *         name: split
- *         required: false
- *         schema:
- *           type: string
- *         description: Split/ubicación a usar para el ranking (por defecto se usa el split más avanzado disponible).
- *       - in: query
- *         name: limit
- *         required: false
- *         schema:
- *           type: integer
- *           default: 50
- *         description: Número máximo de líderes a retornar.
- *       - in: query
- *         name: offset
- *         required: false
- *         schema:
- *           type: integer
- *           default: 0
- *         description: Desplazamiento para paginar resultados.
- *     responses:
- *       '200':
- *         description: Leaderboard obtenido exitosamente.
- *       '400':
- *         description: Parámetros faltantes o inválidos.
- *       '500':
- *         description: Error interno del servidor.
- */
-router.get("/apps/leaderboard", async (req, res) => {
-  try {
-    const {
-      raceId,
-      appId,
-      eventId,
-      type = "overall",
-      gender,
-      category,
-      split,
-      removeEmpty,
-      limit = 50,
-      offset = 0,
-      page,
-      userId,
-      followingOnly
-    } = req.query;
-
-    if (!raceId || !appId || !eventId) {
-      return res.status(400).json({
-        message: "raceId, appId y eventId son obligatorios."
-      });
-    }
-
-    const normalizedType = (type || "overall").toString().toLowerCase();
-    if (!["overall", "gender", "category"].includes(normalizedType)) {
-      return res.status(400).json({ message: "type debe ser overall, gender o category." });
-    }
-    const limitNum = Math.max(1, Math.min(parseInt(limit, 10) || 50, 200));
-    const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
-    const rawPage = parseInt(page, 10);
-    const pageNum = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 0;
-
-    const db = admin.firestore();
-    const participantsSnapshot = await db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants")
-      .get();
-
-    const leaders = [];
-    const groupMap = new Map(); // Para agrupar por gender/category cuando aplique
-
-    participantsSnapshot.forEach((doc) => {
-      const participantData = doc.data() || {};
-      const copernicoData = participantData.copernicoData || participantData.copernico || {};
-
-      const selectedRanking = pickParticipantRanking(copernicoData, split);
-      if (!selectedRanking || !selectedRanking.data) return;
-
-      const participantGenderRaw = participantData.gender || copernicoData.rawData?.gender || "";
-      const participantGender = normalizeGender(participantGenderRaw) || null;
-      const participantCategory = (participantData.category || copernicoData.rawData?.events?.[0]?.category || "").toString() || null;
-
-      const position = getPositionByType(selectedRanking.data, normalizedType);
-      if (position === null || position === undefined) return;
-
-      const normalizedPositions = normalizePositionsFromRanking(selectedRanking.data);
-      const timeValue = selectedRanking.data.net ?? selectedRanking.data.time ?? null;
-
-      const leaderEntry = {
-        participantId: doc.id,
-        externalId: participantData.externalId || participantData.id || doc.id,
-        fullName: buildParticipantName(participantData),
-        dorsal: participantData.dorsal || null,
-        gender: participantGender,
-        category: participantCategory,
-        status: participantData.status || participantData.realStatus || participantData.copernicoStatus || null,
-        split: selectedRanking.key,
-        splitOrder: selectedRanking.order,
-        distance: selectedRanking.distance || null,
-        time: timeValue,
-        average: selectedRanking.data.averageNet ?? selectedRanking.data.average ?? null,
-        position,
-        positions: normalizedPositions
-      };
-
-      if (normalizedType === "gender") {
-        // Si se envió gender, filtramos; de lo contrario, agrupamos todas
-        if (gender && participantGender !== normalizeGender(gender)) return;
-        const groupKey = participantGender || "unknown";
-        leaderEntry.group = groupKey;
-        if (!groupMap.has(groupKey)) groupMap.set(groupKey, []);
-        groupMap.get(groupKey).push(leaderEntry);
-      } else if (normalizedType === "category") {
-        if (category && participantCategory?.toLowerCase() !== category.toString().toLowerCase()) return;
-        const groupKey = participantCategory || "uncategorized";
-        leaderEntry.group = groupKey;
-        if (!groupMap.has(groupKey)) groupMap.set(groupKey, []);
-        groupMap.get(groupKey).push(leaderEntry);
-      } else {
-        leaders.push(leaderEntry);
-      }
-    });
-
-    // Función común de ordenamiento
-    const sortFn = (a, b) => {
-      if (a.position !== b.position) return (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER);
-      if (a.time !== b.time) return (a.time ?? Number.MAX_SAFE_INTEGER) - (b.time ?? Number.MAX_SAFE_INTEGER);
-      return (a.splitOrder ?? 0) - (b.splitOrder ?? 0);
-    };
-
-    if (normalizedType === "overall") {
-      leaders.sort(sortFn);
-
-      const paginatedLeaders = leaders.slice(offsetNum, offsetNum + limitNum);
-      const nextOffset = offsetNum + paginatedLeaders.length;
-      const hasMore = nextOffset < leaders.length;
-
-      return res.status(200).json({
-        raceId,
-        appId,
-        eventId,
-        type: normalizedType,
-        gender: null,
-        category: null,
-        split: split || (paginatedLeaders[0]?.split ?? null),
-        limit: limitNum,
-        offset: offsetNum,
-        returned: paginatedLeaders.length,
-        totalCandidates: leaders.length,
-        totalParticipants: participantsSnapshot.size,
-        hasMore,
-        nextOffset: hasMore ? nextOffset : null,
-        leaders: paginatedLeaders
-      });
-    }
-
-    // Agrupado (gender/category)
-    const groups = [];
-    for (const [groupKey, list] of groupMap.entries()) {
-      list.sort(sortFn);
-      const paginated = list.slice(offsetNum, offsetNum + limitNum);
-      const nextOffsetGroup = offsetNum + paginated.length;
-      const hasMoreGroup = nextOffsetGroup < list.length;
-      groups.push({
-        group: groupKey,
-        totalCandidates: list.length,
-        returned: paginated.length,
-        hasMore: hasMoreGroup,
-        nextOffset: hasMoreGroup ? nextOffsetGroup : null,
-        leaders: paginated
-      });
-    }
-
-    // Ordenar grupos por nombre para una salida determinística
-    groups.sort((a, b) => (a.group || "").localeCompare(b.group || ""));
-
-    const firstLeader = groups[0]?.leaders?.[0];
-    const selectedSplit = split || (firstLeader?.split ?? null);
-
-    return res.status(200).json({
-      raceId,
-      appId,
-      eventId,
-      type: normalizedType,
-      gender: normalizedType === "gender" ? (gender || null) : null,
-      category: normalizedType === "category" ? (category || null) : null,
-      split: selectedSplit,
-      limit: limitNum,
-      offset: offsetNum,
-      groupCount: groups.length,
-      totalParticipants: participantsSnapshot.size,
-      groups
-    });
-  } catch (error) {
-    console.error("❌ Error al obtener el leaderboard:", error);
     return res.status(500).json({
       message: "Error interno del servidor",
       error: error.message
@@ -5137,190 +4795,6 @@ router.post("/migrate-participants", async (req, res) => {
  *       '500':
  *         description: Error interno del servidor
  */
-router.post("/checkpoint-participant", async (req, res) => {
-  try {
-    console.log("🎯 Webhook checkpoint Copernico recibido:", JSON.stringify(req.body, null, 2));
-
-    // Normalizar encoding UTF-8 en extraData si existe
-    if (req.body.extraData && typeof req.body.extraData === 'object') {
-      req.body.extraData = normalizeUTF8InObject(req.body.extraData);
-      console.log("🔤 ExtraData normalizado:", JSON.stringify(req.body.extraData, null, 2));
-    }
-
-    const { competitionId, copernicoId, type, participantId, extraData, rawTime, apiKey: bodyApiKey } = req.body;
-
-    // Validaciones básicas
-    if (!competitionId || !participantId || !type) {
-      console.error("❌ Parámetros requeridos faltantes");
-      return res.status(400).json({
-        error: "Parámetros requeridos faltantes",
-        required: ["competitionId", "participantId", "type"],
-        received: { competitionId, participantId, type }
-      });
-    }
-
-    // Validar tipo de evento
-    if (!['detection', 'modification'].includes(type)) {
-      console.error("❌ Tipo de evento inválido");
-      return res.status(400).json({
-        error: "Tipo de evento inválido",
-        validTypes: ["detection", "modification"],
-        received: type
-      });
-    }
-
-    // Validar API Key para autenticación máquina-a-máquina
-    // Aceptar API key tanto en header como en body para flexibilidad
-    const headerApiKey = req.headers.apikey || req.headers.apiKey || req.headers['api-key'];
-    const apiKey = bodyApiKey || headerApiKey;
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
-
-    if (!apiKey || apiKey !== expectedApiKey) {
-      console.error("❌ API key inválida. Recibida:", apiKey ? "***" + apiKey.slice(-4) : "null");
-      return res.status(401).json({
-        error: "API key inválida",
-        hint: "Envía la API key en el header 'apiKey' o en el body como 'apiKey'"
-      });
-    }
-
-    console.log(`📋 Procesando evento ${type} para participante: ${participantId} en competición: ${competitionId}`);
-
-    console.log(`📋 Procesando evento ${type} para participante: ${participantId} en competición: ${competitionId}`);
-
-    const db = admin.firestore();
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
-
-    // Helper para normalizar componentes del queueKey
-    const sanitize = (value, fallback = "none") =>
-      String(value || fallback)
-        .trim()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-zA-Z0-9_-]/g, "")
-        .toUpperCase();
-
-    const point = extraData?.point || extraData?.location || "no_point";
-    const location = extraData?.location || extraData?.point || "no_location";
-
-    // 1. CREAR IDENTIFICADOR ÚNICO PARA EVITAR DUPLICADOS (incluye punto/ubicación)
-    const requestId = `${competitionId}_${participantId}_${type}_${Date.now()}`;
-    const queueKey = `${sanitize(competitionId)}_${sanitize(participantId)}_${sanitize(type)}_${sanitize(point)}_${sanitize(location)}`;
-
-    console.log(`🔑 Request ID: ${requestId}`);
-    console.log(`🔑 Queue Key: ${queueKey}`);
-
-    // 2. VERIFICAR SI YA ESTÁ EN COLA O PROCESÁNDOSE
-    const existingQueueSnap = await db.collection('processing_queue')
-      .where('queueKey', '==', queueKey)
-      .orderBy('createdAt', 'desc')
-      .limit(1)
-      .get();
-
-    if (!existingQueueSnap.empty) {
-      const queueData = existingQueueSnap.docs[0].data();
-      const timeDiff = Date.now() - queueData.createdAt.toMillis();
-
-      // Si está en cola, no duplicar
-      if (["queued"].includes(queueData.status)) {
-        console.log(`⚠️ Request ya está en cola (status=${queueData.status})`);
-
-        return res.status(200).json({
-          success: true,
-          message: "Request ya está en cola de procesamiento",
-          data: {
-            requestId: queueData.requestId,
-            queueKey,
-            status: "already_queued",
-            queuedAt: queueData.createdAt.toDate().toISOString(),
-            estimatedProcessingTime: "1-2 minutos"
-          }
-        });
-      } else {
-        // Si lleva más de 5 minutos, asumir que falló y reemplazar
-        console.log(`🔄 Request anterior expirado (${Math.round(timeDiff/1000)}s), reemplazando...`);
-      }
-    }
-
-    // 3. ENCOLAR NUEVA REQUEST
-    const expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000); // TTL de 15 minutos
-    const queueData = {
-      requestId,
-      queueKey,
-      competitionId,
-      copernicoId,
-      participantId,
-      type,
-      extraData: extraData || {},
-      rawTime: rawTime || null, // Timestamp exacto del checkpoint
-      status: 'queued',
-      createdAt: timestamp,
-      expireAt,
-      attempts: 0,
-      source: 'copernico-webhook'
-    };
-
-    await existingQueueRef.set(queueData);
-    console.log(`✅ Request encolada: ${requestId}`);
-
-    // 4. RESPUESTA INMEDIATA 200 - NO ESPERAR PROCESAMIENTO
-    const response = {
-      success: true,
-      message: "Request encolada exitosamente para procesamiento",
-      data: {
-        requestId,
-        queueKey,
-        competitionId,
-        participantId,
-        type,
-        status: "queued",
-        queuedAt: new Date().toISOString(),
-        estimatedProcessingTime: "1-2 minutos"
-      }
-    };
-
-    // 5. ENVIAR RESPUESTA INMEDIATA
-    res.status(200).json(response);
-
-    // 6. PROCESAMIENTO ASÍNCRONO EN BACKGROUND (NO BLOQUEA LA RESPUESTA)
-    setImmediate(async () => {
-      try {
-        console.log(`🔄 Iniciando procesamiento en background para: ${requestId}`);
-
-        // Actualizar estado a "processing"
-        await existingQueueRef.update({
-          status: 'processing',
-          processingStartedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        // AQUÍ VA LA LÓGICA COMPLEJA DE PROCESAMIENTO
-        await processCheckpointInBackground(competitionId, copernicoId, participantId, type, extraData, rawTime, requestId, queueKey);
-
-      } catch (backgroundError) {
-        console.error(`❌ Error en procesamiento background para ${requestId}:`, backgroundError);
-
-        // Marcar como fallido en la cola
-        await existingQueueRef.update({
-          status: 'failed',
-          error: backgroundError.message,
-          failedAt: admin.firestore.FieldValue.serverTimestamp(),
-          attempts: admin.firestore.FieldValue.increment(1)
-        });
-      }
-    });
-
-    // La función ya envió la respuesta, no hacer return aquí
-
-
-
-  } catch (error) {
-    console.error("❌ Error procesando webhook checkpoint:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      details: error.message
-    });
-  }
-});
-
-// Nueva version con logica simplificada
 router.post("/checkpoint-participant-v3", async (req, res) => {
   try {
     console.log("🎯 Webhook checkpoint Copernico (v3) recibido:", JSON.stringify(req.body, null, 2));
@@ -5338,15 +4812,15 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
       participantsIds,
       event,
       extraData,
-      rawTime,
-      apiKey: bodyApiKey
+      rawTime
     } = req.body;
 
-    if (!competitionId || !type) {
+    const missingRequired = requireFields(req.body, ["competitionId", "type"]);
+    if (missingRequired.length > 0) {
       console.error("❌ Parámetros requeridos faltantes");
-      return res.status(400).json({
-        error: "Parámetros requeridos faltantes",
+      return sendError(res, 400, "Parámetros requeridos faltantes", {
         required: ["competitionId", "type"],
+        missing: missingRequired,
         received: { competitionId, type }
       });
     }
@@ -5360,14 +4834,10 @@ router.post("/checkpoint-participant-v3", async (req, res) => {
       });
     }
 
-    const headerApiKey = req.headers.apikey || req.headers.apiKey || req.headers['api-key'];
-    const apiKey = bodyApiKey || headerApiKey;
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
-
-    if (!apiKey || apiKey !== expectedApiKey) {
-      console.error("❌ API key inválida. Recibida:", apiKey ? "***" + apiKey.slice(-4) : "null");
-      return res.status(401).json({
-        error: "API key inválida",
+    const receivedApiKey = extractApiKey(req, { allowBody: true });
+    if (!hasValidApiKey(req, { allowBody: true })) {
+      console.error("❌ API key inválida. Recibida:", receivedApiKey ? "***" + receivedApiKey.slice(-4) : "null");
+      return sendError(res, 401, "API key inválida", {
         hint: "Envía la API key en el header 'apiKey' o en el body como 'apiKey'"
       });
     }
@@ -5774,422 +5244,6 @@ router.get("/debug/events", async (req, res) => {
  *       '500':
  *         description: Error interno del servidor
  */
-router.get("/race-events", async (req, res) => {
-  try {
-    const { raceId, appId, eventId, type, participantId, limit = 20, offset = 0 } = req.query;
-
-    if (!raceId || !appId || !eventId) {
-      return res.status(400).json({
-        error: "Faltan parámetros requeridos",
-        required: ["raceId", "appId", "eventId"]
-      });
-    }
-
-    const db = admin.firestore();
-    const limitNum = Math.min(parseInt(limit) || 20, 100);
-    const offsetNum = parseInt(offset) || 0;
-
-    console.log(`🔍 Obteniendo eventos de carrera - Race: ${raceId}, App: ${appId}, Event: ${eventId}, Type: ${type || 'ALL'}, Participant: ${participantId || 'ALL'}`);
-
-    // Obtener sponsors una vez - ESTRUCTURA CORRECTA: races/apps
-    const sponsorsSnapshot = await db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('sponsors').get();
-
-    const sponsors = sponsorsSnapshot.docs.map(doc => ({
-      sponsorId: doc.id,
-      ...doc.data()
-    }));
-
-    const sponsorsFormatted = sponsors.map(sponsor => ({
-      logo_url: sponsor.logoUrl || "",
-      poster_url: sponsor.posterUrl || ""
-    }));
-
-    // ✅ OPTIMIZACIÓN: Obtener participantes según filtro
-    let participantsSnapshot;
-    if (participantId) {
-      // Obtener participante específico
-      const participantDoc = await db.collection('races').doc(raceId)
-        .collection('apps').doc(appId)
-        .collection('events').doc(eventId)
-        .collection('participants').doc(participantId).get();
-
-      if (!participantDoc.exists) {
-        return res.status(404).json({
-          error: "Participante no encontrado",
-          participantId,
-          raceId,
-          appId,
-          eventId
-        });
-      }
-
-      // Simular snapshot con un solo documento
-      participantsSnapshot = {
-        docs: [participantDoc],
-        empty: false,
-        size: 1
-      };
-      console.log(`👤 Participante específico: ${participantId}`);
-    } else {
-      // Obtener todos los participantes - ESTRUCTURA CORRECTA: races/apps/events
-      participantsSnapshot = await db.collection('races').doc(raceId)
-        .collection('apps').doc(appId)
-        .collection('events').doc(eventId)
-        .collection('participants').get();
-    // console.log(`👥 Participantes: ${participantsSnapshot.size}`);
-    }
-
-    if (participantsSnapshot.empty) {
-      return res.status(200).json({
-        stories: [],
-        pagination: {
-          limit: limitNum,
-          offset: offsetNum,
-          total: 0,
-          hasMore: false,
-          currentPage: 1,
-          totalPages: 0
-        },
-        filters: {
-          type: type || null,
-          participantId: participantId || null
-        }
-      });
-    }
-
-    // Recopilar todas las stories de todos los participantes
-    const allStories = [];
-
-    for (const participantDoc of participantsSnapshot.docs) {
-      const participantData = participantDoc.data();
-      const participantId = participantDoc.id;
-
-      // Obtener stories del participante - ESTRUCTURA CORRECTA: races/apps/events
-      let storiesQuery = db.collection('races').doc(raceId)
-        .collection('apps').doc(appId)
-        .collection('events').doc(eventId)
-        .collection('participants').doc(participantId)
-        .collection('stories');
-
-      // NO aplicar filtro en Firestore para evitar problemas de índice
-      // En su lugar, filtraremos en memoria después de obtener los datos
-
-      // Agregar ordenamiento
-      storiesQuery = storiesQuery.orderBy('date', 'desc');
-
-      const storiesSnapshot = await storiesQuery.get();
-      // console.log(`📊 Participante ${participantId}: ${storiesSnapshot.size} stories`);
-
-      // Procesar cada story como un evento
-      storiesSnapshot.docs.forEach(storyDoc => {
-        const storyData = storyDoc.data();
-
-        const storyType = storyData.type || storyData.checkpointInfo?.type;
-
-        // Aplicar filtro por tipo en memoria si se especifica
-        if (type && storyType !== type) {
-          return; // Skip esta story
-        }
-
-        // Crear story con formato de evento
-        // Determinar si fileUrl es imagen o video basado en mediaType
-        const isVideo = storyData.mediaType === "video";
-        const isImage = storyData.mediaType === "image";
-
-        const story = {
-          storyId: storyDoc.id,
-          type: storyData.type || storyData.checkpointInfo?.type || "ATHLETE_STARTED",
-          participant: {
-            id: participantId,
-            externalId: participantData.externalId || null,
-            ...participantData
-          },
-          split_time: storyData.splitTime || {},
-          fileUrl: storyData.fileUrl || "",
-          clipUrl: storyData.generationInfo?.clipUrl || "",
-          sponsors: sponsorsFormatted,
-          // Datos adicionales de la story
-          description: storyData.description || "",
-          duration: storyData.duration || 0,
-          createdAt: storyData.createdAt,
-          date: storyData.date,
-          moderationStatus: storyData.moderationStatus || "",
-          originType: storyData.originType || ""
-        };
-
-        // Agregar campos específicos según el tipo
-        switch (storyData.type) {
-          case 'SPONSOR':
-            story.free_text = storyData.description || "";
-            story.poster_url = storyData.fileUrl || "";
-            break;
-          case 'COMPLETE_AWARD':
-            story.rankings = storyData.rankings || [];
-            break;
-        }
-
-        allStories.push(story);
-      });
-    }
-
-    // Ordenar todas las stories por fecha (manejar múltiples formatos)
-    allStories.sort((a, b) => {
-      const getTimestamp = (dateField) => {
-        if (!dateField) return 0;
-
-        // Si es un Timestamp de Firestore
-        if (dateField && typeof dateField.toMillis === 'function') {
-          return dateField.toMillis();
-        }
-
-        // Si es un objeto con _seconds o seconds
-        if (dateField._seconds) {
-          return dateField._seconds * 1000;
-        }
-        if (dateField.seconds) {
-          return dateField.seconds * 1000;
-        }
-
-        // Si es un string de fecha ISO
-        if (typeof dateField === 'string') {
-          return new Date(dateField).getTime();
-        }
-
-        // Si es un número (timestamp en milliseconds)
-        if (typeof dateField === 'number') {
-          return dateField;
-        }
-
-        // Fallback: intentar convertir a Date
-        try {
-          return new Date(dateField).getTime();
-        } catch (error) {
-          console.warn('Error parsing date field:', dateField);
-          return 0;
-        }
-      };
-
-      return getTimestamp(b.date) - getTimestamp(a.date); // Más reciente primero
-    });
-
-    // DEBUG: Resumen de tipos encontrados
-    const typeCounts = {};
-    allStories.forEach(story => {
-      const storyType = story.type || 'SIN_TIPO';
-      typeCounts[storyType] = (typeCounts[storyType] || 0) + 1;
-    });
-    // console.log(`📊 Total stories: ${allStories.length}, Tipos:`, typeCounts);
-
-    // ✅ PAGINACIÓN MEJORADA
-    const totalStories = allStories.length;
-    const paginatedStories = allStories.slice(offsetNum, offsetNum + limitNum);
-
-    console.log(`✅ ${paginatedStories.length} stories de ${totalStories} (type=${type || 'ALL'}, participant=${participantId || 'ALL'})`);
-
-    return res.status(200).json({
-      stories: paginatedStories,
-      pagination: {
-        limit: limitNum,
-        offset: offsetNum,
-        total: totalStories,
-        hasMore: (offsetNum + limitNum) < totalStories,
-        currentPage: Math.floor(offsetNum / limitNum) + 1,
-        totalPages: Math.ceil(totalStories / limitNum),
-        nextOffset: (offsetNum + limitNum) < totalStories ? offsetNum + limitNum : null,
-        prevOffset: offsetNum > 0 ? Math.max(0, offsetNum - limitNum) : null
-      },
-      filters: {
-        type: type || null,
-        participantId: participantId || null,
-        raceId,
-        appId,
-        eventId
-      },
-      summary: {
-        totalParticipants: participantsSnapshot.size,
-        storiesPerParticipant: participantsSnapshot.size > 0 ? Math.round(totalStories / participantsSnapshot.size * 100) / 100 : 0
-      }
-    });
-
-  } catch (error) {
-    console.error("❌ Error obteniendo eventos de carrera:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      details: error.message
-    });
-  }
-});
-
-/**
- * @openapi
- * /api/race-events-v2:
- *   get:
- *     summary: (BETA) Obtener eventos de carrera con filtros avanzados
- *     description: Copia del endpoint /api/race-events para pruebas de cambios sin afectar prod.
- */
-router.get("/race-events-v2", async (req, res) => {
-  try {
-    const { raceId, appId, eventId, type, participantId, limit = 20, offset = 0 } = req.query;
-
-    if (!raceId || !appId || !eventId) {
-      return res.status(400).json({
-        error: "Faltan parámetros requeridos",
-        required: ["raceId", "appId", "eventId"]
-      });
-    }
-
-    const db = admin.firestore();
-    const limitNum = Math.min(parseInt(limit) || 20, 100);
-    const offsetNum = parseInt(offset) || 0;
-
-    console.log(`🔍 Obteniendo eventos de carrera - Race: ${raceId}, App: ${appId}, Event: ${eventId}, Type: ${type || 'ALL'}, Participant: ${participantId || 'ALL'}`);
-
-    // Obtener sponsors una vez - ESTRUCTURA CORRECTA: races/apps
-    const sponsorsSnapshot = await db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('sponsors').get();
-
-    const sponsors = sponsorsSnapshot.docs.map(doc => ({
-      sponsorId: doc.id,
-      ...doc.data()
-    }));
-
-    const sponsorsFormatted = sponsors.map(sponsor => ({
-      logo_url: sponsor.logoUrl || "",
-      poster_url: sponsor.posterUrl || ""
-    }));
-
-    // Validar participante si se especifica
-    if (participantId) {
-      const participantDoc = await db.collection('races').doc(raceId)
-        .collection('apps').doc(appId)
-        .collection('events').doc(eventId)
-        .collection('participants').doc(participantId).get();
-
-      if (!participantDoc.exists) {
-        return res.status(404).json({
-          error: "Participante no encontrado",
-          participantId,
-          raceId,
-          appId,
-          eventId
-        });
-      }
-    }
-
-    const eventRef = db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('events').doc(eventId);
-
-    // Leer desde la colección de stories por evento (desnormalizada)
-    let storiesQuery = eventRef.collection('stories');
-
-    if (participantId) {
-      storiesQuery = storiesQuery.where('participantId', '==', participantId);
-    }
-    if (type) {
-      storiesQuery = storiesQuery.where('type', '==', type);
-    }
-
-    storiesQuery = storiesQuery.orderBy('date', 'desc');
-
-    let totalStories = null;
-    try {
-      const countSnapshot = await storiesQuery.count().get();
-      totalStories = countSnapshot.data().count || 0;
-    } catch (error) {
-      totalStories = null;
-    }
-
-    const storiesSnapshot = await storiesQuery.offset(offsetNum).limit(limitNum).get();
-
-    const stories = storiesSnapshot.docs.map(storyDoc => {
-      const storyData = storyDoc.data();
-      const storyType = storyData.type || storyData.checkpointInfo?.type || "ATHLETE_STARTED";
-      const participantData = storyData.participant || {};
-
-      const story = {
-        storyId: storyDoc.id,
-        type: storyType,
-        participant: {
-          ...participantData,
-          id: participantData.id || storyData.participantId || participantId || null,
-          externalId: participantData.externalId || null
-        },
-        fileUrl: storyData.fileUrl || "",
-        clipUrl: storyData.clipUrl || storyData.generationInfo?.clipUrl || "",
-        sponsors: sponsorsFormatted,
-        // Datos adicionales de la story
-        description: storyData.description || "",
-        duration: storyData.duration || 0,
-        createdAt: storyData.createdAt,
-        date: storyData.date || storyData.createdAt || null,
-        moderationStatus: storyData.moderationStatus || "",
-        originType: storyData.originType || ""
-      };
-
-      // Agregar campos específicos según el tipo
-      switch (storyType) {
-        case 'SPONSOR':
-          story.free_text = storyData.description || "";
-          story.poster_url = storyData.fileUrl || "";
-          break;
-        case 'COMPLETE_AWARD':
-          story.rankings = storyData.rankings || [];
-          break;
-      }
-
-      return story;
-    });
-
-    const totalSafe = totalStories !== null ? totalStories : offsetNum + stories.length;
-    const hasMore = totalStories !== null ? (offsetNum + limitNum) < totalStories : stories.length === limitNum;
-
-    console.log(`✅ ${stories.length} stories de ${totalSafe} (type=${type || 'ALL'}, participant=${participantId || 'ALL'})`);
-
-    return res.status(200).json({
-      stories,
-      pagination: {
-        limit: limitNum,
-        offset: offsetNum,
-        total: totalSafe,
-        hasMore,
-        currentPage: Math.floor(offsetNum / limitNum) + 1,
-        totalPages: Math.ceil(totalSafe / limitNum),
-        nextOffset: hasMore ? offsetNum + limitNum : null,
-        prevOffset: offsetNum > 0 ? Math.max(0, offsetNum - limitNum) : null
-      },
-      filters: {
-        type: type || null,
-        participantId: participantId || null,
-        raceId,
-        appId,
-        eventId
-      },
-      summary: {
-        totalParticipants: participantId ? 1 : null,
-        storiesPerParticipant: participantId ? totalSafe : null
-      }
-    });
-
-  } catch (error) {
-    console.error("❌ Error obteniendo eventos de carrera:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      details: error.message
-    });
-  }
-});
-
-/**
- * @openapi
- * /api/race-events-v3:
- *   get:
- *     summary: (BETA) Obtener eventos con datos de participante desde Copernico
- *     description: Lee stories por evento y enriquece participante con datos de Copernico.
- */
 router.get("/race-events-v3", async (req, res) => {
   try {
     const {
@@ -6228,9 +5282,9 @@ router.get("/race-events-v3", async (req, res) => {
     console.log(`🔤 [race-events-v3] eventId codepoints:`, Array.from(String(normalizedEventId || '')).map(c => c.charCodeAt(0)));
 
     try {
-      const eventsSnap = await db.collection('races').doc(raceId)
-        .collection('apps').doc(appId)
-        .collection('events').get();
+      const eventsSnap = await buildAppRef(db, { raceId, appId })
+        .collection('events')
+        .get();
       const eventIds = eventsSnap.docs.map(doc => doc.id);
       console.log(`🔤 [race-events-v3] eventIds disponibles (${eventIds.length}):`, eventIds);
       eventIds.forEach(id => {
@@ -6241,9 +5295,9 @@ router.get("/race-events-v3", async (req, res) => {
     }
 
     // Obtener sponsors una vez
-    const sponsorsSnapshot = await db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('sponsors').get();
+    const sponsorsSnapshot = await buildAppRef(db, { raceId, appId })
+      .collection('sponsors')
+      .get();
 
     const sponsors = sponsorsSnapshot.docs.map(doc => ({
       sponsorId: doc.id,
@@ -6257,25 +5311,22 @@ router.get("/race-events-v3", async (req, res) => {
 
     // Validar participante si se especifica
     if (participantId) {
-      const participantDoc = await db.collection('races').doc(raceId)
-        .collection('apps').doc(appId)
-        .collection('events').doc(normalizedEventId)
-        .collection('participants').doc(participantId).get();
-
-      if (!participantDoc.exists) {
-        return res.status(404).json({
-          error: "Participante no encontrado",
-          participantId,
-          raceId,
-          appId,
-          eventId: normalizedEventId
-        });
+      const participantRef = buildParticipantRef(db, {
+        raceId,
+        appId,
+        eventId: normalizedEventId,
+        participantId
+      });
+      const participantCheck = await ensureParticipantExists(res, participantRef, {
+        message: "Participante no encontrado",
+        extra: { participantId, raceId, appId, eventId: normalizedEventId }
+      });
+      if (!participantCheck.exists) {
+        return participantCheck.response;
       }
     }
 
-    const eventRef = db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('events').doc(normalizedEventId);
+    const eventRef = buildEventRef(db, { raceId, appId, eventId: normalizedEventId });
 
     if (debugStoryId) {
       try {
@@ -6451,9 +5502,32 @@ router.get("/race-events-v3", async (req, res) => {
         hasMore = false;
       } else {
         const {docs, maybeMore} = await loadUnionDocs(queryList, target);
-        selectedStoryDocs = docs.slice(offsetNum, offsetNum + limitNum);
-        hasMore = docs.length > (offsetNum + limitNum) || maybeMore;
-        totalStories = maybeMore ? null : docs.length;
+
+        // Si un participante seguido tiene historia de trofeo y historia normal para el
+        // mismo splitName, mostrar solo la de trofeo.
+        const trophyKeys = new Set();
+        for (const doc of docs) {
+          const d = doc.data() || {};
+          const pid = String(d.participantId || d.participant?.externalId || "");
+          const split = d.splitName;
+          if (d.type === "ATHLETE_TROPHY" && pid && split) {
+            trophyKeys.add(`${pid}|${split}`);
+          }
+        }
+        const deduplicatedDocs = trophyKeys.size > 0
+          ? docs.filter(doc => {
+              const d = doc.data() || {};
+              if (d.type === "ATHLETE_TROPHY") return true;
+              const pid = String(d.participantId || d.participant?.externalId || "");
+              const split = d.splitName;
+              if (!pid || !split) return true;
+              return !trophyKeys.has(`${pid}|${split}`);
+            })
+          : docs;
+
+        selectedStoryDocs = deduplicatedDocs.slice(offsetNum, offsetNum + limitNum);
+        hasMore = deduplicatedDocs.length > (offsetNum + limitNum) || maybeMore;
+        totalStories = maybeMore ? null : deduplicatedDocs.length;
       }
     }
 
@@ -6762,9 +5836,11 @@ router.get("/race-events-v3", async (req, res) => {
 router.get("/participants/followers/count", async (req, res) => {
   try {
     let { raceId, appId, eventId, participantId } = req.query;
-    if (!raceId || !appId || !eventId || !participantId) {
-      return res.status(400).json({
-        error: "Los parámetros raceId, appId, eventId y participantId son obligatorios.",
+    const missingRequired = requireFields(req.query, ["raceId", "appId", "eventId", "participantId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "Los parámetros raceId, appId, eventId y participantId son obligatorios.", {
+        required: ["raceId", "appId", "eventId", "participantId"],
+        missing: missingRequired
       });
     }
 
@@ -6772,10 +5848,7 @@ router.get("/participants/followers/count", async (req, res) => {
     eventId = normalizeUTF8InObject(eventId);
 
     const db = admin.firestore();
-    const followersRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants").doc(participantId)
+    const followersRef = buildParticipantRef(db, { raceId, appId, eventId, participantId })
       .collection("followers");
     const followersSnapshot = await followersRef.get();
     const followersCount = followersSnapshot.size;
@@ -6819,9 +5892,11 @@ router.get("/participants/followers/count", async (req, res) => {
 router.get("/users/following/count", async (req, res) => {
   try {
     const { userId, raceId, appId, eventId } = req.query;
-    if (!userId) {
-      return res.status(400).json({
-        error: "El parámetro userId es obligatorio.",
+    const missingRequired = requireFields(req.query, ["userId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "El parámetro userId es obligatorio.", {
+        required: ["userId"],
+        missing: missingRequired
       });
     }
     const db = admin.firestore();
@@ -6939,10 +6014,12 @@ router.get("/users/following", async (req, res) => {
           let participantRef;
           if (appId) {
             // Nueva estructura con appId
-            participantRef = db.collection("races").doc(raceId)
-              .collection("apps").doc(appId)
-              .collection("events").doc(normalizedEventId)
-              .collection("participants").doc(participantId);
+            participantRef = buildParticipantRef(db, {
+              raceId,
+              appId,
+              eventId: normalizedEventId,
+              participantId
+            });
           } else {
             // Estructura antigua (fallback)
             participantRef = db.collection("races").doc(raceId)
@@ -7040,336 +6117,7 @@ router.get("/users/following", async (req, res) => {
  *         description: Error en la búsqueda.
  */
 
-router.get("/search/participants", async (req, res) => {
-  try {
-    const { query, userId, raceId, appId, eventId, limit = 20 } = req.query;
-
-    // Validar parámetros requeridos
-    if (!raceId || !appId || !eventId) {
-      return res.status(400).json({
-        error: "Los parámetros raceId, appId y eventId son obligatorios."
-      });
-    }
-
-    const db = admin.firestore();
-    const limitNum = Math.min(parseInt(limit) || 20, 100);
-
-    console.log(`🔍 Búsqueda de participantes: query="${query}", raceId=${raceId}, appId=${appId}, eventId=${eventId}`);
-
-    // Referencia a la colección de participantes
-    const participantsRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
-      .collection("participants");
-
-    let allParticipants = [];
-
-    if (!query || query.trim() === "") {
-      // Si no hay query, devolver participantes destacados (featured: true)
-      console.log("📋 Obteniendo participantes destacados (featured: true)");
-      const snapshot = await participantsRef
-        .where("featured", "==", true)
-        .limit(limitNum)
-        .get();
-
-      if (!snapshot.empty) {
-        allParticipants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      } else {
-        // Si no hay featured, devolver hasta `limitNum` participantes como fallback
-        console.log(`⚠️ No se encontraron participantes featured; devolviendo hasta ${limitNum} participantes como fallback`);
-        const fallbackSnapshot = await participantsRef.limit(limitNum).get();
-        allParticipants = fallbackSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }
-    } else {
-      // Realizar búsqueda con múltiples campos
-      const searchTerm = query.trim();
-      const searchTermLower = searchTerm.toLowerCase();
-
-      console.log(`🔍 Buscando: "${searchTerm}"`);
-
-      // Búsquedas paralelas en diferentes campos
-      const searchPromises = [];
-
-      // 1. Búsqueda por nombre (case-insensitive usando >= y <=)
-      if (isNaN(searchTerm)) {
-        // Solo buscar por nombre si no es un número
-        const nameSearchUpper = searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1).toLowerCase();
-        searchPromises.push(
-          participantsRef
-            .where("name", ">=", nameSearchUpper)
-            .where("name", "<=", nameSearchUpper + '\uf8ff')
-            .limit(limitNum)
-            .get()
-        );
-
-        // Búsqueda por fullName
-        searchPromises.push(
-          participantsRef
-            .where("fullName", ">=", nameSearchUpper)
-            .where("fullName", "<=", nameSearchUpper + '\uf8ff')
-            .limit(limitNum)
-            .get()
-        );
-      }
-
-      // 2. Búsqueda por dorsal (exacta)
-      searchPromises.push(
-        participantsRef
-          .where("dorsal", "==", searchTerm)
-          .limit(limitNum)
-          .get()
-      );
-
-      // 3. Búsqueda por categoría (exacta)
-      searchPromises.push(
-        participantsRef
-          .where("category", "==", searchTerm)
-          .limit(limitNum)
-          .get()
-      );
-
-      // 4. Búsqueda por equipo
-      if (isNaN(searchTerm)) {
-        searchPromises.push(
-          participantsRef
-            .where("team", ">=", searchTerm)
-            .where("team", "<=", searchTerm + '\uf8ff')
-            .limit(limitNum)
-            .get()
-        );
-      }
-
-      // Ejecutar todas las búsquedas en paralelo
-      const searchResults = await Promise.all(searchPromises);
-
-      // Combinar resultados y eliminar duplicados
-      const participantMap = new Map();
-
-      searchResults.forEach(snapshot => {
-        snapshot.docs.forEach(doc => {
-          if (!participantMap.has(doc.id)) {
-            participantMap.set(doc.id, {
-              id: doc.id,
-              ...doc.data()
-            });
-          }
-        });
-      });
-
-      allParticipants = Array.from(participantMap.values());
-
-      // Filtrado adicional en memoria para búsquedas más flexibles y CASE-INSENSITIVE
-      const filterCaseInsensitive = (participantsArray) => {
-        return participantsArray.filter(participant => {
-          const name = (participant.name || "").toLowerCase();
-          const lastName = (participant.lastName || "").toLowerCase();
-          const fullName = (participant.fullName || "").toLowerCase();
-          const dorsal = (participant.dorsal || "").toLowerCase();
-          const category = (participant.category || "").toLowerCase();
-          const team = (participant.team || "").toLowerCase();
-
-          return name.includes(searchTermLower) ||
-                 lastName.includes(searchTermLower) ||
-                 fullName.includes(searchTermLower) ||
-                 dorsal.includes(searchTermLower) ||
-                 category.includes(searchTermLower) ||
-                 team.includes(searchTermLower);
-        });
-      };
-
-      // Aplicar filtro case-insensitive sobre los resultados recopilados
-      allParticipants = filterCaseInsensitive(allParticipants);
-
-      // Si no alcanzamos el límite, hacer un escaneo acotado (fallback) y filtrar
-      if (allParticipants.length < limitNum && searchTerm.length > 0) {
-        try {
-          const scanLimit = 500; // límite razonable para evitar lecturas masivas
-          console.log(`🔎 Broad scan fallback: buscando hasta ${scanLimit} participantes para coincidencias case-insensitive`);
-          const scanSnapshot = await participantsRef.limit(scanLimit).get();
-          const scanned = scanSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-          const scannedFiltered = filterCaseInsensitive(scanned);
-
-          // Añadir al mapa original evitando duplicados
-          scannedFiltered.forEach(p => {
-            if (!participantMap.has(p.id)) participantMap.set(p.id, p);
-          });
-
-          // Reconstruir lista final a partir del mapa y aplicar filtro
-          allParticipants = Array.from(participantMap.values()).filter(p => {
-            const name = (p.name || "").toLowerCase();
-            const lastName = (p.lastName || "").toLowerCase();
-            const fullName = (p.fullName || "").toLowerCase();
-            const dorsal = (p.dorsal || "").toLowerCase();
-            const category = (p.category || "").toLowerCase();
-            const team = (p.team || "").toLowerCase();
-            return name.includes(searchTermLower) ||
-                   lastName.includes(searchTermLower) ||
-                   fullName.includes(searchTermLower) ||
-                   dorsal.includes(searchTermLower) ||
-                   category.includes(searchTermLower) ||
-                   team.includes(searchTermLower);
-          });
-        } catch (e) {
-          console.warn("⚠️ Broad scan fallback failed:", e.message || e);
-        }
-      }
-
-      // Limitar resultados finales
-      allParticipants = allParticipants.slice(0, limitNum);
-    }
-
-    console.log(`📊 Encontrados ${allParticipants.length} participantes`);
-
-    // Continuar con la lógica de seguimientos...
-
-    // Crear un mapa de participantes seguidos para comparación eficiente
-    const followedParticipantsMap = new Map();
-
-    if (userId) {
-      try {
-        console.log(`👥 Obteniendo seguimientos para usuario: ${userId}`);
-
-        // Obtener todos los seguimientos del usuario
-        let followingsQuery = db.collection("users")
-          .doc(userId)
-          .collection("followings")
-          .where("profileType", "==", "participant");
-
-        // Si se especifica raceId y eventId, filtrar por ellos
-        if (raceId && eventId) {
-          followingsQuery = followingsQuery
-            .where("raceId", "==", raceId)
-            .where("eventId", "==", eventId);
-        }
-
-        const followingsSnapshot = await followingsQuery.get();
-        console.log(`📋 Encontrados ${followingsSnapshot.size} seguimientos`);
-
-        followingsSnapshot.forEach(doc => {
-          const data = doc.data();
-          const { profileId, raceId: followedRaceId, eventId: followedEventId } = data;
-
-          if (profileId) {
-            // Crear clave única para participante en contexto específico
-            const key = raceId && eventId
-              ? `${profileId}_${followedRaceId}_${followedEventId}`
-              : profileId;
-            followedParticipantsMap.set(key, true);
-          }
-        });
-      } catch (error) {
-        console.error("Error al obtener seguimientos:", error);
-      }
-    }
-
-    // Enriquecer los resultados agregando el campo "following"
-    const participantsWithFollowing = allParticipants.map(participant => {
-      let isFollowing = false;
-
-      if (userId && followedParticipantsMap.size > 0) {
-        const participantId = participant.id;
-
-        if (raceId && eventId) {
-          // Comparación específica por race/event
-          const specificKey = `${participantId}_${raceId}_${eventId}`;
-          isFollowing = followedParticipantsMap.has(specificKey);
-        } else {
-          // Comparación general (cualquier race/event)
-          isFollowing = followedParticipantsMap.has(participantId);
-        }
-      }
-
-      // Mapear a la estructura esperada por el frontend
-      const enrichedParticipant = {
-        id: participant.id,
-        objectID: participant.id, // Para compatibilidad con frontend que espera objectID
-        externalId: participant.externalId || null,
-        name: participant.name || participant.fullName || "",
-        lastName: participant.lastName || null, // ✅ Campo lastName agregado
-        fullName: participant.fullName || `${participant.name || ""} ${participant.lastName || ""}`.trim(),
-        bib: participant.dorsal || null,
-        dorsal: participant.dorsal || null,
-        category: participant.category || null,
-        team: participant.team || null,
-        club: participant.club || null,
-        gender: participant.gender || null,
-        featured: participant.featured || false,
-        status: participant.status || "unknown",
-        following: isFollowing,
-        raceId: raceId,
-        eventId: eventId,
-        appId: appId,
-        // Campos adicionales disponibles
-        birthdate: participant.birthdate || null,
-        country: participant.country || null,
-        wave: participant.wave || null,
-        chip: participant.chip || null
-      };
-
-      return enrichedParticipant;
-    });
-
-    console.log(`✅ Búsqueda completada: ${participantsWithFollowing.length} participantes encontrados`);
-
-    return res.status(200).json({
-      participants: participantsWithFollowing,
-      total: participantsWithFollowing.length,
-      query: query || "",
-      searchMethod: "firestore_native",
-      raceId,
-      appId,
-      eventId
-    });
-  } catch (error) {
-    console.error("Error en la búsqueda de participantes:", error);
-    return res.status(500).json({
-      error: "Error en la búsqueda",
-      message: error.message
-    });
-  }
-});
-
-/**
- * @openapi
- * /api/search/participants-v3:
- *   get:
- *     summary: Buscar participantes (Copernico)
- *     description: Realiza una búsqueda de participantes directamente en Copernico.
- *     parameters:
- *       - in: query
- *         name: query
- *         required: false
- *         schema:
- *           type: string
- *       - in: query
- *         name: userId
- *         required: false
- *         schema:
- *           type: string
- *       - in: query
- *         name: raceId
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: appId
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: eventId
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: limit
- *         required: false
- *         schema:
- *           type: integer
- *           default: 20
- */
-router.get("/search/participants-v3", async (req, res) => {
+const searchParticipantsV3Handler = async (req, res) => {
   try {
     const { query, userId, raceId, appId, eventId, limit = 20 } = req.query;
 
@@ -7384,51 +6132,25 @@ router.get("/search/participants-v3", async (req, res) => {
 
     console.log(`🔍 [Copernico] Búsqueda de participantes: query="${query}", raceId=${raceId}, appId=${appId}, eventId=${eventId}`);
 
-    const participantsRef = db.collection("races").doc(raceId)
-      .collection("apps").doc(appId)
-      .collection("events").doc(eventId)
+    const participantsRef = buildEventRef(db, { raceId, appId, eventId })
       .collection("participants");
 
-    const searchTerm = query ? query.trim() : "";
-    const searchLower = searchTerm.toLowerCase();
-    const scanLimit = searchTerm ? 1000 : limitNum;
+    const normalizeSearchText = (value) => String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+    const includesText = (value, normalizedQuery) => normalizeSearchText(value).includes(normalizedQuery);
+
+    const searchTerm = query ? String(query).trim() : "";
+    const searchLower = normalizeSearchText(searchTerm);
+    const isQueryEmpty = !searchTerm;
     const totalSnapshot = await participantsRef.count().get();
     const totalFromFirestore = totalSnapshot.data().count || 0;
-    const snapshot = await participantsRef.limit(scanLimit).get();
-
-    let athletes = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-
-    if (searchTerm) {
-      athletes = athletes.filter((athlete) => {
-        const name = (athlete.name || "").toLowerCase();
-        const lastName = (athlete.lastName || athlete.surname || "").toLowerCase();
-        const fullName = `${athlete.fullName || `${athlete.name || ""} ${athlete.lastName || athlete.surname || ""}`}`.toLowerCase();
-        const dorsal = String(athlete.dorsal || "").toLowerCase();
-        const category = String(athlete.category || "").toLowerCase();
-        const team = String(athlete.team || "").toLowerCase();
-        const club = String(athlete.club || "").toLowerCase();
-        const id = String(athlete.id || "").toLowerCase();
-        const externalId = String(athlete.externalId || "").toLowerCase();
-
-        return name.includes(searchLower) ||
-          lastName.includes(searchLower) ||
-          fullName.includes(searchLower) ||
-          dorsal.includes(searchLower) ||
-          category.includes(searchLower) ||
-          team.includes(searchLower) ||
-          club.includes(searchLower) ||
-          id.includes(searchLower) ||
-          externalId.includes(searchLower);
-      });
-    }
-
-    athletes = athletes.slice(0, limitNum);
 
     // Mapa de participantes seguidos (misma lógica que v1)
     const followedParticipantsMap = new Map();
+    const followedProfileIds = [];
     if (userId) {
       try {
         let followingsQuery = db.collection("users")
@@ -7447,6 +6169,7 @@ router.get("/search/participants-v3", async (req, res) => {
           const data = doc.data();
           const { profileId, raceId: followedRaceId, eventId: followedEventId } = data;
           if (profileId) {
+            followedProfileIds.push(profileId);
             const key = raceId && eventId
               ? `${profileId}_${followedRaceId}_${followedEventId}`
               : profileId;
@@ -7457,6 +6180,134 @@ router.get("/search/participants-v3", async (req, res) => {
         console.error("Error al obtener seguimientos:", error);
       }
     }
+
+    const eventParticipantMap = new Map();
+    const collectIdCandidates = (obj = {}, fallbackId = "") => {
+      const candidates = [
+        fallbackId,
+        obj.id,
+        obj.participantId,
+        obj.externalId,
+        obj.profileId
+      ]
+        .filter(Boolean)
+        .map((value) => String(value));
+      return [...new Set(candidates)];
+    };
+    const listEventParticipantDocs = async ({ fullScan = false, pageSize = 1000 }) => {
+      if (!fullScan) {
+        const snap = await participantsRef.limit(limitNum).get();
+        return snap.docs;
+      }
+
+      const docs = [];
+      let lastDocId = null;
+      while (true) {
+        let queryRef = participantsRef
+          .orderBy(admin.firestore.FieldPath.documentId())
+          .limit(pageSize);
+
+        if (lastDocId) {
+          queryRef = queryRef.startAfter(lastDocId);
+        }
+
+        const snap = await queryRef.get();
+        if (snap.empty) break;
+
+        docs.push(...snap.docs);
+        lastDocId = snap.docs[snap.docs.length - 1].id;
+
+        if (snap.size < pageSize) break;
+      }
+
+      return docs;
+    };
+
+    let candidateIds = [];
+    if (isQueryEmpty && userId && followedProfileIds.length > 0) {
+      candidateIds = [...new Set(followedProfileIds.map((id) => String(id)))];
+
+      const followedDocs = await Promise.all(
+        candidateIds.map((participantId) => participantsRef.doc(participantId).get())
+      );
+      followedDocs.forEach((doc) => {
+        if (!doc.exists) return;
+        const data = doc.data() || {};
+        collectIdCandidates(data, doc.id).forEach((candidateId) => {
+          if (!eventParticipantMap.has(candidateId)) {
+            eventParticipantMap.set(candidateId, { id: doc.id, ...data });
+          }
+        });
+      });
+    } else {
+      const eventParticipantDocs = await listEventParticipantDocs({
+        fullScan: Boolean(searchTerm),
+        pageSize: 1000
+      });
+
+      const discoveredIds = [];
+      eventParticipantDocs.forEach((doc) => {
+        const data = doc.data() || {};
+        const ids = collectIdCandidates(data, doc.id);
+        ids.forEach((id) => {
+          if (!eventParticipantMap.has(id)) {
+            eventParticipantMap.set(id, { id: doc.id, ...data });
+          }
+          discoveredIds.push(id);
+        });
+      });
+      candidateIds = [...new Set(discoveredIds)];
+    }
+
+    const canonicalParticipantsMap = new Map();
+    if (candidateIds.length > 0) {
+      const chunks = [];
+      for (let i = 0; i < candidateIds.length; i += 30) {
+        chunks.push(candidateIds.slice(i, i + 30));
+      }
+
+      for (const chunk of chunks) {
+        const snap = await db.collection("races").doc(raceId)
+          .collection("participants")
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk)
+          .get();
+
+        snap.forEach((doc) => {
+          canonicalParticipantsMap.set(doc.id, { id: doc.id, ...doc.data() });
+        });
+      }
+    }
+
+    let athletes = candidateIds.map((candidateId) => {
+      const eventData = eventParticipantMap.get(candidateId) || {};
+      const canonicalData = canonicalParticipantsMap.get(candidateId) || {};
+
+      return {
+        ...eventData,
+        ...canonicalData,
+        id: canonicalData.id || eventData.id || candidateId
+      };
+    }).filter((athlete) => athlete && athlete.id);
+
+    if (searchTerm) {
+      athletes = athletes.filter((athlete) => {
+        const name = athlete.name || "";
+        const lastName = athlete.lastName || athlete.surname || "";
+        const fullName = athlete.fullName || `${athlete.name || ""} ${athlete.lastName || athlete.surname || ""}`;
+
+        return includesText(name, searchLower) ||
+          includesText(lastName, searchLower) ||
+          includesText(fullName, searchLower) ||
+          includesText(athlete.dorsal, searchLower) ||
+          includesText(athlete.category, searchLower) ||
+          includesText(athlete.team, searchLower) ||
+          includesText(athlete.club, searchLower) ||
+          includesText(athlete.id, searchLower) ||
+          includesText(athlete.externalId, searchLower);
+      });
+    }
+
+    athletes = athletes.slice(0, limitNum);
 
     const participantsWithFollowing = athletes.map(athlete => {
       const participantId = athlete.id || athlete.externalId || "";
@@ -7509,7 +6360,6 @@ router.get("/search/participants-v3", async (req, res) => {
       .map(({ p }) => p);
 
     let finalParticipants = participantsSorted;
-    const isQueryEmpty = !searchTerm;
     if (isQueryEmpty && userId && followedParticipantsMap.size > 0) {
       finalParticipants = participantsSorted.filter(p => p.following);
     }
@@ -7531,7 +6381,10 @@ router.get("/search/participants-v3", async (req, res) => {
       details: error.message
     });
   }
-});
+};
+
+router.get("/search/participants-v3", searchParticipantsV3Handler);
+router.get("/search/participant-v3", searchParticipantsV3Handler);
 
 /**
  * @openapi
@@ -8015,679 +6868,6 @@ router.get("/apps/gpx-maps", async (req, res) => {
  *       500:
  *         description: Error interno del servidor
  */
-router.get("/config", async (req, res) => {
-  try {
-    const { raceId, bundleId, raceName } = req.query;
-
-    // Validar que al menos un filtro esté presente
-    if (!raceId && !bundleId && !raceName) {
-      return res.status(400).json({
-        error: "Se requiere al menos uno de los siguientes parámetros: raceId, bundleId, raceName",
-        required: ["raceId", "bundleId", "raceName"]
-      });
-    }
-
-    console.log(`⚙️ [getConfig] Buscando app - raceId: ${raceId}, bundleId: ${bundleId}, raceName: ${raceName}`);
-
-    const db = admin.firestore();
-    let targetApp = null;
-    let targetRaceId = null;
-
-    // 1. Buscar la app según los filtros proporcionados - ESTRUCTURA CORRECTA: races/apps
-    if (raceId) {
-      // Buscar por raceId - buscar apps en esa race específica
-      const appsSnapshot = await db.collection('races').doc(raceId)
-        .collection('apps').get();
-
-      if (!appsSnapshot.empty) {
-        // Tomar la primera app encontrada en esa race
-        targetApp = { id: appsSnapshot.docs[0].id, ...appsSnapshot.docs[0].data() };
-        targetRaceId = raceId;
-      }
-    } else {
-      // Buscar por bundleId o raceName - OPTIMIZADO: solo buscar en race conocida primero
-      console.log(`🔍 [getConfig] Búsqueda optimizada por bundleId/raceName`);
-
-      // Primero intentar en la race que sabemos que tiene datos
-      const knownRaceId = "26dc137a-34e2-44a0-918b-a5af620cf281";
-      console.log(`🔍 [getConfig] Buscando primero en race conocida: ${knownRaceId}`);
-
-      const knownAppsSnapshot = await db.collection('races').doc(knownRaceId)
-        .collection('apps').get();
-
-      console.log(`🔍 [getConfig] Encontradas ${knownAppsSnapshot.size} apps en race conocida`);
-
-      for (const appDoc of knownAppsSnapshot.docs) {
-        const appData = appDoc.data();
-        console.log(`🔍 [getConfig] Revisando app ${appDoc.id} - bundleId: "${appData.bundleId}", raceName: "${appData.raceName}"`);
-
-        if ((bundleId && appData.bundleId === bundleId) ||
-            (raceName && appData.raceName === raceName)) {
-          targetApp = { id: appDoc.id, ...appData };
-          targetRaceId = knownRaceId;
-          console.log(`✅ [getConfig] App encontrada en race conocida: ${appDoc.id}`);
-          break;
-        }
-      }
-
-      // Si no se encontró en la race conocida, buscar en todas las demás
-      if (!targetApp) {
-        console.log(`🔍 [getConfig] No encontrada en race conocida, buscando en todas las races`);
-        const racesSnapshot = await db.collection('races').get();
-
-        for (const raceDoc of racesSnapshot.docs) {
-          const currentRaceId = raceDoc.id;
-
-          // Saltar la race que ya revisamos
-          if (currentRaceId === knownRaceId) continue;
-
-          const appsSnapshot = await db.collection('races').doc(currentRaceId)
-            .collection('apps').get();
-
-          if (appsSnapshot.size > 0) {
-            console.log(`🔍 [getConfig] Revisando ${appsSnapshot.size} apps en race ${currentRaceId}`);
-
-            for (const appDoc of appsSnapshot.docs) {
-              const appData = appDoc.data();
-
-              if ((bundleId && appData.bundleId === bundleId) ||
-                  (raceName && appData.raceName === raceName)) {
-                targetApp = { id: appDoc.id, ...appData };
-                targetRaceId = currentRaceId;
-                console.log(`✅ [getConfig] App encontrada: ${appDoc.id}`);
-                break;
-              }
-            }
-          }
-
-          if (targetApp) break;
-        }
-      }
-    }
-
-    if (!targetApp || !targetRaceId) {
-      return res.status(404).json({
-        error: "App no encontrada",
-        filters: { raceId, bundleId, raceName }
-      });
-    }
-
-    console.log(`✅ [getConfig] App encontrada: ${targetApp.name} (${targetApp.id}) en race: ${targetRaceId}`);
-
-    // 2. Obtener datos de la race
-    const raceDoc = await db.collection('races').doc(targetRaceId).get();
-    const raceData = raceDoc.exists ? raceDoc.data() : {};
-
-    // 3. Obtener eventos de esta app en esta race
-    const eventsSnapshot = await db.collection('races').doc(targetRaceId)
-      .collection('apps').doc(targetApp.id)
-      .collection('events').get();
-
-    // 4. Obtener media de esta app en esta race
-    const mediaSnapshot = await db.collection('races').doc(targetRaceId)
-      .collection('apps').doc(targetApp.id)
-      .collection('media').get();
-
-    const media = mediaSnapshot.docs.map(mediaDoc => ({
-      mediaId: mediaDoc.id,
-      ...mediaDoc.data()
-    }));
-
-    // 5. Organizar media por tipo (sin array 'all' redundante)
-    const mediaByType = {
-      sponsors: media.filter(m => m.type === 'sponsors'),
-      logos: media.filter(m => m.type === 'logos'),
-      videos: media.filter(m => m.type === 'videos'),
-      images: media.filter(m => m.type === 'images'),
-      posters: media.filter(m => m.type === 'posters')
-    };
-
-    console.log(`📊 [getConfig] Eventos: ${eventsSnapshot.size}, Media: ${media.length}`);
-
-    // 6. Procesar eventos e incluir la misma media en cada uno
-    const events = eventsSnapshot.docs.map(eventDoc => ({
-      eventId: eventDoc.id,
-      ...eventDoc.data(),
-      media: mediaByType // La misma media para todos los eventos
-    }));
-
-    // 7. Respuesta
-    const { sponsors, images, videos, logos, ...cleanAppData } = targetApp; // Excluir media antigua
-    const response = {
-      app: {
-        appId: targetApp.id,
-        name: targetApp.name,
-        raceId: targetRaceId,
-        raceName: raceData.name || targetApp.raceName,
-        bundleId: targetApp.bundleId,
-        ...cleanAppData, // Incluir datos de la app SIN media antigua
-        events: events,
-        eventsCount: events.length,
-        mediaCount: media.length
-      },
-      summary: {
-        totalEvents: events.length,
-        totalMedia: media.length,
-        mediaByType: {
-          sponsors: mediaByType.sponsors.length,
-          logos: mediaByType.logos.length,
-          videos: mediaByType.videos.length,
-          images: mediaByType.images.length,
-          posters: mediaByType.posters.length
-        }
-      }
-    };
-
-    console.log(`✅ [getConfig] Configuración obtenida exitosamente`);
-
-    return res.status(200).json(response);
-
-  } catch (error) {
-    console.error("❌ Error en GET /api/config:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      message: error.message
-    });
-  }
-});
-
-/**
- * /api/config-v3:
- *   get:
- *     summary: Obtener configuración con publishedRankings desde Copernico
- */
-router.get("/config-v3", async (req, res) => {
-  try {
-    const { raceId, bundleId, raceName } = req.query;
-
-    if (!raceId && !bundleId && !raceName) {
-      return res.status(400).json({
-        error: "Se requiere al menos uno de los siguientes parámetros: raceId, bundleId, raceName",
-        required: ["raceId", "bundleId", "raceName"]
-      });
-    }
-
-    console.log(`⚙️ [getConfigV3] Buscando app - raceId: ${raceId}, bundleId: ${bundleId}, raceName: ${raceName}`);
-
-    const db = admin.firestore();
-    let targetApp = null;
-    let targetRaceId = null;
-
-    if (raceId) {
-      const appsSnapshot = await db.collection('races').doc(raceId)
-        .collection('apps').get();
-
-      if (!appsSnapshot.empty) {
-        targetApp = { id: appsSnapshot.docs[0].id, ...appsSnapshot.docs[0].data() };
-        targetRaceId = raceId;
-      }
-    } else {
-      console.log(`🔍 [getConfigV3] Búsqueda optimizada por bundleId/raceName`);
-
-      const knownRaceId = "26dc137a-34e2-44a0-918b-a5af620cf281";
-      console.log(`🔍 [getConfigV3] Buscando primero en race conocida: ${knownRaceId}`);
-
-      const knownAppsSnapshot = await db.collection('races').doc(knownRaceId)
-        .collection('apps').get();
-
-      for (const appDoc of knownAppsSnapshot.docs) {
-        const appData = appDoc.data();
-        if ((bundleId && appData.bundleId === bundleId) ||
-            (raceName && appData.raceName === raceName)) {
-          targetApp = { id: appDoc.id, ...appData };
-          targetRaceId = knownRaceId;
-          console.log(`✅ [getConfigV3] App encontrada en race conocida: ${appDoc.id}`);
-          break;
-        }
-      }
-
-      if (!targetApp) {
-        console.log(`🔍 [getConfigV3] No encontrada en race conocida, buscando en todas las races`);
-        const racesSnapshot = await db.collection('races').get();
-
-        for (const raceDoc of racesSnapshot.docs) {
-          const currentRaceId = raceDoc.id;
-          if (currentRaceId === knownRaceId) continue;
-
-          const appsSnapshot = await db.collection('races').doc(currentRaceId)
-            .collection('apps').get();
-
-          if (appsSnapshot.size > 0) {
-            for (const appDoc of appsSnapshot.docs) {
-              const appData = appDoc.data();
-
-              if ((bundleId && appData.bundleId === bundleId) ||
-                  (raceName && appData.raceName === raceName)) {
-                targetApp = { id: appDoc.id, ...appData };
-                targetRaceId = currentRaceId;
-                console.log(`✅ [getConfigV3] App encontrada: ${appDoc.id}`);
-                break;
-              }
-            }
-          }
-
-          if (targetApp) break;
-        }
-      }
-    }
-
-    if (!targetApp || !targetRaceId) {
-      return res.status(404).json({
-        error: "App no encontrada",
-        filters: { raceId, bundleId, raceName }
-      });
-    }
-
-    console.log(`✅ [getConfigV3] App encontrada: ${targetApp.name} (${targetApp.id}) en race: ${targetRaceId}`);
-
-    const {raceSlug, raceDoc, raceData, copernicoEnv} = await recoverRaceData(db, targetRaceId);
-
-    const eventsSnapshot = await db.collection('races').doc(targetRaceId)
-      .collection('apps').doc(targetApp.id)
-      .collection('events').get();
-
-    const mediaSnapshot = await db.collection('races').doc(targetRaceId)
-      .collection('apps').doc(targetApp.id)
-      .collection('media').get();
-
-    const media = mediaSnapshot.docs.map(mediaDoc => ({
-      mediaId: mediaDoc.id,
-      ...mediaDoc.data()
-    }));
-
-    const mediaByType = {
-      sponsors: media.filter(m => m.type === 'sponsors'),
-      logos: media.filter(m => m.type === 'logos'),
-      videos: media.filter(m => m.type === 'videos'),
-      images: media.filter(m => m.type === 'images'),
-      posters: media.filter(m => m.type === 'posters')
-    };
-
-    let copernicoEvents = [];
-
-    try {
-      const envConfig = copernicoService.config.getEnvironmentConfig(copernicoEnv);
-      const baseUrl = envConfig.baseUrl;
-      const headers = copernicoService.config.getRequestHeaders(copernicoEnv);
-      const raceUrl = `${baseUrl}/${raceSlug}`;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), copernicoService.config.get("request.timeoutMs") || 10000);
-
-      const response = await fetch(raceUrl, {
-        method: "GET",
-        headers,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const payload = await response.json();
-      if (!payload?.result || (payload.result.code !== 0 && payload.result.code !== 1)) {
-        throw new Error(payload?.result?.message || "Respuesta invalida de Copernico");
-      }
-
-      copernicoEvents = Array.isArray(payload?.data?.events) ? payload.data.events : [];
-    } catch (copernicoError) {
-      console.warn("⚠️ [getConfigV3] No se pudo obtener eventos de Copernico:", copernicoError.message);
-    }
-
-    const normalizeKey = (value) => String(value || '').trim().toLowerCase();
-    const buildRanking = (payload) => ({ ...payload });
-    const buildPublishedRankings = (raceEvent) => {
-      const categoryRankings = (raceEvent?.categories || []).map(category => buildRanking({
-        name: category.name,
-        family: "General",
-        event: raceEvent.name,
-        type: 'category',
-        "type-value": category.name
-      }));
-      const genderRankings = ['male', 'female'].map(gender => buildRanking({
-        name: gender,
-        family: "General",
-        event: raceEvent.name,
-        type: 'gender',
-        "type-value": gender
-      }));
-      const attrRankings = (raceEvent?.attributes || []).map(attr =>
-        (attr.options || []).map(({ value }) => buildRanking({
-          name: `${attr.name} ${value}`,
-          family: "General",
-          event: raceEvent.name,
-          type: `attribute:${attr.name}`,
-          "type-value": value
-        }))
-      ).flat();
-
-      return [
-        buildRanking({ name: "overall", "family": "General", event: raceEvent.name, type: "overall", "type-value": "" }),
-        ...categoryRankings,
-        ...genderRankings,
-        ...attrRankings
-      ];
-    };
-
-    const events = eventsSnapshot.docs.map(eventDoc => {
-      const eventData = eventDoc.data();
-      const eventId = eventDoc.id;
-      const eventName = eventData?.name || eventId;
-
-      const matchingEvent = copernicoEvents.find(evt =>
-        normalizeKey(evt?.name) === normalizeKey(eventName) ||
-        normalizeKey(evt?.name) === normalizeKey(eventId)
-      );
-
-      if (!matchingEvent) {
-        return null;
-      }
-
-      const publishedRankings = buildPublishedRankings(matchingEvent || {});
-      const eventMaps = matchingEvent?.maps ?? matchingEvent?.map ?? [];
-      return {
-        eventId: eventId,
-        ...eventData,
-        media: mediaByType,
-        publishedRankings,
-        maps: eventMaps
-      };
-    }).filter(Boolean);
-
-    const { sponsors, images, videos, logos, ...cleanAppData } = targetApp;
-    const response = {
-      app: {
-        appId: targetApp.id,
-        name: targetApp.name,
-        raceId: targetRaceId,
-        raceName: raceData.name || targetApp.raceName,
-        bundleId: targetApp.bundleId,
-        ...cleanAppData,
-        events: events,
-        eventsCount: events.length,
-        mediaCount: media.length
-      },
-      summary: {
-        totalEvents: events.length,
-        totalMedia: media.length,
-        mediaByType: {
-          sponsors: mediaByType.sponsors.length,
-          logos: mediaByType.logos.length,
-          videos: mediaByType.videos.length,
-          images: mediaByType.images.length,
-          posters: mediaByType.posters.length
-        }
-      }
-    };
-
-    console.log(`✅ [getConfigV3] Configuración obtenida exitosamente`);
-    return res.status(200).json(response);
-
-  } catch (error) {
-    console.error("❌ Error en GET /api/config-v3:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      message: error.message
-    });
-  }
-});
-
-/**
- * /api/config-v3-by-app:
- *   get:
- *     summary: Obtener configuración con publishedRankings desde Copernico (requiere raceId + appId)
- */
-router.get("/config-v3-by-app", async (req, res) => {
-  try {
-    const { raceId, appId } = req.query;
-
-    if (!raceId || !appId) {
-      return res.status(400).json({
-        error: "raceId y appId son obligatorios",
-        required: ["raceId", "appId"]
-      });
-    }
-
-    const db = admin.firestore();
-
-    const appDoc = await db.collection('races').doc(raceId)
-      .collection('apps').doc(appId).get();
-
-    if (!appDoc.exists) {
-      return res.status(404).json({
-        error: "App no encontrada",
-        filters: { raceId, appId }
-      });
-    }
-
-    const targetApp = { id: appDoc.id, ...appDoc.data() };
-    const {raceSlug, raceDoc, raceData, copernicoEnv} = await recoverRaceData(db, raceId);
-
-    const eventsSnapshot = await db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('events').get();
-
-    const mediaSnapshot = await db.collection('races').doc(raceId)
-      .collection('apps').doc(appId)
-      .collection('media').get();
-
-    const media = mediaSnapshot.docs.map(mediaDoc => ({
-      mediaId: mediaDoc.id,
-      ...mediaDoc.data()
-    }));
-
-    const mediaByType = {
-      sponsors: media.filter(m => m.type === 'sponsors'),
-      logos: media.filter(m => m.type === 'logos'),
-      videos: media.filter(m => m.type === 'videos'),
-      images: media.filter(m => m.type === 'images'),
-      posters: media.filter(m => m.type === 'posters')
-    };
-
-    let copernicoEvents = [];
-
-    try {
-      const envConfig = copernicoService.config.getEnvironmentConfig(copernicoEnv);
-      const baseUrl = envConfig.baseUrl;
-      const headers = copernicoService.config.getRequestHeaders(copernicoEnv);
-      const raceUrl = `${baseUrl}/${raceSlug}`;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), copernicoService.config.get("request.timeoutMs") || 10000);
-
-      const response = await fetch(raceUrl, {
-        method: "GET",
-        headers,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const payload = await response.json();
-      if (!payload?.result || (payload.result.code !== 0 && payload.result.code !== 1)) {
-        throw new Error(payload?.result?.message || "Respuesta invalida de Copernico");
-      }
-
-      copernicoEvents = Array.isArray(payload?.data?.events) ? payload.data.events : [];
-    } catch (copernicoError) {
-      console.warn("⚠️ [getConfigV3ByApp] No se pudo obtener eventos de Copernico:", copernicoError.message);
-    }
-
-    const normalizeKey = (value) => String(value || '').trim().toLowerCase();
-    const buildRanking = (payload) => ({ ...payload });
-    const buildPublishedRankings = (raceEvent) => {
-      const categoryRankings = (raceEvent?.categories || []).map(category => buildRanking({
-        name: category.name,
-        family: "General",
-        event: raceEvent.name,
-        type: 'category',
-        "type-value": category.name
-      }));
-      const genderRankings = ['male', 'female'].map(gender => buildRanking({
-        name: gender,
-        family: "General",
-        event: raceEvent.name,
-        type: 'gender',
-        "type-value": gender
-      }));
-      const attrRankings = (raceEvent?.attributes || []).map(attr =>
-        (attr.options || []).map(({ value }) => buildRanking({
-          name: `${attr.name} ${value}`,
-          family: "General",
-          event: raceEvent.name,
-          type: `attribute:${attr.name}`,
-          "type-value": value
-        }))
-      ).flat();
-
-      return [
-        buildRanking({ name: "overall", "family": "General", event: raceEvent.name, type: "overall", "type-value": "" }),
-        ...categoryRankings,
-        ...genderRankings,
-        ...attrRankings
-      ];
-    };
-
-    const events = eventsSnapshot.docs.map(eventDoc => {
-      const eventData = eventDoc.data();
-      const eventId = eventDoc.id;
-      const eventName = eventData?.name || eventId;
-
-      const matchingEvent = copernicoEvents.find(evt =>
-        normalizeKey(evt?.name) === normalizeKey(eventName) ||
-        normalizeKey(evt?.name) === normalizeKey(eventId)
-      );
-
-      if (!matchingEvent) {
-        return null;
-      }
-
-      const publishedRankings = buildPublishedRankings(matchingEvent || {});
-      const eventMaps = matchingEvent?.maps ?? matchingEvent?.map ?? [];
-      return {
-        eventId: eventId,
-        ...eventData,
-        media: mediaByType,
-        publishedRankings,
-        maps: eventMaps
-      };
-    }).filter(Boolean);
-
-    const { sponsors, images, videos, logos, ...cleanAppData } = targetApp;
-    const response = {
-      app: {
-        appId: targetApp.id,
-        name: targetApp.name,
-        raceId: raceId,
-        raceName: raceData.name || targetApp.raceName,
-        bundleId: targetApp.bundleId,
-        ...cleanAppData,
-        events: events,
-        eventsCount: events.length,
-        mediaCount: media.length
-      },
-      summary: {
-        totalEvents: events.length,
-        totalMedia: media.length,
-        mediaByType: {
-          sponsors: mediaByType.sponsors.length,
-          logos: mediaByType.logos.length,
-          videos: mediaByType.videos.length,
-          images: mediaByType.images.length,
-          posters: mediaByType.posters.length
-        }
-      }
-    };
-
-    console.log(`✅ [getConfigV3ByApp] Configuración obtenida exitosamente`);
-    return res.status(200).json(response);
-
-  } catch (error) {
-    console.error("❌ Error en GET /api/config-v3-by-app:", error);
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      message: error.message
-    });
-  }
-});
-
-/**
- * @openapi
- * /api/companies:
- *   get:
- *     summary: Listar companies de los últimos 15 días
- *     description: Retorna todas las companies que tienen apps creadas en los últimos 15 días (desde hace 15 días hasta hoy inclusive).
- *     responses:
- *       '200':
- *         description: Lista de companies obtenida exitosamente.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 companies:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       idcompany:
- *                         type: string
- *                         description: ID único de la company
- *                       apps:
- *                         type: array
- *                         items:
- *                           type: object
- *                           properties:
- *                             appId:
- *                               type: string
- *                             name:
- *                               type: string
- *                             createdAt:
- *                               type: string
- *                               format: date-time
- *                       appsCount:
- *                         type: integer
- *                         description: Número total de apps de esta company
- *                       firstSeen:
- *                         type: string
- *                         format: date-time
- *                         description: Fecha de la primera app creada
- *                       lastSeen:
- *                         type: string
- *                         format: date-time
- *                         description: Fecha de la última app creada
- *                 total:
- *                   type: integer
- *                 dateRange:
- *                   type: object
- *                   properties:
- *                     from:
- *                       type: string
- *                       format: date-time
- *                     to:
- *                       type: string
- *                       format: date-time
- *                     days:
- *                       type: integer
- *                 summary:
- *                   type: object
- *                   properties:
- *                     totalCompanies:
- *                       type: integer
- *                     totalApps:
- *                       type: integer
- *                     avgAppsPerCompany:
- *                       type: string
- *       '500':
- *         description: Error interno del servidor.
- */
-// ✅ NUEVA API: Listar companies de los últimos 15 días
 router.get("/companies", async (_req, res) => {
   try {
     console.log("🏢 GET /api/companies - Obteniendo companies de últimos 15 días");
@@ -8844,15 +7024,14 @@ router.get("/athlete-card/config/:raceId", async (req, res) => {
  */
 router.post("/admin/backfill-event-index", async (req, res) => {
   try {
-    const apiKey = req.headers?.apikey || req.headers?.apiKey || req.body?.apiKey;
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
-    if (apiKey !== expectedApiKey) {
-      return res.status(403).json({ error: "Forbidden" });
+    if (!hasValidApiKey(req, { allowBody: true })) {
+      return sendError(res, 403, "Forbidden");
     }
 
     const { raceId, appId } = req.body || {};
-    if (!raceId) {
-      return res.status(400).json({ error: "raceId es obligatorio" });
+    const missingRequired = requireFields(req.body || {}, ["raceId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "raceId es obligatorio");
     }
 
     const normalizeEventKey = (value) =>
@@ -8965,15 +7144,14 @@ router.post("/admin/backfill-event-index", async (req, res) => {
  */
 router.post("/admin/backfill-story-dates", async (req, res) => {
   try {
-    const apiKey = req.headers?.apikey || req.headers?.apiKey || req.body?.apiKey;
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
-    if (apiKey !== expectedApiKey) {
-      return res.status(403).json({ error: "Forbidden" });
+    if (!hasValidApiKey(req, { allowBody: true })) {
+      return sendError(res, 403, "Forbidden");
     }
 
     const { raceId, appId, eventId, scope = "events" } = req.body || {};
-    if (!raceId) {
-      return res.status(400).json({ error: "raceId es obligatorio" });
+    const missingRequired = requireFields(req.body || {}, ["raceId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "raceId es obligatorio");
     }
 
     const db = admin.firestore();
@@ -9127,10 +7305,8 @@ router.post("/admin/backfill-story-dates", async (req, res) => {
  */
 router.post("/admin/update-event-status", async (req, res) => {
   try {
-    const apiKey = req.headers?.apikey || req.headers?.apiKey || req.body?.apiKey;
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
-    if (!apiKey || apiKey !== expectedApiKey) {
-      return res.status(403).json({ error: "Forbidden" });
+    if (!hasValidApiKey(req, { allowBody: true })) {
+      return sendError(res, 403, "Forbidden");
     }
 
     const {
@@ -9504,21 +7680,28 @@ router.post("/webhook/runner-checkpoint", async (req, res) => {
   try {
     console.log("🔔 Webhook recibido:", JSON.stringify(req.body, null, 2));
 
-    const { runnerId, runnerBib, checkpointId, timestamp, raceId, eventId, streamId, apiKey } = req.body;
+    const { runnerId, runnerBib, checkpointId, timestamp, raceId, eventId, streamId } = req.body;
 
     // 1. Validar API key
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || "MISSING_WEBHOOK_API_KEY";
-    if (!apiKey || apiKey !== expectedApiKey) {
+    if (!hasValidApiKey(req, { allowBody: true })) {
       console.error("❌ API key inválida");
-      return res.status(401).json({ error: "API key inválida" });
+      return sendError(res, 401, "API key inválida");
     }
 
     // 2. Validar parámetros requeridos
-    if (!runnerId || !checkpointId || !timestamp || !raceId || !eventId || !streamId) {
+    const missingRequired = requireFields(req.body, [
+      "runnerId",
+      "checkpointId",
+      "timestamp",
+      "raceId",
+      "eventId",
+      "streamId"
+    ]);
+    if (missingRequired.length > 0) {
       console.error("❌ Parámetros faltantes");
-      return res.status(400).json({
-        error: "Parámetros faltantes",
+      return sendError(res, 400, "Parámetros faltantes", {
         required: ["runnerId", "checkpointId", "timestamp", "raceId", "eventId", "streamId"],
+        missing: missingRequired,
         received: { runnerId: !!runnerId, checkpointId: !!checkpointId, timestamp: !!timestamp, raceId: !!raceId, eventId: !!eventId, streamId: !!streamId }
       });
     }
@@ -9728,23 +7911,23 @@ router.post("/copernico/subscribe", async (req, res) => {
   try {
     console.log("🎯 [Copernico] Solicitud de suscripción:", JSON.stringify(req.body, null, 2));
 
-    const { raceId, participantIds, apiKey } = req.body;
+    const { raceId, participantIds } = req.body;
 
     // Validaciones básicas
-    if (!raceId || !apiKey) {
+    const missingRequired = requireFields(req.body, ["raceId"]);
+    if (missingRequired.length > 0) {
       console.error("❌ [Copernico] Parámetros requeridos faltantes");
-      return res.status(400).json({
-        error: "Parámetros requeridos faltantes",
-        required: ["raceId", "apiKey"],
-        received: { raceId: !!raceId, apiKey: !!apiKey }
+      return sendError(res, 400, "Parámetros requeridos faltantes", {
+        required: ["raceId"],
+        missing: missingRequired,
+        received: { raceId: !!raceId }
       });
     }
 
     // Validar API key
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || 'MISSING_WEBHOOK_API_KEY';
-    if (apiKey !== expectedApiKey) {
+    if (!hasValidApiKey(req, { allowBody: true })) {
       console.error("❌ [Copernico] API key inválida");
-      return res.status(401).json({ error: "API key inválida" });
+      return sendError(res, 401, "API key inválida");
     }
 
     // Establecer suscripción
@@ -9801,20 +7984,20 @@ router.post("/copernico/unsubscribe", async (req, res) => {
   try {
     console.log("🛑 [Copernico] Solicitud de desuscripción:", JSON.stringify(req.body, null, 2));
 
-    const { raceId, apiKey } = req.body;
+    const { raceId } = req.body;
 
     // Validaciones básicas
-    if (!raceId || !apiKey) {
-      return res.status(400).json({
-        error: "Parámetros requeridos faltantes",
-        required: ["raceId", "apiKey"]
+    const missingRequired = requireFields(req.body, ["raceId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "Parámetros requeridos faltantes", {
+        required: ["raceId"],
+        missing: missingRequired
       });
     }
 
     // Validar API key
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || 'MISSING_WEBHOOK_API_KEY';
-    if (apiKey !== expectedApiKey) {
-      return res.status(401).json({ error: "API key inválida" });
+    if (!hasValidApiKey(req, { allowBody: true })) {
+      return sendError(res, 401, "API key inválida");
     }
 
     // Desuscribirse
@@ -9904,20 +8087,20 @@ router.post("/copernico/test-connection", async (req, res) => {
   try {
     console.log("🧪 [Copernico] Prueba de conexión:", JSON.stringify(req.body, null, 2));
 
-    const { raceId, environment, apiKey } = req.body;
+    const { raceId, environment } = req.body;
 
     // Validaciones básicas
-    if (!raceId || !apiKey) {
-      return res.status(400).json({
-        error: "Parámetros requeridos faltantes",
-        required: ["raceId", "apiKey"]
+    const missingRequired = requireFields(req.body, ["raceId"]);
+    if (missingRequired.length > 0) {
+      return sendError(res, 400, "Parámetros requeridos faltantes", {
+        required: ["raceId"],
+        missing: missingRequired
       });
     }
 
     // Validar API key
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || 'MISSING_WEBHOOK_API_KEY';
-    if (apiKey !== expectedApiKey) {
-      return res.status(401).json({ error: "API key inválida" });
+    if (!hasValidApiKey(req, { allowBody: true })) {
+      return sendError(res, 401, "API key inválida");
     }
 
     // Cambiar ambiente si se especifica
@@ -10031,12 +8214,9 @@ router.get("/copernico/metrics", async (req, res) => {
  */
 router.post("/copernico/reset-metrics", async (req, res) => {
   try {
-    const { apiKey } = req.body;
-
     // Validar API key
-    const expectedApiKey = process.env.WEBHOOK_API_KEY || 'MISSING_WEBHOOK_API_KEY';
-    if (!apiKey || apiKey !== expectedApiKey) {
-      return res.status(401).json({ error: "API key inválida" });
+    if (!hasValidApiKey(req, { allowBody: true })) {
+      return sendError(res, 401, "API key inválida");
     }
 
     copernicoMonitor.resetMetrics();
@@ -10812,10 +8992,6 @@ router.get('/debug/users-with-tokens', async (req, res) => {
 });
 
 /**
- * 🎯 ENDPOINTS PARA CONSULTAR SPLITS CON CLIPS DE PARTICIPANTES
- */
-
-/**
  * @swagger
  * /api/races/{raceId}/events/{eventId}/participants/{participantId}/splits-with-clips:
  *   get:
@@ -11089,305 +9265,7 @@ router.get('/races/:raceId/events/:eventId/participants/:participantId/splits-wi
   }
 });
 
-export const onCheckpointQueueCreated = onDocumentCreated({
-  document: "processing_queue/{queueKey}",
-  timeoutSeconds: 540,
-  memory: "1GiB",
-  region: "us-central1"
-}, async (event) => {
-  const data = event.data?.data();
-  if (!data) return;
-
-  const { competitionId, copernicoId, participantId, type, extraData, rawTime, requestId, queueKey } = data;
-  if (type === 'creation' || type === 'deletion') {
-    return;
-  }
-
-  const queueRef = event.data.ref;
-  try {
-    await queueRef.update({
-      status: 'processing',
-      processingStartedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    await processCheckpointInBackgroundV3(
-      competitionId,
-      copernicoId,
-      participantId,
-      null,
-      type,
-      extraData,
-      rawTime,
-      requestId,
-      queueKey,
-      { updateQueue: true },
-        EVENT_CACHE_TTL_MS,
-        eventResolutionCache
-    );
-  } catch (error) {
-    console.error(`❌ Error en trigger de queue ${queueKey}:`, error.message);
-    try {
-      await queueRef.update({
-        status: 'failed',
-        error: error.message,
-        failedAt: admin.firestore.FieldValue.serverTimestamp(),
-        attempts: admin.firestore.FieldValue.increment(1)
-      });
-    } catch (updateError) {
-      console.error(`❌ Error actualizando queue ${queueKey}:`, updateError.message);
-    }
-  }
-});
-
-export const onClipGenerationJobCreated = onDocumentCreated("clip_generation_jobs/{jobId}", async (event) => {
-  const jobData = event.data?.data();
-  if (!jobData) return;
-
-  const jobRef = event.data.ref;
-  const db = admin.firestore();
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
-
-  const {
-    raceId,
-    appId,
-    eventId,
-    participantId,
-    participantExternalId,
-    storyId,
-    storyRefPath,
-    eventStoryRefPath,
-    streamId,
-    checkpointRawTime,
-    checkpointId,
-    extraData,
-    participantData
-  } = jobData;
-
-  if (!storyRefPath || !eventStoryRefPath || !streamId) {
-    await jobRef.set({
-      status: "failed",
-      error: "Job inválido: faltan storyRefPath/eventStoryRefPath/streamId",
-      failedAt: timestamp
-    }, { merge: true });
-    return;
-  }
-
-  const storyRef = db.doc(storyRefPath);
-  const eventStoryRef = db.doc(eventStoryRefPath);
-
-  const updateStoryRefs = async (updateData) => {
-    await Promise.all([
-      storyRef.set(updateData, { merge: true }),
-      eventStoryRef.set(updateData, { merge: true })
-    ]);
-  };
-
-  try {
-    await jobRef.set({
-      status: "processing",
-      processingStartedAt: timestamp,
-      attempts: admin.firestore.FieldValue.increment(1)
-    }, { merge: true });
-
-    const clipResult = await generateStoryVideoClip(streamId, checkpointRawTime || Date.now(), extraData || {});
-
-    if (!clipResult.success) {
-      await updateStoryRefs({
-        "generationInfo.status": "failed",
-        "generationInfo.error": clipResult.error || "clip_generation_failed",
-        "generationInfo.failedAt": timestamp
-      });
-
-      await jobRef.set({
-        status: "failed",
-        error: clipResult.error || "clip_generation_failed",
-        details: clipResult.details || null,
-        failedAt: timestamp
-      }, { merge: true });
-      return;
-    }
-
-    await updateStoryRefs({
-      fileUrl: clipResult.clipUrl,
-      fileName: clipResult.fileName,
-      filePath: clipResult.clipUrl,
-      generationInfo: {
-        status: "completed",
-        clipUrl: clipResult.clipUrl,
-        generatedAt: clipResult.generationInfo?.generatedAt || new Date().toISOString(),
-        startTime: clipResult.generationInfo?.startTime || null,
-        endTime: clipResult.generationInfo?.endTime || null,
-        apiResponse: clipResult.generationInfo?.apiResponse || null
-      }
-    });
-
-    try {
-      await createSplitClipsFromStory({
-        db,
-        raceId,
-        appId,
-        eventId,
-        participantId: participantExternalId || participantId,
-        checkpointId,
-        clipUrl: clipResult.clipUrl,
-        streamId,
-        timestamp: checkpointRawTime || Date.now()
-      });
-    } catch (splitClipError) {
-      console.error(`⚠️ [CLIP-JOB] Error creando split-clips ${event.params.jobId}:`, splitClipError.message);
-    }
-
-    try {
-      const storyDoc = await storyRef.get();
-      const storyData = storyDoc.exists ? storyDoc.data() : null;
-      if (storyData) {
-        await sendStoryNotificationToFollowers({
-          db,
-          raceId,
-          appId,
-          eventId,
-          participantId: participantExternalId || participantId,
-          storyId: storyId || storyRef.id,
-          storyData: {
-            ...storyData,
-            fileUrl: clipResult.clipUrl,
-            description: "Clip disponible para ver"
-          },
-          participantData: participantData || storyData.participant || {},
-          notificationOverrides: {
-            notificationType: "STORY_CLIP_READY",
-            body: "El clip del checkpoint ya esta disponible."
-          }
-        });
-      }
-    } catch (notifyError) {
-      console.error(`⚠️ [CLIP-JOB] Error enviando notificación ${event.params.jobId}:`, notifyError.message);
-    }
-
-    await jobRef.set({
-      status: "completed",
-      clipUrl: clipResult.clipUrl,
-      completedAt: timestamp
-    }, { merge: true });
-  } catch (error) {
-    console.error(`❌ [CLIP-JOB] Error procesando job ${event.params.jobId}:`, error.message);
-    await updateStoryRefs({
-      "generationInfo.status": "failed",
-      "generationInfo.error": error.message,
-      "generationInfo.failedAt": timestamp
-    });
-    await jobRef.set({
-      status: "failed",
-      error: error.message,
-      failedAt: timestamp
-    }, { merge: true });
-  }
-});
-
-export const onCheckpointQueueJobCreated = onDocumentCreated({
-  document: "processing_queue_jobs/{jobId}",
-  timeoutSeconds: 540,
-  memory: "1GiB",
-  region: "us-central1"
-}, async (event) => {
-  const jobData = event.data?.data();
-  if (!jobData) return;
-
-  const {
-    queueKey,
-    requestId,
-    competitionId,
-    copernicoId,
-    type,
-    participantsIds,
-    extraData,
-    rawTime
-  } = jobData;
-
-  const jobRef = event.data.ref;
-  const db = admin.firestore();
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
-
-  try {
-    await jobRef.update({
-      status: 'processing',
-      processingStartedAt: timestamp
-    });
-
-    const result = await processCheckpointInBackgroundV3(
-      competitionId,
-      copernicoId,
-      null,
-      participantsIds,
-      type,
-      extraData,
-      rawTime,
-      requestId,
-      queueKey,
-      { updateQueue: false },
-        EVENT_CACHE_TTL_MS,
-        eventResolutionCache
-    );
-
-    const results = Array.isArray(result?.results) ? result.results : [];
-    const successCount = results.filter(r => r && r.success !== false && !r.error).length;
-    const failureCount = results.length - successCount;
-
-    await jobRef.update({
-      status: 'completed',
-      completedAt: timestamp,
-      resultsCount: results.length,
-      successCount,
-      failureCount
-    });
-
-    const queueRef = db.collection('processing_queue').doc(queueKey);
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(queueRef);
-      if (!snap.exists) return;
-      const data = snap.data() || {};
-      const nextCompleted = (data.jobsCompleted || 0) + 1;
-      const nextFailed = (data.jobsFailed || 0) + (failureCount > 0 ? 1 : 0);
-      const updates = {
-        jobsCompleted: nextCompleted,
-        jobsFailed: nextFailed,
-        updatedAt: timestamp
-      };
-      if (data.jobsTotal && nextCompleted >= data.jobsTotal) {
-        updates.status = nextFailed > 0 ? 'completed_with_errors' : 'completed';
-        updates.completedAt = timestamp;
-        updates.expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
-      }
-      tx.update(queueRef, updates);
-    });
-  } catch (error) {
-    console.error(`❌ Error en job ${event.params.jobId}:`, error.message);
-    await jobRef.update({
-      status: 'failed',
-      error: error.message,
-      failedAt: timestamp
-    });
-
-    const queueRef = db.collection('processing_queue').doc(queueKey);
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(queueRef);
-      if (!snap.exists) return;
-      const data = snap.data() || {};
-      const nextCompleted = (data.jobsCompleted || 0) + 1;
-      const nextFailed = (data.jobsFailed || 0) + 1;
-      const updates = {
-        jobsCompleted: nextCompleted,
-        jobsFailed: nextFailed,
-        updatedAt: timestamp
-      };
-      if (data.jobsTotal && nextCompleted >= data.jobsTotal) {
-        updates.status = 'completed_with_errors';
-        updates.completedAt = timestamp;
-        updates.expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
-      }
-      tx.update(queueRef, updates);
-    });
-  }
-});
+// onCheckpointQueueCreated, onCheckpointQueueJobCreated, onClipGenerationJobCreated
+// eliminados — manejados exclusivamente por v2 (onCheckpointQueueCreatedV2, onCheckpointQueueJobCreatedV2, onClipGenerationJobCreatedV2)
 
 export default router;

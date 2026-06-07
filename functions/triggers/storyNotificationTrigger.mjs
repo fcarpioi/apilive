@@ -52,6 +52,13 @@ export const onStoryCreated = onDocumentCreated(
       const storyData = event.data.data();
       let { raceId, appId, eventId, participantId, storyId } = event.params;
 
+      // Las historias automáticas de checkpoint ya notifican desde el flujo v3.
+      // Aquí se evita el envío duplicado.
+      if (storyData?.originType === "automatic_checkpoint") {
+        console.log(`ℹ️ [TRIGGER] Notificación omitida para story automática de checkpoint: ${storyId}`);
+        return;
+      }
+
       console.log(`📖 Historia: ${storyId}`);
       console.log(`🏃 Participante: ${participantId}`);
       console.log(`🏁 Carrera: ${raceId}, App: ${appId}, Evento: ${eventId}`);

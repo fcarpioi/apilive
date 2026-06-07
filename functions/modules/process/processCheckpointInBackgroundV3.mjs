@@ -4,9 +4,6 @@ import {findSpecificEvent} from "../competitions/findSpecificEvent.mjs";
 import {findEventsByCompetition} from "../competitions/findEventsByCompetition.mjs";
 import copernicoService from "../../services/copernicoService.mjs";
 import {getCompetitionStreams} from "../competitions/getCompetitionStreams.mjs";
-import {
-    sendCheckpointNotificationToFollowers
-} from "../notifications/sendCheckpointNotificationToFollowers.mjs";
 import {sendStoryNotificationToFollowers} from "../notifications/sendStoryNotificationToFollowers.mjs";
 import {createAutomaticStory} from "../stories/createAutomaticStory.mjs";
 import {recoverRaceData} from "../db/recoverRaceData.mjs";
@@ -743,20 +740,6 @@ async function modificationProcess({
                                        transformedData,
                                        rawTime
                                    }) {
-    if (hasFollowers) {
-        await sendCheckpointNotificationToFollowers({
-            db,
-            raceId,
-            appId,
-            eventId,
-            participantId: participantDocId,
-            checkpointInfo: {
-                point: extraData?.point ?? null,
-                location: extraData?.location ?? null
-            }
-        });
-    }
-
     let storyResult = null;
     const shouldCreateStory = (isFeatured || hasFollowers) && (extraData?.point || extraData?.location);
     console.log(`🧭 [BACKGROUND v3] story gate (mod) for ${raceId}/${appId}/${eventId}/${participantDocId}: featured=${isFeatured} followers=${hasFollowers}`);
