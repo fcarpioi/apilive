@@ -42,26 +42,22 @@ El job se marca como `processing` en Firestore.
 
 ---
 
-## FASE 5 — Llama a la API de generación de clip (con reintentos)
+## FASE 5 — Llama a la API de generación de clip (un solo intento)
 
-Se hace una petición HTTP a la API externa `generateSingleClipFromChunks` con el `streamId` y el rango de tiempo calculado.
-
-**Aquí entra el mecanismo de reintentos:**
-
-La API puede responder con error 404 o 503 porque los fragmentos de vídeo todavía no están disponibles en el servidor (el stream puede tardar en procesarse). En ese caso el sistema **espera 20 segundos y vuelve a intentarlo**, hasta un máximo de **5 minutos** en total.
+Se hace **una única petición HTTP** a la API externa `generateSingleClipFromChunks` con el `streamId` y el rango de tiempo calculado.
 
 | Respuesta de la API | Acción |
 |---|---|
 | ✅ 200 con URL del clip | Continúa al paso 6 |
-| ⚠️ 404 / 503 / error de red | Espera 20s y reintenta |
-| ❌ 400 / 401 / 403 | Falla inmediatamente (error permanente) |
-| ⏱️ 5 minutos agotados | Marca como `failed` |
+| ❌ Cualquier error (404, 503, error de red, etc.) | Marca como `failed` inmediatamente |
+
+Si la llamada falla, el sistema guarda en la historia el `requestPayload` completo (con `streamId`, `startTime`, `endTime`). Esos datos permiten reintentar el clip más tarde mediante el endpoint de reintento (ver sección abajo).
 
 ---
 
 ## FASE 6 — El clip está listo
 
-Cuando la API devuelve la URL del clip generado, el sistema hace tres cosas en paralelo:
+Cuando la API devuelve la URL del clip generado, el sistema hace tres cosas:
 
 1. **Actualiza la historia** (tanto la canónica como el enlace de evento) con la URL del vídeo y estado `completed`.
 2. **Guarda el clip en `split-clips`** — una colección auxiliar que indexa clips por checkpoint y atleta.
@@ -73,13 +69,13 @@ El job se marca como `completed` en Firestore.
 
 ## FASE 7 — Si algo falla
 
-Si después de los 5 minutos de reintentos no hay clip, o si hay un error permanente (ej. `streamId` inválido), el sistema:
+Si la llamada a la API falla por cualquier motivo, el sistema:
 
 - Marca el job como `failed` en Firestore con el detalle del error (código HTTP, cuerpo de respuesta).
-- Actualiza la historia con `generationInfo.status = "failed"` y el mismo detalle.
+- Actualiza la historia con `generationInfo.status = "failed"` y guarda el `requestPayload` con los datos necesarios para reintentar.
 - **No envía notificación** — el atleta ya recibió la primera noti del checkpoint.
 
-La historia sigue siendo visible en el feed, simplemente sin vídeo.
+La historia sigue siendo visible en el feed, simplemente sin vídeo. El clip se puede recuperar usando el endpoint de reintento.
 
 ---
 
@@ -98,17 +94,61 @@ Copernico webhook
       ↓
   Calcula rango: cruce ±20s
       ↓
-  Llama API → reintenta cada 20s hasta 5 min
+  Llama API — un solo intento
       ↓
    ┌──────────────┐
    │  Clip OK?    │
    └──────────────┘
-    ✅ Sí               ❌ No (timeout/error permanente)
+    ✅ Sí               ❌ No (cualquier error)
     ↓                      ↓
 Actualiza historia      Historia queda sin clip
-Guarda en split-clips   Job marcado "failed"
-Push noti #2 con clip   (sin segunda notificación)
+Guarda en split-clips   Guarda requestPayload en historia
+Push noti #2 con clip   Job marcado "failed"
+                        (sin segunda notificación)
+                        ↓
+                   Reintento manual disponible
+                   via retryClipGeneration
 ```
+
+---
+
+## Reintento manual de clip fallido
+
+Cuando una historia tiene `generationInfo.status = "failed"`, la app puede solicitar un reintento usando la siguiente Cloud Function HTTP:
+
+**Endpoint:** `POST https://us-central1-live-copernico.cloudfunctions.net/retryClipGeneration`
+
+**Autenticación:** Header `Authorization: Bearer <firebase-id-token>`
+
+**Body:**
+```json
+{
+  "storyId": "st_abc123",
+  "raceId": "race-uuid",
+  "appId": "app-id",
+  "eventId": "event-id"
+}
+```
+
+**Respuestas posibles:**
+
+| `status` | Significado |
+|---|---|
+| `completed` | Clip generado correctamente, incluye `clipUrl` |
+| `failed` | La API volvió a fallar, historia actualizada con el error |
+| `already_generated` | La historia ya tenía clip, incluye `clipUrl` |
+| `in_progress` | Hay otro reintento en curso, esperar |
+
+**Errores HTTP:**
+
+| Código | `error` | Causa |
+|---|---|---|
+| 400 | `missing_params` | Falta algún campo en el body |
+| 400 | `no_payload` | La historia no tiene `requestPayload` — no se puede reintentar |
+| 401 | `unauthorized` | Token ausente o inválido |
+| 404 | `story_not_found` | No existe la historia |
+
+> **Nota:** El endpoint devuelve HTTP 200 tanto si el clip se genera como si falla, para que la app pueda leer el campo `status` y decidir qué mostrar sin tratar el fallo como un error de red.
 
 ---
 
@@ -122,11 +162,20 @@ Push noti #2 con clip   (sin segunda notificación)
 | `races/{raceId}/apps/{appId}/events/{eventId}/split-clips` | Índice de clips por checkpoint y atleta |
 | `notification-stats` | Estadísticas de notificaciones enviadas |
 
+## Estados de `generationInfo.status` en la historia
+
+| Estado | Significado |
+|---|---|
+| `pending` | Historia creada, job aún no ha arrancado |
+| `processing` | Trigger activo o reintento en curso |
+| `completed` | Clip generado y disponible en `fileUrl` |
+| `failed` | La llamada a la API falló — reintento disponible si existe `requestPayload` |
+
 ## Estados del job (`clip_generation_jobs`)
 
 | Estado | Significado |
 |---|---|
 | `queued` | Job creado, esperando que el trigger arranque |
-| `processing` | Trigger activo, llamando a la API con reintentos |
+| `processing` | Trigger activo, llamando a la API |
 | `completed` | Clip generado y guardado correctamente |
-| `failed` | Agotados los reintentos o error permanente |
+| `failed` | La llamada falló — ver `clipApiDebug` para detalle |
