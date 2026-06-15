@@ -563,6 +563,30 @@
         { "fieldPath": "platform", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "diplomas",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "metadata.raceName", "order": "ASCENDING" },
+        { "fieldPath": "metadata.companyId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diplomas",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "metadata.raceName", "order": "ASCENDING" },
+        { "fieldPath": "metadata.appId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diplomas",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "metadata.companyId", "order": "ASCENDING" },
+        { "fieldPath": "metadata.appId", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -622,6 +646,30 @@
           "queryScope": "COLLECTION",
           "order": "DESCENDING"
         }
+      ]
+    },
+    {
+      "collectionGroup": "diplomas",
+      "fieldPath": "metadata.raceName",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" },
+        { "queryScope": "COLLECTION", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diplomas",
+      "fieldPath": "metadata.companyId",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" },
+        { "queryScope": "COLLECTION", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diplomas",
+      "fieldPath": "metadata.appId",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" },
+        { "queryScope": "COLLECTION", "order": "ASCENDING" }
       ]
     },
     {
