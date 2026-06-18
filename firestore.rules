@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Backend (Cloud Functions) usa Admin SDK — bypasa estas reglas.
+    // El CMS lee/escribe Firestore directamente desde el browser con Firebase Auth.
+
+    // Colección principal: apps
+    match /apps/{appId} {
+      allow read, write, delete: if request.auth != null;
+      match /{subcollection=**} {
+        allow read, write, delete: if request.auth != null;
+      }
+    }
+
+    // Colección principal: races
+    match /races/{raceId} {
+      allow read, write, delete: if request.auth != null;
+      match /{subcollection=**} {
+        allow read, write, delete: if request.auth != null;
+      }
+    }
+
+    // Empresas y templates de diplomas
+    match /companies/{companyId} {
+      allow read, write, delete: if request.auth != null;
+      match /{subcollection=**} {
+        allow read, write, delete: if request.auth != null;
+      }
+    }
+
+    // Events como colección raíz
+    match /events/{eventId} {
+      allow read, write, delete: if request.auth != null;
+      match /{subcollection=**} {
+        allow read, write, delete: if request.auth != null;
+      }
+    }
+
+    // Config (solo lectura para clientes autenticados — escritura solo por Admin SDK)
+    match /config/{document} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Resto: deniega acceso directo desde cliente
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
