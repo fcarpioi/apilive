@@ -209,6 +209,41 @@ Verificar en Firebase Console → Functions → cada función → pestaña Logs 
 
 ---
 
+## Phase F — Story de inicio de wave/evento
+
+### Endpoint nuevo
+```
+POST /api-v2/races/:raceId/apps/:appId/events/:eventId/wave-start
+```
+
+### Request body
+| Campo | Tipo | Obligatorio | Descripción |
+|---|---|---|---|
+| `fileUrl` | string | sí | URL del vídeo/imagen de 10s |
+| `description` | string | no | Texto de la story (default: "¡La carrera ha comenzado!") |
+| `duration` | number | no | Duración en segundos (default: 10) |
+| `waveName` | string | no | Nombre de la wave si aplica |
+| `force` | boolean | no | Si `true`, sobreescribe una story existente (default: false) |
+
+### Response
+```json
+{ "storyId": "wave_start_<eventId>", "status": "created", "created": true }
+{ "storyId": "wave_start_<eventId>", "status": "already_exists", "created": false }
+```
+
+### Story creada
+- `storyId` determinístico: `wave_start_{eventId}` — deduplicación por diseño
+- `featured: true` en raíz Y en `participant.featured` → aparece en feed featured
+- `participant.id = "wave_start_{eventId}"` (nunca vacío)
+- `type: "WAVE_STARTED"` — frontend renderiza como story de vídeo estándar
+- `clipUrl` = `fileUrl` si termina en `.m3u8`, vacío en caso contrario
+
+### Archivos creados
+- `functions_v2/src/controllers/waveStartController.mjs`
+- `functions_v2/src/routes/waveStart.routes.mjs`
+
+---
+
 ## Checklist post-migración
 
 - [ ] Frontend actualizado a endpoints v2
